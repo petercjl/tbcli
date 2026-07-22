@@ -7,6 +7,8 @@ import {
   isVerificationSignal,
   VERIFICATION_ERROR_CODE,
 } from '../taobao-guard.mjs';
+import { enrichEncodedPrices } from '../price-decoder.mjs';
+import { writeShopProductsXlsx } from '../shop-products-xlsx.mjs';
 
 const CSV_COLUMNS = [
   'shopName', 'shopId', 'sellerId', 'itemId', 'title', 'itemUrl', 'image',
@@ -104,10 +106,32 @@ export async function runShopProducts(opts) {
         totalCount,
         rawItems,
         pagesFetched: pageNo - 1,
+        pageSize,
         requestDelayMs: { min: minDelayMs, max: maxDelayMs },
       });
       const outPath = opts.out ? path.resolve(opts.out) : '';
-      if (outPath.toLowerCase().endsWith('.csv')) {
+      const isXlsx = outPath.toLowerCase().endsWith('.xlsx');
+      if (isXlsx) {
+        process.stderr.write('正在还原店铺列表价格...\n');
+        const priceResult = await enrichEncodedPrices({
+          page,
+          items: output.items,
+          totalCount: output.totalCount,
+          shopUrl,
+          delayBeforeRequest: () => sleep(randomDelayMs(minDelayMs, maxDelayMs)),
+          onProgress: ({ phase, pageNo: webPage, itemId, found, total }) => {
+            if (phase === 'detail') {
+              process.stderr.write(`\r价格补充：商品 ${itemId}，已找到 ${found}/${total} 条`);
+            } else {
+              process.stderr.write(`\r价格匹配：网页第 ${webPage} 页，已找到 ${found}/${total} 条`);
+            }
+          },
+        });
+        process.stderr.write('\n');
+        output.priceDecodedCount = priceResult.decodedCount;
+        output.pricePagesScanned = priceResult.scannedPages;
+        await writeShopProductsXlsx(outPath, output);
+      } else if (outPath.toLowerCase().endsWith('.csv')) {
         writeCsv(outPath, output.items, CSV_COLUMNS);
       } else if (outPath) {
         const { default: fs } = await import('node:fs');
@@ -119,7 +143,8 @@ export async function runShopProducts(opts) {
       else {
         console.log(`Taobao shop products: ${output.shop.name} (${output.shop.shopId})`);
         console.log(`exported=${output.exportedCount}, total=${output.totalCount}, pages=${output.pagesFetched}`);
-        console.log('price=encoded（淘宝列表接口未返回可直接读取的数字价格）');
+        if (isXlsx) console.log(`price=${output.priceDecodedCount}/${output.exportedCount}`);
+        else console.log('price=encoded（JSON/CSV 保留接口原始价格状态；Excel 会自动还原展示价格）');
         if (outPath) console.log(`output: ${outPath}`);
       }
     } finally {
@@ -184,7 +209,7 @@ export function randomDelayMs(min, max, random = Math.random) {
   return min + Math.floor(random() * (max - min + 1));
 }
 
-export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, totalCount, rawItems, pagesFetched, requestDelayMs = null }) {
+export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, totalCount, rawItems, pagesFetched, pageSize = 30, requestDelayMs = null }) {
   const shopName = String(seller?.shopName || '');
   const items = rawItems.map((item) => ({
     shopName,
@@ -215,6 +240,7 @@ export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, total
     totalCount: Number(totalCount || items.length),
     exportedCount: items.length,
     pagesFetched,
+    pageSize,
     requestDelayMs,
     priceNote: 'priceStatus=encoded 表示淘宝列表接口返回加密价格，price 留空；encodedPrice 保留原始值供后续解码。',
     items,
