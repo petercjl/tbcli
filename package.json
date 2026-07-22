@@ -1,6 +1,6 @@
 {
   "name": "@petercjl/tbcli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CLI for Taobao and Qianniu seller backend workflows",
   "type": "module",
   "bin": {
@@ -28,6 +28,8 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
+    "@excel.js/exceljs": "^0.9.0",
+    "fontkit": "^2.0.4",
     "playwright-core": "^1.61.1"
   },
   "scripts": {

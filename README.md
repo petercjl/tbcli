@@ -84,6 +84,7 @@ by the logged-in shop page:
 ```bash
 tbcli shop products --url 'https://kemi.tmall.com/category.htm?visible=true&show=true' --out products.json
 tbcli shop products --url 'https://kemi.tmall.com/category.htm?visible=true&show=true' --out products.csv
+tbcli shop products --url 'https://kemi.tmall.com/category.htm?visible=true&show=true' --out products.xlsx
 ```
 
 The product command waits a random 1000-2000ms before every API call by
@@ -92,7 +93,9 @@ the legacy `--delay-ms` option for a fixed delay. Login redirects, CAPTCHA,
 slider verification, access restrictions, and MTOP validation signals stop the
 command immediately.
 
-Use `--max-pages N` for a small test run. The command exports product IDs,
+Use `--max-pages N` for a small test run. When the output filename ends in
+`.xlsx`, tbcli automatically restores the shop-list display price and creates
+an Excel workbook with `概览`, `商品列表`, and `SKU明细` sheets. The command exports product IDs,
 titles, links, images, 365-day vague sales, benefits, rankings, and SKU data.
 Taobao currently returns the list price as an encoded value; JSON preserves it
 as `encodedPrice`, while the normalized `price` field stays empty and

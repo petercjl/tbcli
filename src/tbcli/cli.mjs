@@ -10,7 +10,7 @@ export function usage() {
   console.log(`Usage:
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
   tbcli logistics get --trade-id ID [--seller-id ID] [--json] [--out file.json]
-  tbcli shop products --url SHOP_URL [--max-pages N] [--min-delay-ms 1000] [--max-delay-ms 2000] [--out products.json|products.csv] [--json]
+  tbcli shop products --url SHOP_URL [--max-pages N] [--min-delay-ms 1000] [--max-delay-ms 2000] [--out products.xlsx|products.json|products.csv] [--json]
   tbcli capabilities [--json]
   tbcli doctor [--json]
   tbcli dev pages [--json]
