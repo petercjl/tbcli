@@ -5,7 +5,7 @@ Local CLI for Taobao/Qianniu seller backend workflows. It shares the same
 
 ## Install
 
-Requires Node.js 20 or newer:
+Supports macOS and Windows. Requires Node.js 20 or newer and Google Chrome:
 
 ```bash
 npm install -g @petercjl/tbcli
@@ -26,10 +26,16 @@ tbcli browser open
 Default browser settings:
 
 - CDP URL: `http://127.0.0.1:9223`
-- Chrome profile: `~/.dianshang-chrome-profile`
-- Chrome binary: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+- Chrome profile: `~/.dianshang-chrome-profile` on macOS, `%USERPROFILE%\.dianshang-chrome-profile` on Windows
+- macOS Chrome: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
+- Windows Chrome: automatically detected under `%LOCALAPPDATA%`, `%PROGRAMFILES%`, or `%PROGRAMFILES(X86)%`
 
 These can be overridden with `TBCLI_CDP_URL`, `TBCLI_CHROME_PROFILE`, `TBCLI_REMOTE_DEBUGGING_PORT`, or `TBCLI_CHROME_PATH`.
+
+On first use, run `tbcli browser open`, then sign in to Taobao/Qianniu manually
+in the opened ecommerce browser. npm installs the required `playwright-core`
+dependency automatically; Chrome and Node.js are system prerequisites and are
+not installed by `tbcli`.
 
 The CLI does not read or store cookies directly. It connects to the logged-in
 ecommerce browser through CDP and runs Taobao requests inside the browser page

@@ -29,8 +29,9 @@ export async function ensureBrowserOpen(opts = {}) {
   const chromePath = opts.chromePath || DEFAULT_CHROME_PATH;
   const startUrl = opts.startUrl || opts.url || DEFAULT_START_URL;
 
-  if (!fs.existsSync(chromePath)) {
-    throw new Error(`找不到 Chrome：${chromePath}。可用 --chrome-path 或 TBCLI_CHROME_PATH 指定。`);
+  if (!chromePath || !fs.existsSync(chromePath)) {
+    const detected = chromePath || '未检测到默认路径';
+    throw new Error(`找不到 Chrome：${detected}。请先安装 Google Chrome，或用 --chrome-path / TBCLI_CHROME_PATH 指定。`);
   }
   fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
 
@@ -43,6 +44,7 @@ export async function ensureBrowserOpen(opts = {}) {
   ], {
     detached: true,
     stdio: 'ignore',
+    windowsHide: true,
   });
   child.unref();
 
