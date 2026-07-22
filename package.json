@@ -1,6 +1,6 @@
 {
   "name": "@petercjl/tbcli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CLI for Taobao and Qianniu seller backend workflows",
   "type": "module",
   "bin": {

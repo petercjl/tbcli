@@ -61,7 +61,7 @@ async function waitForCdp(cdpUrl) {
   throw new Error(`电商浏览器已启动但 CDP 未就绪：${cdpUrl}`);
 }
 
-async function isCdpReachable(cdpUrl) {
+export async function isCdpReachable(cdpUrl) {
   try {
     const response = await fetch(`${cdpUrl.replace(/\/$/, '')}/json/version`);
     return response.ok;
