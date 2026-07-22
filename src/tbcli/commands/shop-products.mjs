@@ -1,7 +1,6 @@
 import path from 'node:path';
-import { DEFAULT_CDP } from '../config.mjs';
+import { assertTaobaoLoggedIn, withBrowserSession } from '../browser-session.mjs';
 import { writeCsv } from '../format.mjs';
-import { ensureBrowserOpen } from './browser.mjs';
 import {
   assertPageNotVerifying,
   createVerificationError,
@@ -22,88 +21,114 @@ export async function runShopProducts(opts) {
 
   const pageSize = boundedInteger(opts.pageSize, 30, 1, 30, '--page-size');
   const maxPages = boundedInteger(opts.maxPages, 0, 0, 10000, '--max-pages');
-  const delayMs = boundedInteger(opts.delayMs, 500, 0, 10000, '--delay-ms');
+  const fixedDelay = opts.delayMs == null ? null : boundedInteger(opts.delayMs, 0, 0, 60000, '--delay-ms');
+  const minDelayMs = fixedDelay ?? boundedInteger(opts.minDelayMs, 1000, 0, 60000, '--min-delay-ms');
+  const maxDelayMs = fixedDelay ?? boundedInteger(opts.maxDelayMs, 2000, 0, 60000, '--max-delay-ms');
+  if (maxDelayMs < minDelayMs) throw new Error('--max-delay-ms 不能小于 --min-delay-ms');
 
-  const { chromium } = await import('playwright-core');
-  await ensureBrowserOpen({ ...opts, startUrl: shopUrl || 'https://www.taobao.com/' });
-  const browser = await chromium.connectOverCDP(opts.cdpUrl || DEFAULT_CDP);
-  let createdPage = false;
-  let page;
-  try {
-    const context = browser.contexts()[0];
-    if (!context) throw new Error('没有可用的浏览器上下文');
-    if (shopUrl) {
-      page = await context.newPage();
-      createdPage = true;
-    } else {
-      page = findShopPage(context.pages(), shopUrl);
-      if (!page) {
+  await withBrowserSession({ ...opts, startUrl: shopUrl || 'https://www.taobao.com/' }, async ({ context }) => {
+    await assertTaobaoLoggedIn(context);
+    let createdPage = false;
+    let page;
+    try {
+      if (shopUrl) {
         page = await context.newPage();
         createdPage = true;
+      } else {
+        page = findShopPage(context.pages(), shopUrl);
+        if (!page) {
+          page = await context.newPage();
+          createdPage = true;
+        }
       }
-    }
-    if (shopUrl && page.url() !== shopUrl) {
-      await page.goto(shopUrl, { waitUntil: 'domcontentloaded' });
-    }
-    await assertPageNotVerifying(page);
-    try {
-      await page.waitForFunction(() => window.lib?.mtop?.request && window.g_config?.seller, null, { timeout: 20000 });
-    } catch (error) {
-      await assertPageNotVerifying(page);
-      throw error;
-    }
-
-    const seller = await page.evaluate(() => window.g_config.seller);
-    const shopId = String(opts.shopId || seller.shopId || '');
-    const sellerId = String(opts.sellerId || seller.sellerId || '');
-    if (!shopId || !sellerId) throw new Error('无法从店铺页识别 shopId/sellerId');
-
-    const rawItems = [];
-    const seen = new Set();
-    let pageNo = 1;
-    let hasNext = true;
-    let totalCount = 0;
-    while (hasNext && (!maxPages || pageNo <= maxPages)) {
-      await assertPageNotVerifying(page);
-      const result = await requestProductPage(page, { shopId, sellerId, page: pageNo, pageSize });
-      totalCount = Number(result.totalCnt || totalCount || 0);
-      for (const item of result.data || []) {
-        const itemId = String(item?.itemId || '');
-        if (!itemId || seen.has(itemId)) continue;
-        seen.add(itemId);
-        rawItems.push(item);
+      if (shopUrl && page.url() !== shopUrl) {
+        await page.goto(shopUrl, { waitUntil: 'domcontentloaded' });
       }
-      hasNext = result.hasNext === true || result.hasNext === 'true';
-      process.stderr.write(`\r店铺商品：第 ${pageNo} 页，已获取 ${rawItems.length}/${totalCount || '?'} 条`);
-      pageNo += 1;
-      if (hasNext && delayMs) await sleep(delayMs);
-    }
-    process.stderr.write('\n');
+      await assertPageNotVerifying(page);
+      try {
+        await page.waitForFunction(
+          () => window.lib?.mtop?.request && (window.g_config?.shopId || window.g_config?.seller?.shopId),
+          null,
+          { timeout: 20000 },
+        );
+      } catch (error) {
+        await assertPageNotVerifying(page);
+        throw error;
+      }
 
-    const output = normalizeShopProducts({ seller, shopId, sellerId, shopUrl: page.url(), totalCount, rawItems, pagesFetched: pageNo - 1 });
-    const outPath = opts.out ? path.resolve(opts.out) : '';
-    if (outPath.toLowerCase().endsWith('.csv')) {
-      writeCsv(outPath, output.items, CSV_COLUMNS);
-    } else if (outPath) {
-      const { default: fs } = await import('node:fs');
-      fs.mkdirSync(path.dirname(outPath), { recursive: true });
-      fs.writeFileSync(outPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
-    }
+      const seller = await page.evaluate(() => ({
+        shopId: String(window.g_config?.shopId || window.g_config?.seller?.shopId || ''),
+        sellerId: String(window.g_config?.sellerId || window.g_config?.seller?.sellerId || ''),
+        shopName: String(
+          window.g_config?.seller?.shopName
+          || document.querySelector('.slogo-shopname strong, .shop-name, .header-extra .slogo')?.textContent
+          || document.title.split('-').find((part) => /店/.test(part))
+          || '',
+        ).replace(/\s+/g, ' ').trim(),
+      }));
+      const shopId = String(opts.shopId || seller.shopId || '');
+      const sellerId = String(opts.sellerId || seller.sellerId || '');
+      if (!shopId || !sellerId) throw new Error('无法从店铺页识别 shopId/sellerId');
 
-    if (opts.json) console.log(JSON.stringify(output, null, 2));
-    else {
-      console.log(`Taobao shop products: ${output.shop.name} (${output.shop.shopId})`);
-      console.log(`exported=${output.exportedCount}, total=${output.totalCount}, pages=${output.pagesFetched}`);
-      console.log('price=encoded（淘宝列表接口未返回可直接读取的数字价格）');
-      if (outPath) console.log(`output: ${outPath}`);
+      const rawItems = [];
+      const seen = new Set();
+      let pageNo = 1;
+      let hasNext = true;
+      let totalCount = 0;
+      while (hasNext && (!maxPages || pageNo <= maxPages)) {
+        await assertPageNotVerifying(page);
+        await sleep(randomDelayMs(minDelayMs, maxDelayMs));
+        const result = await requestProductPage(
+          page,
+          { shopId, sellerId, page: pageNo, pageSize },
+          { minDelayMs, maxDelayMs },
+        );
+        totalCount = Number(result.totalCnt || totalCount || 0);
+        for (const item of result.data || []) {
+          const itemId = String(item?.itemId || '');
+          if (!itemId || seen.has(itemId)) continue;
+          seen.add(itemId);
+          rawItems.push(item);
+        }
+        hasNext = result.hasNext === true || result.hasNext === 'true';
+        process.stderr.write(`\r店铺商品：第 ${pageNo} 页，已获取 ${rawItems.length}/${totalCount || '?'} 条`);
+        pageNo += 1;
+      }
+      process.stderr.write('\n');
+
+      const output = normalizeShopProducts({
+        seller,
+        shopId,
+        sellerId,
+        shopUrl: page.url(),
+        totalCount,
+        rawItems,
+        pagesFetched: pageNo - 1,
+        requestDelayMs: { min: minDelayMs, max: maxDelayMs },
+      });
+      const outPath = opts.out ? path.resolve(opts.out) : '';
+      if (outPath.toLowerCase().endsWith('.csv')) {
+        writeCsv(outPath, output.items, CSV_COLUMNS);
+      } else if (outPath) {
+        const { default: fs } = await import('node:fs');
+        fs.mkdirSync(path.dirname(outPath), { recursive: true });
+        fs.writeFileSync(outPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+      }
+
+      if (opts.json) console.log(JSON.stringify(output, null, 2));
+      else {
+        console.log(`Taobao shop products: ${output.shop.name} (${output.shop.shopId})`);
+        console.log(`exported=${output.exportedCount}, total=${output.totalCount}, pages=${output.pagesFetched}`);
+        console.log('price=encoded（淘宝列表接口未返回可直接读取的数字价格）');
+        if (outPath) console.log(`output: ${outPath}`);
+      }
+    } finally {
+      if (createdPage && !opts.keepPage && page) await page.close().catch(() => {});
     }
-  } finally {
-    if (createdPage && !opts.keepPage && page) await page.close().catch(() => {});
-    await browser.close();
-  }
+  });
 }
 
-async function requestProductPage(page, data) {
+async function requestProductPage(page, data, delayRange) {
   let lastError;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     try {
@@ -147,14 +172,19 @@ async function requestProductPage(page, data) {
         throw guardError;
       }
       if (attempt < 5) {
-        await sleep(1500 * attempt);
+        await sleep(randomDelayMs(delayRange.minDelayMs, delayRange.maxDelayMs));
       }
     }
   }
   throw new Error(`商品第 ${data.page} 页请求失败：${lastError?.message || lastError}`);
 }
 
-export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, totalCount, rawItems, pagesFetched }) {
+export function randomDelayMs(min, max, random = Math.random) {
+  if (max <= min) return min;
+  return min + Math.floor(random() * (max - min + 1));
+}
+
+export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, totalCount, rawItems, pagesFetched, requestDelayMs = null }) {
   const shopName = String(seller?.shopName || '');
   const items = rawItems.map((item) => ({
     shopName,
@@ -185,6 +215,7 @@ export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, total
     totalCount: Number(totalCount || items.length),
     exportedCount: items.length,
     pagesFetched,
+    requestDelayMs,
     priceNote: 'priceStatus=encoded 表示淘宝列表接口返回加密价格，price 留空；encodedPrice 保留原始值供后续解码。',
     items,
   };

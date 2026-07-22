@@ -12,6 +12,13 @@ npm install -g @petercjl/tbcli
 tbcli --help
 ```
 
+List stable commands and development tools:
+
+```bash
+tbcli capabilities
+tbcli doctor
+```
+
 ## Requirements
 
 - The ecommerce browser is running with remote debugging on port `9223`.
@@ -79,8 +86,29 @@ tbcli shop products --url 'https://kemi.tmall.com/category.htm?visible=true&show
 tbcli shop products --url 'https://kemi.tmall.com/category.htm?visible=true&show=true' --out products.csv
 ```
 
+The product command waits a random 1000-2000ms before every API call by
+default. Override the range with `--min-delay-ms` and `--max-delay-ms`, or use
+the legacy `--delay-ms` option for a fixed delay. Login redirects, CAPTCHA,
+slider verification, access restrictions, and MTOP validation signals stop the
+command immediately.
+
 Use `--max-pages N` for a small test run. The command exports product IDs,
 titles, links, images, 365-day vague sales, benefits, rankings, and SKU data.
 Taobao currently returns the list price as an encoded value; JSON preserves it
 as `encodedPrice`, while the normalized `price` field stays empty and
 `priceStatus` is `encoded`.
+
+## Development tools
+
+Development tools reuse the same Chrome process, profile, login state, and CDP
+connection as stable commands:
+
+```bash
+tbcli dev pages
+tbcli dev inspect --url 'https://example.tmall.com/category.htm'
+tbcli dev capture --url 'https://example.tmall.com/category.htm' --duration-ms 15000
+```
+
+Capture output is restricted to Taobao/Tmall request metadata. Sensitive query
+parameters are redacted, response bodies and cookies are not exported, and any
+verification signal stops capture immediately.

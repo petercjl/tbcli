@@ -16,6 +16,9 @@ export function parseArgs(argv) {
     else if (arg === '--max-pages') out.maxPages = argv[++index];
     else if (arg === '--page-size') out.pageSize = argv[++index];
     else if (arg === '--delay-ms') out.delayMs = argv[++index];
+    else if (arg === '--min-delay-ms') out.minDelayMs = argv[++index];
+    else if (arg === '--max-delay-ms') out.maxDelayMs = argv[++index];
+    else if (arg === '--duration-ms') out.durationMs = argv[++index];
     else if (arg === '--keep-page') out.keepPage = true;
     else if (arg === '-h' || arg === '--help') out.help = true;
     else out._.push(arg);

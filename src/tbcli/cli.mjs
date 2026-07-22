@@ -3,12 +3,19 @@ import { DEFAULT_CDP, DEFAULT_CHROME_PATH, DEFAULT_DEBUGGING_PORT, DEFAULT_PROFI
 import { runBrowserOpen } from './commands/browser.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
+import { runCapabilities, runDoctor } from './commands/system.mjs';
+import { runDevCapture, runDevInspect, runDevPages } from './commands/dev.mjs';
 
 export function usage() {
   console.log(`Usage:
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
   tbcli logistics get --trade-id ID [--seller-id ID] [--json] [--out file.json]
-  tbcli shop products --url SHOP_URL [--max-pages N] [--out products.json|products.csv] [--json]
+  tbcli shop products --url SHOP_URL [--max-pages N] [--min-delay-ms 1000] [--max-delay-ms 2000] [--out products.json|products.csv] [--json]
+  tbcli capabilities [--json]
+  tbcli doctor [--json]
+  tbcli dev pages [--json]
+  tbcli dev inspect [--url SHOP_URL]
+  tbcli dev capture [--url SHOP_URL] [--duration-ms 15000]
 
 Environment:
   TBCLI_CDP_URL   Chrome DevTools URL, default ${DEFAULT_CDP}
@@ -47,6 +54,32 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
+  if (group === 'capabilities') {
+    runCapabilities(args);
+    return;
+  }
+
+  if (group === 'doctor') {
+    await runDoctor(args);
+    return;
+  }
+
+  if (group === 'dev' && command === 'pages') {
+    await runDevPages(args);
+    return;
+  }
+
+  if (group === 'dev' && command === 'inspect') {
+    await runDevInspect(args);
+    return;
+  }
+
+  if (group === 'dev' && command === 'capture') {
+    await runDevCapture(args);
+    return;
+  }
+
+  console.error(`未找到命令：${args._.join(' ')}。可先运行 tbcli capabilities；需要发现新接口时使用 tbcli dev inspect/capture。`);
   usage();
   process.exitCode = 2;
 }

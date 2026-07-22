@@ -1,18 +1,13 @@
-import { DEFAULT_CDP } from '../config.mjs';
+import { assertTaobaoLoggedIn, withBrowserSession } from '../browser-session.mjs';
 import { printJsonOrText } from '../format.mjs';
-import { ensureBrowserOpen } from './browser.mjs';
 import { assertPageNotVerifying, createVerificationError, isVerificationSignal } from '../taobao-guard.mjs';
 
 export async function runLogisticsGet(opts) {
   const tradeId = String(opts.tradeId || opts.tid || '').trim();
   if (!tradeId) throw new Error('缺少 --trade-id');
 
-  const { chromium } = await import('playwright-core');
-  await ensureBrowserOpen(opts);
-  const browser = await chromium.connectOverCDP(opts.cdpUrl || DEFAULT_CDP);
-  try {
-    const context = browser.contexts()[0];
-    if (!context) throw new Error('没有可用的浏览器上下文，请先打开已登录淘宝/千牛后台的电商浏览器');
+  await withBrowserSession(opts, async ({ context }) => {
+    await assertTaobaoLoggedIn(context);
 
     const sellerId = opts.sellerId || inferSellerId(context.pages());
     if (!sellerId) throw new Error('缺少 --seller-id，且当前电商浏览器页面 URL 中无法推断 seller_id');
@@ -34,9 +29,7 @@ export async function runLogisticsGet(opts) {
         ].join('\t'));
       }
     });
-  } finally {
-    await browser.close();
-  }
+  });
 }
 
 async function resolveTaobaoPage(context) {
