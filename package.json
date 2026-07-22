@@ -1,0 +1,36 @@
+{
+  "name": "@petercjl/tbcli",
+  "version": "0.1.0",
+  "description": "CLI for Taobao and Qianniu seller backend workflows",
+  "type": "module",
+  "bin": {
+    "tbcli": "scripts/tbcli.mjs"
+  },
+  "files": [
+    "scripts",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/petercjl/tbcli.git"
+  },
+  "homepage": "https://github.com/petercjl/tbcli#readme",
+  "bugs": {
+    "url": "https://github.com/petercjl/tbcli/issues"
+  },
+  "license": "UNLICENSED",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "playwright-core": "^1.61.1"
+  },
+  "scripts": {
+    "test": "node --test"
+  }
+}
