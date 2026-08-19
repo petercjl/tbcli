@@ -27,9 +27,12 @@ disabling the sandbox or repeatedly retrying verification.
 
 For npm installs, use `npm install -g @petercjl/tbcli@0.5.1`, verify with
 `tbcli --version`, then check the current Agent with `tbcli skill status --agent
-<agent>`. Run `tbcli skill update --agent <agent>` only for a managed copy; a
-linked Skill already follows the upgraded package. For a source checkout, use
-the repository's update workflow instead of installing over it globally.
+<agent>`. If absent, run `tbcli skill install --agent <agent>`. Update only a
+stale managed copy with `tbcli skill update --agent <agent>`; a current linked
+Skill already follows the upgraded package and a current copy needs no action.
+Stop without overwriting an unmanaged directory, foreign link, or broken link.
+For a source checkout, use the repository's update workflow instead of
+installing over it globally.
 
 ## SYCM and Wujie reports
 
