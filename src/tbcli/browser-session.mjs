@@ -43,16 +43,10 @@ async function withManagedSession(opts, callback) {
 
   let context;
   try {
-    context = await chromium.launchPersistentContext(profileDir, {
-      executablePath: chromePath,
-      headless: false,
-      ignoreDefaultArgs: ['--use-mock-keychain', '--password-store=basic'],
-      args: [
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-session-crashed-bubble',
-      ],
-    });
+    context = await chromium.launchPersistentContext(
+      profileDir,
+      managedChromeLaunchOptions(chromePath),
+    );
   } catch (error) {
     throw normalizeManagedLaunchError(error, profileDir);
   }
@@ -67,6 +61,20 @@ async function withManagedSession(opts, callback) {
   } finally {
     await context.close();
   }
+}
+
+export function managedChromeLaunchOptions(chromePath) {
+  return {
+    executablePath: chromePath,
+    headless: false,
+    chromiumSandbox: true,
+    ignoreDefaultArgs: ['--use-mock-keychain', '--password-store=basic'],
+    args: [
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-session-crashed-bubble',
+    ],
+  };
 }
 
 export async function withAuthenticatedTaobaoSession(opts, callback) {
@@ -108,6 +116,9 @@ export function normalizeManagedLaunchError(error, profileDir) {
   const message = String(error?.message || error || '');
   if (/user data directory is already in use|processSingleton|SingletonLock|profile.*in use|existing browser session|现有的浏览器会话/i.test(message)) {
     return new Error(`固定浏览器 Profile 正被另一个 Chrome 占用：${profileDir}。请先关闭使用该 Profile 的 Chrome，再重新执行；tbcli 不会复制或读取浏览器 Cookie。`);
+  }
+  if (/sandbox/i.test(message)) {
+    return new Error('Chrome 安全沙箱无法启动。tbcli 不会使用不安全的 --no-sandbox；请检查操作系统的 Chrome 沙箱支持后重试。');
   }
   return error instanceof Error ? error : new Error(message);
 }

@@ -144,6 +144,8 @@ Default browser settings:
 - Windows Chrome: automatically detected under `%LOCALAPPDATA%`, `%PROGRAMFILES%`, or `%PROGRAMFILES(X86)%`
 - Session mode: `auto`; reuse an existing legacy CDP browser when available,
   otherwise launch a managed persistent browser without opening TCP port `9223`
+- Chrome security sandbox: explicitly enabled; tbcli never falls back to
+  `--no-sandbox`
 
 These can be overridden with `TBCLI_SESSION_MODE`, `TBCLI_CDP_URL`,
 `TBCLI_CHROME_PROFILE`, `TBCLI_REMOTE_DEBUGGING_PORT`, or `TBCLI_CHROME_PATH`.
@@ -158,6 +160,24 @@ The CLI checks only whether the required login-cookie names exist. It never
 prints, exports, or maintains a separate cookie/token file; authentication stays
 inside the dedicated Chrome profile. npm installs `playwright-core`
 automatically; Chrome and Node.js remain system prerequisites.
+
+If Chrome displays an unsupported `--no-sandbox` command-line warning, upgrade
+tbcli to the latest version, close the Chrome using the fixed Profile, and run
+`tbcli auth login` again. Do not continue entering credentials or repeatedly
+attempt the slider in that unsafe browser session.
+
+For npm installations, the fixed release can be installed and verified with:
+
+```bash
+npm install -g @petercjl/tbcli@0.5.1
+tbcli --version
+tbcli skill status --agent sealseek
+```
+
+If the SealSeek Skill status reports a managed copy rather than a link, refresh
+it with `tbcli skill update --agent sealseek` before starting `tbcli auth login`.
+Source-checkout developers should update through their repository workflow
+instead of replacing that checkout with a global npm package.
 
 ## Verification safety rule
 

@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   hasTaobaoLoginCookies,
+  managedChromeLaunchOptions,
   normalizeManagedLaunchError,
   resolveSessionMode,
 } from '../src/tbcli/browser-session.mjs';
@@ -29,6 +30,13 @@ test('explicit managed mode never requires the CDP probe', async () => {
   assert.equal(probed, false);
 });
 
+test('managed Chrome keeps the browser sandbox enabled', () => {
+  const options = managedChromeLaunchOptions('/Applications/Google Chrome');
+  assert.equal(options.chromiumSandbox, true);
+  assert.equal(options.headless, false);
+  assert.doesNotMatch(options.args.join(' '), /--no-sandbox/);
+});
+
 test('explicit CDP configuration keeps the compatibility mode', async () => {
   assert.equal(await resolveSessionMode({ cdpUrl: 'http://127.0.0.1:9333' }), 'cdp');
   assert.equal(await resolveSessionMode({ sessionMode: 'cdp' }), 'cdp');
@@ -51,6 +59,14 @@ test('explains when the fixed profile is already open', () => {
     '/tmp/tbcli-profile',
   );
   assert.match(localized.message, /Profile 正被另一个 Chrome 占用/);
+});
+
+test('never recommends falling back to an unsafe browser sandbox mode', () => {
+  const error = normalizeManagedLaunchError(
+    new Error('Chromium sandboxing failed!'),
+    '/tmp/tbcli-profile',
+  );
+  assert.match(error.message, /不会使用不安全的 --no-sandbox/);
 });
 
 test('redacts sensitive captured URL parameters', () => {

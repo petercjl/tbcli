@@ -20,6 +20,20 @@ Profile, ask the user to close it; never copy the Profile or export cookies. If
 the caller supplies `--profile-dir` or `--session-mode`, keep the same values on
 the status, login, status-confirmation, and business commands.
 
+Managed Chrome must run with its security sandbox enabled. If Chrome shows an
+unsupported `--no-sandbox` warning, stop authentication, upgrade tbcli, close
+that browser, and start `auth login` again. Never work around a slider by
+disabling the sandbox or repeatedly retrying verification.
+
+For npm installs, use `npm install -g @petercjl/tbcli@0.5.1`, verify with
+`tbcli --version`, then check the current Agent with `tbcli skill status --agent
+<agent>`. If absent, run `tbcli skill install --agent <agent>`. Update only a
+stale managed copy with `tbcli skill update --agent <agent>`; a current linked
+Skill already follows the upgraded package and a current copy needs no action.
+Stop without overwriting an unmanaged directory, foreign link, or broken link.
+For a source checkout, use the repository's update workflow instead of
+installing over it globally.
+
 ## SYCM and Wujie reports
 
 ```bash
