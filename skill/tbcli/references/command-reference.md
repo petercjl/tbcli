@@ -16,7 +16,9 @@ Use the fixed persistent tbcli Profile. Start with `auth status`; if logged out,
 run `auth login` and wait while the user completes the visible login flow. Normal
 commands use a managed browser without requiring port 9223. `browser open` is a
 legacy compatibility/debugging command. If another ordinary Chrome owns the
-Profile, ask the user to close it; never copy the Profile or export cookies.
+Profile, ask the user to close it; never copy the Profile or export cookies. If
+the caller supplies `--profile-dir` or `--session-mode`, keep the same values on
+the status, login, status-confirmation, and business commands.
 
 ## SYCM and Wujie reports
 

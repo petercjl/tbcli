@@ -128,7 +128,7 @@ export const COMMAND_DEFINITIONS = Object.freeze([
       requiredInputs: ['母版报表，或平台+粒度+维度', '开始日期', '结束日期', '新的 Excel 输出路径'],
       optionalInputs: ['字段名称/代码（默认全部）', '筛选项', '生成超时时间', '请求间隔（默认1000-2000毫秒）'],
       delivery: '指定日期范围的生意参谋完整 Excel 数据文件',
-      commandTemplate: 'tbcli sycm fetch --data-platform <平台> --data-type <粒度> --data-dimension <维度> [--fields <字段,...>] --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD> --out <数据.xlsx>',
+      commandTemplate: 'tbcli sycm fetch --data-platform <平台> --data-type <粒度> --data-dimension <维度> [--date-type <day|week|month|customDaySum>] [--fields <字段,...>] --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD> --out <数据.xlsx>',
     },
   },
   {

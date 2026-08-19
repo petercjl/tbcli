@@ -19,6 +19,11 @@ test('authentication commands are stable internal capabilities', () => {
   }
 });
 
+test('direct SYCM fetch advertises its date granularity option', () => {
+  const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'sycm fetch');
+  assert.match(command.capability.commandTemplate, /--date-type/);
+});
+
 test('every stable business command has complete ecommerce-facing guidance', () => {
   const capabilities = businessCapabilities();
   assert.ok(capabilities.length > 0);

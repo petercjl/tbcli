@@ -60,7 +60,7 @@ export function usage() {
   tbcli sycm catalog [--data-platform NAME [--data-type NAME [--data-dimension NAME]]] [--date-type TYPE] [--json]
   tbcli sycm export (--report-id ID | --report-name NAME) --out report.xlsx [--timeout-ms 120000] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json]
   tbcli sycm fetch (--report-id ID | --report-name NAME) --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--timeout-ms 120000] [--json]
-  tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--fields all|FIELD,...] [--filter NAME=VALUE,...] --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--json]
+  tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--date-type day|week|month|customDaySum] [--fields all|FIELD,...] [--filter NAME=VALUE,...] --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
