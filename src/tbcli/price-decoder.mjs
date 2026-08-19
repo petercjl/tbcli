@@ -1,5 +1,9 @@
 import * as fontkit from 'fontkit';
 
+import {
+  decodeSecfontApiPrices,
+  parseSecfontPrice,
+} from './secfont-direct-decoder.mjs';
 import { assertPageNotVerifying } from './taobao-guard.mjs';
 
 const GLYPH_TEXT = new Map([
@@ -50,30 +54,85 @@ export async function enrichEncodedPrices({
   totalCount,
   shopUrl,
   delayBeforeRequest,
+  navigateToShopPage,
+  prefetchedVisibleItems = [],
+  maxShopPages = 0,
+  allowedShopPages = null,
   onProgress = () => {},
   fetchImpl = fetch,
+  directDecoder = decodeSecfontApiPrices,
 }) {
   const targets = new Map(
     items
       .filter((item) => item.priceStatus === 'encoded')
       .map((item) => [String(item.itemId), item]),
   );
-  if (!targets.size) return { decodedCount: 0, scannedPages: 0 };
+  if (!targets.size) return { decodedCount: 0, scannedPages: 0, directDecodedCount: 0 };
   if (!shopUrl) throw new Error('导出 Excel 并还原价格时必须提供 --url');
 
-  const found = new Map();
-  const expectedWebPages = Math.max(1, Math.ceil(Number(totalCount || items.length) / 60));
-  const maxWebPages = Math.min(expectedWebPages + 2, 100);
-  let scannedPages = 0;
+  const decodedIds = new Set();
+  const directDecodedIds = new Set();
+  const directTargets = [...targets.values()].filter((item) => parseSecfontPrice(item.encodedPrice));
+  if (directTargets.length) {
+    const directResults = await directDecoder({ page, items: directTargets });
+    for (const result of directResults) {
+      const item = targets.get(String(result.itemId));
+      if (!item) continue;
+      item.price = result.price;
+      item.priceStatus = 'decoded-secfont';
+      decodedIds.add(String(result.itemId));
+      directDecodedIds.add(String(result.itemId));
+    }
+    onProgress({
+      phase: 'direct',
+      found: decodedIds.size,
+      total: targets.size,
+    });
+    if (decodedIds.size === targets.size) {
+      return {
+        decodedCount: decodedIds.size,
+        directDecodedCount: directDecodedIds.size,
+        scannedPages: 0,
+      };
+    }
+  }
 
-  for (let pageNo = 1; pageNo <= maxWebPages && found.size < targets.size; pageNo += 1) {
+  const found = new Map();
+  for (const entry of prefetchedVisibleItems) {
+    if (targets.has(entry.itemId) && (entry.plainPrice || (entry.encodedDisplayPrice && entry.fontUrl))) {
+      found.set(entry.itemId, entry);
+    }
+  }
+  const decoders = new Map();
+  await applyFoundPrices();
+
+  const expectedWebPages = Math.max(1, Math.ceil(Number(totalCount || items.length) / 60));
+  const pageNumbers = Array.isArray(allowedShopPages) && allowedShopPages.length
+    ? [...new Set(allowedShopPages.map(Number).filter((value) => value >= 1 && value <= 100))]
+    : Array.from({
+      length: maxShopPages
+        ? Math.min(maxShopPages, 100)
+        : Math.min(expectedWebPages + 2, 100),
+    }, (_, index) => index + 1);
+  const prefetchedPages = new Set(
+    prefetchedVisibleItems.map((entry) => entry.pageNo).filter(Boolean),
+  );
+  let scannedPages = prefetchedPages.size;
+
+  for (const pageNo of pageNumbers) {
+    if (found.size >= targets.size) break;
+    if (prefetchedPages.has(pageNo)) continue;
     await assertPageNotVerifying(page);
-    await delayBeforeRequest();
-    await page.goto(makeShopPageUrl(shopUrl, pageNo), { waitUntil: 'domcontentloaded', timeout: 60000 });
+    if (navigateToShopPage) {
+      await navigateToShopPage(pageNo);
+    } else {
+      await delayBeforeRequest();
+      await page.goto(makeShopPageUrl(shopUrl, pageNo), { waitUntil: 'domcontentloaded', timeout: 60000 });
+    }
     await assertPageNotVerifying(page);
     try {
       await page.waitForFunction(
-        () => document.querySelector('.J_TItems > .item4line1 .c-price'),
+        () => document.querySelector('.J_TItems > [class*="item"][class*="line1"] .c-price'),
         null,
         { timeout: 30000 },
       );
@@ -83,100 +142,56 @@ export async function enrichEncodedPrices({
     }
     await assertPageNotVerifying(page);
     const visibleItems = await readVisiblePrices(page);
-    scannedPages = pageNo;
+    scannedPages = Math.max(scannedPages, pageNo);
     for (const entry of visibleItems) {
-      if (targets.has(entry.itemId) && entry.encodedDisplayPrice && entry.fontUrl) {
+      if (targets.has(entry.itemId) && (entry.plainPrice || (entry.encodedDisplayPrice && entry.fontUrl))) {
         found.set(entry.itemId, entry);
       }
     }
+    await applyFoundPrices();
     onProgress({ phase: 'shop-page', pageNo, found: found.size, total: targets.size });
   }
 
   const missing = [...targets.keys()].filter((itemId) => !found.has(itemId));
-  for (const itemId of missing) {
-    const item = targets.get(itemId);
-    await assertPageNotVerifying(page);
-    await delayBeforeRequest();
-    let detailUrl;
-    try {
-      const original = new URL(item.itemUrl);
-      const trustedHost = original.hostname === 'taobao.com'
-        || original.hostname.endsWith('.taobao.com')
-        || original.hostname === 'tmall.com'
-        || original.hostname.endsWith('.tmall.com');
-      detailUrl = trustedHost ? new URL(`${original.origin}${original.pathname}`) : new URL('https://detail.tmall.com/item.htm');
-    } catch {
-      detailUrl = new URL('https://detail.tmall.com/item.htm');
-    }
-    detailUrl.searchParams.set('id', itemId);
-    await page.goto(detailUrl.toString(), { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await assertPageNotVerifying(page);
-    const plainPrice = await readDetailPrice(page, itemId);
-    if (plainPrice) found.set(itemId, { plainPrice });
-    onProgress({ phase: 'detail', itemId, found: found.size, total: targets.size });
+  if (missing.length) {
+    const error = new Error(`有 ${missing.length} 个商品未在已获取的店铺列表页找到可展示价格；为避免逐个访问商品详情，已停止导出：${missing.slice(0, 5).join(', ')}`);
+    error.code = 'PARTIAL_DATA';
+    error.partialDecodedCount = decodedIds.size;
+    throw error;
   }
 
-  const stillMissing = [...targets.keys()].filter((itemId) => !found.has(itemId));
-  if (stillMissing.length) {
-    throw new Error(`有 ${stillMissing.length} 个商品未找到可展示价格，已停止导出：${stillMissing.slice(0, 5).join(', ')}`);
-  }
+  return {
+    decodedCount: decodedIds.size,
+    directDecodedCount: directDecodedIds.size,
+    scannedPages,
+  };
 
-  const decoders = new Map();
-  for (const [itemId, item] of targets) {
-    const display = found.get(itemId);
-    if (display.plainPrice) {
-      item.price = display.plainPrice;
-      item.priceStatus = 'detail-page';
-      continue;
-    }
-    let decode = decoders.get(display.fontUrl);
-    if (!decode) {
-      decode = await loadFontDecoder(display.fontUrl, fetchImpl);
-      decoders.set(display.fontUrl, decode);
-    }
-    item.price = decode(display.encodedDisplayPrice);
-    item.priceStatus = 'decoded-font';
-    item.encodedDisplayPrice = display.encodedDisplayPrice;
-  }
-  return { decodedCount: targets.size, scannedPages };
-}
-
-async function readDetailPrice(page, itemId) {
-  try {
-    await page.waitForFunction(() => {
-      const selectors = [
-        '[class*="highlightPrice"] [class*="text"]',
-        '#J_PromoPrice .tm-price',
-        '#J_StrPrice .tm-price',
-        '[class*="Price--priceText"]',
-      ];
-      return selectors.some((selector) => [...document.querySelectorAll(selector)].some((node) => /^\d+(?:\.\d{1,2})?$/.test((node.textContent || '').trim())));
-    }, null, { timeout: 30000 });
-  } catch (error) {
-    await assertPageNotVerifying(page);
-    return '';
-  }
-  await assertPageNotVerifying(page);
-  return page.evaluate((expectedItemId) => {
-    if (new URL(location.href).searchParams.get('id') !== expectedItemId) return '';
-    const selectors = [
-      '[class*="highlightPrice"] [class*="text"]',
-      '#J_PromoPrice .tm-price',
-      '#J_StrPrice .tm-price',
-      '[class*="Price--priceText"]',
-    ];
-    for (const selector of selectors) {
-      for (const node of document.querySelectorAll(selector)) {
-        const text = String(node.textContent || '').trim();
-        if (/^\d+(?:\.\d{1,2})?$/.test(text)) return text;
+  async function applyFoundPrices() {
+    for (const [itemId, display] of found) {
+      if (decodedIds.has(itemId)) continue;
+      const item = targets.get(itemId);
+      if (!item) continue;
+      if (display.plainPrice) {
+        item.price = display.plainPrice;
+        item.priceStatus = 'shop-page';
+        decodedIds.add(itemId);
+        continue;
       }
+      let decode = decoders.get(display.fontUrl);
+      if (!decode) {
+        decode = await loadFontDecoder(display.fontUrl, fetchImpl);
+        decoders.set(display.fontUrl, decode);
+      }
+      item.price = decode(display.encodedDisplayPrice);
+      item.priceStatus = 'decoded-font';
+      item.encodedDisplayPrice = display.encodedDisplayPrice;
+      decodedIds.add(itemId);
     }
-    return '';
-  }, itemId);
+  }
 }
 
-async function readVisiblePrices(page) {
-  return page.evaluate(() => {
+export async function readVisiblePrices(page, pageNo = null) {
+  const entries = await page.evaluate(() => {
     const normalizeFamily = (value) => String(value || '').split(',')[0].replace(/["']/g, '').trim();
     const findFontUrl = (fontFamily) => {
       const family = normalizeFamily(fontFamily);
@@ -199,22 +214,25 @@ async function readVisiblePrices(page) {
     const result = [];
     for (const child of container.children) {
       if (child.classList.contains('pagination') || child.classList.contains('comboHd')) break;
-      if (!child.classList.contains('item4line1')) continue;
+      if (![...child.classList].some((name) => /^item\d+line1$/.test(name))) continue;
       for (const item of child.querySelectorAll('.item')) {
         const link = item.querySelector('a.item-name');
         const price = item.querySelector('.c-price');
         if (!link || !price) continue;
         const itemId = String(item.dataset.id || new URL(link.href, location.href).searchParams.get('id') || '');
         const fontFamily = getComputedStyle(price).fontFamily;
+        const displayPrice = String(price.textContent || '').trim();
         result.push({
           itemId,
-          encodedDisplayPrice: String(price.textContent || '').trim(),
+          plainPrice: /^\d+(?:\.\d{1,2})?$/.test(displayPrice) ? displayPrice : '',
+          encodedDisplayPrice: displayPrice,
           fontUrl: findFontUrl(fontFamily),
         });
       }
     }
     return result;
   });
+  return pageNo == null ? entries : entries.map((entry) => ({ ...entry, pageNo }));
 }
 
 async function loadFontDecoder(fontUrl, fetchImpl) {

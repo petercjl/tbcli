@@ -1,0 +1,4 @@
+interface:
+  display_name: "tbcli 电商数据助手"
+  short_description: "使用 tbcli 执行淘宝、千牛、生意参谋与无界数据任务"
+  default_prompt: "使用 $tbcli 获取指定时间范围的生意参谋取数报表并交付 Excel。"

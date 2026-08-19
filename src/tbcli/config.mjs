@@ -35,5 +35,6 @@ export const DEFAULT_PROFILE_DIR = process.env.TBCLI_CHROME_PROFILE
   || path.join(os.homedir(), '.dianshang-chrome-profile');
 export const DEFAULT_CHROME_PATH = resolveDefaultChromePath();
 export const DEFAULT_START_URL = 'about:blank';
+export const DEFAULT_SESSION_MODE = process.env.TBCLI_SESSION_MODE || 'auto';
 export const DEFAULT_CDP = process.env.TBCLI_CDP_URL
   || `http://127.0.0.1:${DEFAULT_DEBUGGING_PORT}`;

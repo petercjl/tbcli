@@ -1,4 +1,5 @@
-import { assertTaobaoLoggedIn, withBrowserSession } from '../browser-session.mjs';
+import { withAuthenticatedTaobaoSession } from '../browser-session.mjs';
+import { resolveApiDelayRange, waitBeforeTaobaoApiRequest } from '../api-policy.mjs';
 import { printJsonOrText } from '../format.mjs';
 import { assertPageNotVerifying, createVerificationError, isVerificationSignal } from '../taobao-guard.mjs';
 
@@ -6,14 +7,15 @@ export async function runLogisticsGet(opts) {
   const tradeId = String(opts.tradeId || opts.tid || '').trim();
   if (!tradeId) throw new Error('缺少 --trade-id');
 
-  await withBrowserSession(opts, async ({ context }) => {
-    await assertTaobaoLoggedIn(context);
+  const delayRange = resolveApiDelayRange(opts);
+  await withAuthenticatedTaobaoSession(opts, async ({ context }) => {
 
     const sellerId = opts.sellerId || inferSellerId(context.pages());
     if (!sellerId) throw new Error('缺少 --seller-id，且当前电商浏览器页面 URL 中无法推断 seller_id');
 
     const page = await resolveTaobaoPage(context);
     await assertPageNotVerifying(page);
+    await waitBeforeTaobaoApiRequest(page, delayRange);
     const detail = await queryLogisticsDetail(page, { tradeId, sellerId });
     const output = normalizeLogisticsDetail(detail, { tradeId, sellerId });
 
