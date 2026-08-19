@@ -145,6 +145,8 @@ Read [references/command-reference.md](references/command-reference.md) when the
 
 - **Browser unavailable:** verify Chrome installation and the fixed Profile configuration with `tbcli doctor`; normal commands launch a managed persistent browser without requiring port 9223. Return to Main Flow Step 4 after resolving the dependency.
 - **Profile already open:** an ordinary Chrome without an attachable session cannot be taken over safely. Ask the user to close the Chrome using the fixed Profile, then return to Main Flow Step 4. Never copy the Profile or extract Cookie databases.
+- **Unsupported `--no-sandbox` banner:** treat this as an unsafe or outdated tbcli browser launch. Stop the login attempt, upgrade with the user's supported package-manager workflow, close that browser, and rerun `tbcli auth login`. Never advise repeated slider attempts or disabling the Chrome sandbox.
+- **Sandbox unavailable:** stop with the CLI error and ask the user to repair Chrome/operating-system sandbox support. Never add or recommend `--no-sandbox` as a fallback.
 - **Login or verification required:** run `tbcli auth login`, ask the user to complete login/captcha in the visible Chrome, wait for the CLI to confirm authentication, and return to Main Flow Step 4. Do not bypass verification or expose cookies.
 - **Date unavailable:** report requested and valid periods; require approval before changing the period.
 - **Unknown report/field/filter:** use `sycm catalog`; never invent names or codes.

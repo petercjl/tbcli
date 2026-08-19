@@ -20,6 +20,11 @@ Profile, ask the user to close it; never copy the Profile or export cookies. If
 the caller supplies `--profile-dir` or `--session-mode`, keep the same values on
 the status, login, status-confirmation, and business commands.
 
+Managed Chrome must run with its security sandbox enabled. If Chrome shows an
+unsupported `--no-sandbox` warning, stop authentication, upgrade tbcli, close
+that browser, and start `auth login` again. Never work around a slider by
+disabling the sandbox or repeatedly retrying verification.
+
 ## SYCM and Wujie reports
 
 ```bash
