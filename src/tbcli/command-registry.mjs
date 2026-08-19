@@ -1,5 +1,17 @@
 export const COMMAND_DEFINITIONS = Object.freeze([
   {
+    key: 'auth login',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '打开固定浏览器 Profile，等待用户完成淘宝登录并确认登录成功',
+  },
+  {
+    key: 'auth status',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '检查固定浏览器 Profile 中的淘宝登录状态',
+  },
+  {
     key: 'skill source',
     maturity: 'stable',
     audience: 'internal',
@@ -174,7 +186,7 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     key: 'doctor',
     maturity: 'stable',
     audience: 'internal',
-    description: '检查 Chrome、CDP 和淘宝登录状态',
+    description: '检查 Chrome、浏览器会话和淘宝登录状态',
   },
   {
     key: 'dev pages',

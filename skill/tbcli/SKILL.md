@@ -26,7 +26,7 @@ Use `--agent agents`, `openclaw`, or `sealseek`, or `--target-dir <agent-skill-r
 - **Input:** a supported business task plus identifiers, URLs, report paths, dates, fields, filters, and output preference when applicable.
 - **Strategy:** discover the live CLI, normalize the intent, preflight dependencies and all targets, execute stable commands, then verify outputs.
 - **Output:** requested business data or a new file, with paths, covered period, command outcome, and limitations.
-- **Dependencies:** `tbcli` on `PATH`; a supported Chrome; the dedicated ecommerce browser logged into the required account; terminal execution and filesystem access.
+- **Dependencies:** `tbcli` on `PATH`; a supported Chrome; the fixed tbcli browser Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
 - **Permissions:** use only the current user's authorized account and visible data. Never extract or persist cookies, tokens, or session headers.
 - **Success:** every requested target completes, every output is new and readable, its scope matches the request, and temporary SYCM reports are cleaned.
 
@@ -37,7 +37,7 @@ If `command -v tbcli` fails, return `CLI_UNAVAILABLE`. Do not recreate a stable 
 1. Run `command -v tbcli`, `tbcli --help`, and `tbcli capabilities --json`. Use the live CLI rather than recalled syntax.
 2. Parse the user's intent into one or more targets. Identify required URLs/IDs, platform, data type, dimension, date granularity, period, fields, filters, and delivery directory.
 3. Resolve relative dates using the user's local date. For completed daily data, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. State the resolved dates.
-4. Preflight every target before creating any output. Check authentication with `tbcli doctor` when browser/login state is uncertain. For取数报表, follow **SYCM Report Flow**.
+4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. For取数报表, follow **SYCM Report Flow**.
 5. Choose a new output path. Read-only check every explicit path first. Never overwrite an existing file; use a clear new filename or ask when naming materially matters.
 6. Execute targets sequentially so request pacing and partial failures remain understandable. Use `--json` when structured verification is useful.
 7. Verify each output: existence, nonzero size, expected file type, requested date coverage, key headers, and target identity. For Excel, inspect the workbook rather than trusting only the exit code.
@@ -143,8 +143,9 @@ Read [references/command-reference.md](references/command-reference.md) when the
 
 ## Failure Branches
 
-- **Browser unavailable:** run `tbcli browser open`, then `tbcli doctor`, and return to Main Flow Step 4.
-- **Login or verification required:** stop and ask the user to complete login/captcha in the ecommerce browser. Do not bypass it.
+- **Browser unavailable:** verify Chrome installation and the fixed Profile configuration with `tbcli doctor`; normal commands launch a managed persistent browser without requiring port 9223. Return to Main Flow Step 4 after resolving the dependency.
+- **Profile already open:** an ordinary Chrome without an attachable session cannot be taken over safely. Ask the user to close the Chrome using the fixed Profile, then return to Main Flow Step 4. Never copy the Profile or extract Cookie databases.
+- **Login or verification required:** run `tbcli auth login`, ask the user to complete login/captcha in the visible Chrome, wait for the CLI to confirm authentication, and return to Main Flow Step 4. Do not bypass verification or expose cookies.
 - **Date unavailable:** report requested and valid periods; require approval before changing the period.
 - **Unknown report/field/filter:** use `sycm catalog`; never invent names or codes.
 - **Existing output:** select a new path; never bypass overwrite protection.

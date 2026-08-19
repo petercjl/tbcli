@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 import { withBrowserSession, assertTaobaoLoggedIn } from '../browser-session.mjs';
-import { DEFAULT_CDP, DEFAULT_CHROME_PATH, DEFAULT_PROFILE_DIR } from '../config.mjs';
+import { DEFAULT_CHROME_PATH, DEFAULT_PROFILE_DIR } from '../config.mjs';
 import { businessCapabilities, technicalCapabilities } from '../command-registry.mjs';
 
 export function runCapabilities(opts = {}) {
@@ -43,13 +43,14 @@ export async function runDoctor(opts = {}) {
     chromePath: DEFAULT_CHROME_PATH,
     chromeExists: Boolean(DEFAULT_CHROME_PATH && fs.existsSync(DEFAULT_CHROME_PATH)),
     profileDir: DEFAULT_PROFILE_DIR,
-    cdpUrl: opts.cdpUrl || DEFAULT_CDP,
-    cdpReady: false,
+    sessionMode: '',
+    browserReady: false,
     taobaoLoggedIn: false,
     pages: 0,
   };
-  await withBrowserSession(opts, async ({ context }) => {
-    result.cdpReady = true;
+  await withBrowserSession({ ...opts, startUrl: 'about:blank', url: '' }, async ({ context, sessionMode }) => {
+    result.sessionMode = sessionMode;
+    result.browserReady = true;
     result.pages = context.pages().length;
     try {
       await assertTaobaoLoggedIn(context);
@@ -58,5 +59,5 @@ export async function runDoctor(opts = {}) {
   });
   if (opts.json) console.log(JSON.stringify(result, null, 2));
   else for (const [key, value] of Object.entries(result)) console.log(`${key}: ${value}`);
-  if (!result.chromeExists || !result.cdpReady || !result.taobaoLoggedIn) process.exitCode = 1;
+  if (!result.chromeExists || !result.browserReady || !result.taobaoLoggedIn) process.exitCode = 1;
 }

@@ -11,6 +11,7 @@ export function parseArgs(argv) {
     else if (arg === '--cdp-url') out.cdpUrl = argv[++index];
     else if (arg === '--profile-dir') out.profileDir = argv[++index];
     else if (arg === '--chrome-path') out.chromePath = argv[++index];
+    else if (arg === '--session-mode') out.sessionMode = argv[++index];
     else if (arg === '--port') out.port = argv[++index];
     else if (arg === '--url') out.url = argv[++index];
     else if (arg === '--trade-id') out.tradeId = argv[++index];

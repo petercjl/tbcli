@@ -11,6 +11,14 @@ test('every routed command is declared in the single command registry', () => {
   );
 });
 
+test('authentication commands are stable internal capabilities', () => {
+  for (const key of ['auth login', 'auth status']) {
+    const command = COMMAND_DEFINITIONS.find((entry) => entry.key === key);
+    assert.equal(command?.maturity, 'stable');
+    assert.equal(command?.audience, 'internal');
+  }
+});
+
 test('every stable business command has complete ecommerce-facing guidance', () => {
   const capabilities = businessCapabilities();
   assert.ok(capabilities.length > 0);

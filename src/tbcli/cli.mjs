@@ -1,6 +1,13 @@
 import { parseArgs } from './args.mjs';
-import { DEFAULT_CDP, DEFAULT_CHROME_PATH, DEFAULT_DEBUGGING_PORT, DEFAULT_PROFILE_DIR } from './config.mjs';
+import {
+  DEFAULT_CDP,
+  DEFAULT_CHROME_PATH,
+  DEFAULT_DEBUGGING_PORT,
+  DEFAULT_PROFILE_DIR,
+  DEFAULT_SESSION_MODE,
+} from './config.mjs';
 import { runBrowserOpen } from './commands/browser.mjs';
+import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
@@ -13,6 +20,8 @@ import { runSkillInstall, runSkillSource, runSkillStatus, runSkillUpdate } from 
 import { findCommandDefinition } from './command-registry.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
+  'auth login': runAuthLogin,
+  'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
   'logistics get': runLogisticsGet,
   'shop products': runShopProducts,
@@ -38,6 +47,8 @@ export const ROUTED_COMMAND_KEYS = Object.freeze(Object.keys(COMMAND_HANDLERS));
 
 export function usage() {
   console.log(`Usage:
+  tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
+  tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
   tbcli logistics get --trade-id ID [--seller-id ID] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json] [--out file.json]
   tbcli shop products --url SHOP_URL [--page N | --max-pages N] [--min-delay-ms 3000] [--max-delay-ms 5000] [--cache-path checkpoint.json] [--out products.xlsx|products.json|products.csv] [--json]
@@ -61,6 +72,7 @@ export function usage() {
   tbcli dev capture [--url SHOP_URL] [--duration-ms 15000]
 
 Environment:
+  TBCLI_SESSION_MODE   Browser session mode, default ${DEFAULT_SESSION_MODE} (auto reuses an existing CDP browser, otherwise managed)
   TBCLI_CDP_URL   Chrome DevTools URL, default ${DEFAULT_CDP}
   TBCLI_CHROME_PROFILE   Chrome profile dir, default ${DEFAULT_PROFILE_DIR}
   TBCLI_REMOTE_DEBUGGING_PORT   Chrome remote debugging port, default ${DEFAULT_DEBUGGING_PORT}
@@ -69,10 +81,10 @@ Environment:
 Notes:
   - 不知道 tbcli 能做什么？可直接问 Agent：“这个 tbcli 有哪些能力？”
   - Agent 应先运行 tbcli capabilities --json，按能力清单调用稳定命令。
-  - tbcli browser open starts the shared ecommerce browser (电商浏览器).
-  - The ecommerce browser always defaults to CDP :9223 and ~/.dianshang-chrome-profile.
-  - Requires that the ecommerce browser is already logged in to Taobao/Qianniu seller backend.
-  - Does not read or store cookies; requests run inside the logged-in browser page context.
+  - First use: run tbcli auth login and complete login in the opened Chrome.
+  - Normal commands use the persistent profile at ~/.dianshang-chrome-profile without requiring port 9223.
+  - Auto mode can reuse an already running legacy CDP browser; browser open remains a compatibility/debugging command.
+  - tbcli never exports cookies or tokens; authentication stays in the dedicated Chrome profile.
 `);
 }
 

@@ -5,12 +5,18 @@ Read only the section relevant to the current request. Always confirm live synta
 ## Ecommerce browser and health
 
 ```bash
+tbcli auth login [--timeout-ms 300000] [--json]
+tbcli auth status [--json]
 tbcli browser open [--url '<URL>']
 tbcli doctor [--json]
 tbcli capabilities [--json] [--all]
 ```
 
-Use the shared dedicated ecommerce browser. Do not substitute a temporary browser profile. `doctor` checks Chrome/CDP and the authenticated session.
+Use the fixed persistent tbcli Profile. Start with `auth status`; if logged out,
+run `auth login` and wait while the user completes the visible login flow. Normal
+commands use a managed browser without requiring port 9223. `browser open` is a
+legacy compatibility/debugging command. If another ordinary Chrome owns the
+Profile, ask the user to close it; never copy the Profile or export cookies.
 
 ## SYCM and Wujie reports
 

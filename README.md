@@ -122,42 +122,50 @@ For example, a user can say: `帮我获取【店铺首页链接】的商品列�
 Use `tbcli capabilities --all` only when internal browser and development tools
 also need to be shown.
 
-## Requirements
+## Authentication and browser session
 
-- The ecommerce browser is running with remote debugging on port `9223`.
-- The ecommerce browser is already logged in to Taobao/Qianniu seller backend.
-
-By default, `tbcli` opens the shared ecommerce browser:
+On first use, start the interactive login flow:
 
 ```bash
-tbcli browser open
+tbcli auth login
+```
+
+`tbcli` opens Chrome with its fixed persistent profile and waits until the user
+has completed Taobao/Tmall login. Check it at any time with:
+
+```bash
+tbcli auth status --json
 ```
 
 Default browser settings:
 
-- CDP URL: `http://127.0.0.1:9223`
 - Chrome profile: `~/.dianshang-chrome-profile` on macOS, `%USERPROFILE%\.dianshang-chrome-profile` on Windows
 - macOS Chrome: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
 - Windows Chrome: automatically detected under `%LOCALAPPDATA%`, `%PROGRAMFILES%`, or `%PROGRAMFILES(X86)%`
+- Session mode: `auto`; reuse an existing legacy CDP browser when available,
+  otherwise launch a managed persistent browser without opening TCP port `9223`
 
-These can be overridden with `TBCLI_CDP_URL`, `TBCLI_CHROME_PROFILE`, `TBCLI_REMOTE_DEBUGGING_PORT`, or `TBCLI_CHROME_PATH`.
+These can be overridden with `TBCLI_SESSION_MODE`, `TBCLI_CDP_URL`,
+`TBCLI_CHROME_PROFILE`, `TBCLI_REMOTE_DEBUGGING_PORT`, or `TBCLI_CHROME_PATH`.
 
-On first use, run `tbcli browser open`, then sign in to Taobao/Qianniu manually
-in the opened ecommerce browser. npm installs the required `playwright-core`
-dependency automatically; Chrome and Node.js are system prerequisites and are
-not installed by `tbcli`.
+Normal data commands start and close their own managed browser session while
+reusing the same profile. Port `9223` is no longer a requirement. The legacy
+`tbcli browser open` command remains available for compatibility and debugging.
+If another ordinary Chrome already owns the fixed profile without a debuggable
+connection, close that Chrome first so tbcli can safely open the profile.
 
-The CLI does not read or store cookies directly. It connects to the logged-in
-ecommerce browser through CDP and runs Taobao requests inside the browser page
-context. Do not create a separate profile for `tbcli`.
+The CLI checks only whether the required login-cookie names exist. It never
+prints, exports, or maintains a separate cookie/token file; authentication stays
+inside the dedicated Chrome profile. npm installs `playwright-core`
+automatically; Chrome and Node.js remain system prerequisites.
 
 ## Verification safety rule
 
 If Taobao shows or is suspected to show a login redirect, slider, CAPTCHA,
 security verification, access restriction, or MTOP validation signal, `tbcli`
 must stop immediately. It must not retry, refresh, or continue requesting more
-pages. Complete the verification manually in the ecommerce browser, then run
-the command again. This rule applies to every Taobao data command.
+pages. Run `tbcli auth login`, complete the verification manually, then run the
+data command again. This rule applies to every Taobao data command.
 
 ## Commands
 
