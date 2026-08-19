@@ -19,6 +19,12 @@ test('authentication commands are stable internal capabilities', () => {
   }
 });
 
+test('version command is a stable internal capability', () => {
+  const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'version');
+  assert.equal(command?.maturity, 'stable');
+  assert.equal(command?.audience, 'internal');
+});
+
 test('direct SYCM fetch advertises its date granularity option', () => {
   const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'sycm fetch');
   assert.match(command.capability.commandTemplate, /--date-type/);

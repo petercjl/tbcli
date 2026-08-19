@@ -18,8 +18,10 @@ import { runAiDianjingExport } from './commands/ai-dianjing.mjs';
 import { runSycmCatalog, runSycmExport, runSycmFetch, runSycmReports } from './commands/sycm-reports.mjs';
 import { runSkillInstall, runSkillSource, runSkillStatus, runSkillUpdate } from './commands/skill.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
+import { runVersion } from './version.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
+  version: runVersion,
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
@@ -47,6 +49,8 @@ export const ROUTED_COMMAND_KEYS = Object.freeze(Object.keys(COMMAND_HANDLERS));
 
 export function usage() {
   console.log(`Usage:
+  tbcli --version
+  tbcli version
   tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
@@ -90,6 +94,10 @@ Notes:
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
+  if (args.version) {
+    runVersion();
+    return;
+  }
   if (args.help || args._.length === 0) {
     usage();
     return;

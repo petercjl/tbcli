@@ -3,6 +3,7 @@ export function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--json') out.json = true;
+    else if (arg === '--version' || arg === '-v') out.version = true;
     else if (arg === '--all') out.all = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;

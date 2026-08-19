@@ -1,5 +1,11 @@
 export const COMMAND_DEFINITIONS = Object.freeze([
   {
+    key: 'version',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '查看当前 tbcli 版本',
+  },
+  {
     key: 'auth login',
     maturity: 'stable',
     audience: 'internal',

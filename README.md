@@ -166,6 +166,19 @@ tbcli to the latest version, close the Chrome using the fixed Profile, and run
 `tbcli auth login` again. Do not continue entering credentials or repeatedly
 attempt the slider in that unsafe browser session.
 
+For npm installations, the fixed release can be installed and verified with:
+
+```bash
+npm install -g @petercjl/tbcli@0.5.1
+tbcli --version
+tbcli skill status --agent sealseek
+```
+
+If the SealSeek Skill status reports a managed copy rather than a link, refresh
+it with `tbcli skill update --agent sealseek` before starting `tbcli auth login`.
+Source-checkout developers should update through their repository workflow
+instead of replacing that checkout with a global npm package.
+
 ## Verification safety rule
 
 If Taobao shows or is suspected to show a login redirect, slider, CAPTCHA,

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import { withBrowserSession, assertTaobaoLoggedIn } from '../browser-session.mjs';
 import { DEFAULT_CHROME_PATH, DEFAULT_PROFILE_DIR } from '../config.mjs';
 import { businessCapabilities, technicalCapabilities } from '../command-registry.mjs';
+import { TBCLI_VERSION } from '../version.mjs';
 
 export function runCapabilities(opts = {}) {
   const capabilities = businessCapabilities();
@@ -38,6 +39,7 @@ export function runCapabilities(opts = {}) {
 
 export async function runDoctor(opts = {}) {
   const result = {
+    version: TBCLI_VERSION,
     node: process.version,
     platform: process.platform,
     chromePath: DEFAULT_CHROME_PATH,
