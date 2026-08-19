@@ -56,6 +56,13 @@ tbcli sycm fetch \
   --fields '访客数,支付金额' \
   --start-date 2026-08-01 --end-date 2026-08-18 \
   --out ./店铺-整体-指定字段.xlsx
+
+# Fetch selected products over the complete currently available daily history.
+tbcli sycm fetch \
+  --data-platform '生意参谋' --data-type '商品' --data-dimension '整体' \
+  --date-type day --fields all --device all \
+  --item-ids '631249289145,635607974988,650978994929' --all-history \
+  --out ./商品-整体-指定商品-全部历史.xlsx --json
 ```
 
 `sycm reports` locates saved reports and returns their IDs, dimensions, date
@@ -74,7 +81,10 @@ reads the live platform/type/dimension/field metadata available to the logged-in
 account. In direct mode, `sycm fetch` does not require a saved mother report:
 it accepts `--data-platform`, `--data-type`, and `--data-dimension`, resolves
 `--fields` by exact Chinese name or field code (`all` by default), and supports
-repeatable `--filter '筛选项=值1,值2'` arguments. Fields remain scoped to their own
+repeatable `--filter '筛选项=值1,值2'` arguments. Direct 商品 mode also accepts up
+to 100 numeric IDs through `--item-ids`; `--device` selects all, overall,
+wireless, or PC field groups. `--all-history` resolves and uses the live complete
+valid period instead of requiring explicit dates. Fields remain scoped to their own
 dimension and cannot be mixed across report types. When selecting metrics,
 tbcli automatically keeps the dimension identity columns (for example item/SKU,
 scene, or conversion-cycle fields) so repeated rows remain interpretable.

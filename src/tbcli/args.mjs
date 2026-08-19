@@ -5,6 +5,7 @@ export function parseArgs(argv) {
     if (arg === '--json') out.json = true;
     else if (arg === '--version' || arg === '-v') out.version = true;
     else if (arg === '--all') out.all = true;
+    else if (arg === '--all-history') out.allHistory = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
     else if (arg === '--out') out.out = argv[++index];
@@ -24,6 +25,8 @@ export function parseArgs(argv) {
     else if (arg === '--data-dimension') out.dataDimension = argv[++index];
     else if (arg === '--date-type') out.dateType = argv[++index];
     else if (arg === '--fields') out.fields = argv[++index];
+    else if (arg === '--item-ids') out.itemIds = argv[++index];
+    else if (arg === '--device') out.device = argv[++index];
     else if (arg === '--filter') (out.filters ||= []).push(argv[++index]);
     else if (arg === '--agent') out.agent = argv[++index];
     else if (arg === '--target-dir') out.targetDir = argv[++index];

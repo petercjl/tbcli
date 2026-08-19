@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, shop-product exports, order logistics, AI点睛 reports, and supported DingTalk document tasks. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 店铺-整体, 商品-整体, SKU, 关键词, 流量来源, 无界账户/计划/人群/商品主体, 最近N天分日数据, or asks what tbcli can do. Translate natural-language report names, periods, fields, and filters into stable CLI commands and deliver verified files.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, shop-product exports, order logistics, AI点睛 reports, and supported DingTalk document tasks. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 店铺-整体, 商品-整体, SKU, 关键词, 流量来源, 无界账户/计划/人群/商品主体, 指定商品ID, 所有历史数据, 终端类型, 最近N天分日数据, or asks what tbcli can do. Translate natural-language report names, periods, fields, and filters into stable CLI commands and deliver verified files.
 ---
 
 # tbcli
@@ -89,6 +89,8 @@ Preflight all targets against their `validPeriod` before downloading any. If the
 - Do not mix fields from different dimensions.
 - tbcli automatically retains identity columns such as item/SKU, scene, and conversion cycle when metrics are selected.
 - For each returned filter with multiple values, use the user's choice. If the choice materially changes meaning—especially 无界“转化周期”—ask rather than guessing. Pass repeatable `--filter '筛选项=值1,值2'` arguments.
+- For 商品 dimensions, pass requested numeric IDs with `--item-ids 'ID1,ID2,...'`; accept comma, Chinese comma, or whitespace in user input, deduplicate it, and preserve 最多 100 IDs. Do not download every product and filter afterward.
+- Map “所有终端/全部终端” to `--device all`, “总体/整体” to `overall`, “无线端” to `wireless`, and “PC端” to `pc`. `all` retains every returned field group and is valid even when the dimension does not require terminal filtering; identity fields remain present. Stop only when a non-`all` terminal choice is requested but the live dimension does not support it.
 
 ### 4. Fetch without a saved mother report
 
@@ -101,11 +103,20 @@ tbcli sycm fetch \
   --data-dimension '<数据维度>' \
   --date-type '<时间粒度>' \
   --fields '<all|字段1,字段2>' \
-  --start-date '<YYYY-MM-DD>' \
-  --end-date '<YYYY-MM-DD>' \
+  [--device '<all|overall|wireless|pc>'] \
+  [--item-ids '<ID1,ID2,...>'] \
+  (--all-history | --start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>') \
   --out '<new-output.xlsx>' \
   --json
 ```
+
+Use `--all-history` when the user asks for “所有有数据的历史时间区间”, “全部可取历史”, or equivalent wording. The CLI resolves the live `validPeriod` and uses both boundaries; do not invent an earlier date. Do not combine it with explicit start/end dates.
+
+For the natural request:
+
+> 获取商品-整体中商品 ID 631249289145、635607974988、650978994929 的所有历史分日数据，所有字段，终端类型选择所有终端。
+
+Preflight 商品-整体 with `day`, then run direct `sycm fetch` with `--fields all --device all --item-ids '631249289145,635607974988,650978994929' --all-history`. Report the resolved live date range from the JSON result and deliver one verified Excel.
 
 Add filters as needed. The CLI creates a uniquely named `tbcli-temp-*` report, downloads the official Excel, and deletes only that verified temporary report.
 
@@ -129,10 +140,11 @@ Use these branches only when the user explicitly wants a saved report/template o
 Require all of the following:
 
 - JSON reports the requested period and target dimension.
+- JSON reports the requested item IDs and terminal choice when supplied, plus `workbook.returnedItemIds`, `itemIdsWithoutRows`, and the actual `dataPeriod`. Treat missing rows as “no rows returned in the selected scope”, not as proof that an item does not exist.
 - `temporaryReportDeleted` is `true` for `sycm fetch`.
 - The `.xlsx` exists, is nonempty, and opens.
 - Headers include date, shop, required identity dimensions, and requested metrics.
-- The first/last dates and time granularity match the request.
+- The time granularity matches the request. For sparse filtered results, `workbook.dataPeriod` may be narrower than `requestedPeriod`; require it to stay inside the requested range rather than falsely requiring rows on both boundaries.
 - Multi-target delivery includes one verified result per target.
 
 If cleanup fails, preserve the downloaded file, report the exact temporary report ID/name, and do not claim full success. After an interrupted run, inspect `tbcli sycm reports --keyword 'tbcli-temp-' --json`; delete nothing manually without verifying tbcli ownership.

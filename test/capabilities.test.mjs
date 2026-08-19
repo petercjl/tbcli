@@ -28,6 +28,9 @@ test('version command is a stable internal capability', () => {
 test('direct SYCM fetch advertises its date granularity option', () => {
   const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'sycm fetch');
   assert.match(command.capability.commandTemplate, /--date-type/);
+  assert.match(command.capability.commandTemplate, /--all-history/);
+  assert.match(command.capability.commandTemplate, /--item-ids/);
+  assert.match(command.capability.commandTemplate, /--device/);
 });
 
 test('every stable business command has complete ecommerce-facing guidance', () => {

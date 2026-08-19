@@ -42,6 +42,14 @@ test('bundled Skill routes the multi-report recent-30-day request through direct
   assert.match(skill, /one Excel per table/);
 });
 
+test('bundled Skill routes product IDs, all history, and all terminals through direct fetch', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  assert.match(skill, /--item-ids/);
+  assert.match(skill, /--all-history/);
+  assert.match(skill, /--device all/);
+  assert.match(skill, /最多 100/);
+});
+
 test('npm package includes the canonical companion Skill source', async () => {
   const packageJson = JSON.parse(await fs.readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'));
   assert.ok(packageJson.files.includes('skill'));

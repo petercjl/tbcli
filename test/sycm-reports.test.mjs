@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import ExcelJS from '@excel.js/exceljs';
 
 import {
   assertRequestedDateRange,
+  buildDirectSycmMaster,
   buildTemporaryReportPayload,
   deleteTemporarySycmReport,
   fetchSycmDownload,
@@ -10,8 +12,12 @@ import {
   generateSycmDownload,
   getSycmCatalog,
   getSycmValidDateRange,
+  inspectSycmWorkbook,
   normalizeSycmReport,
+  parseItemIds,
   requestSycmJson,
+  filterFieldsByDevice,
+  resolveDeviceSelection,
   resolveFieldSelection,
 } from '../src/tbcli/commands/sycm-reports.mjs';
 
@@ -164,6 +170,50 @@ test('field selection accepts exact Chinese names or codes and rejects ambiguity
   assert.throws(() => resolveFieldSelection('不存在', fields), /没有字段/);
 });
 
+test('item ID selection accepts comma, Chinese comma, and whitespace with a 100-item limit', () => {
+  assert.deepEqual(parseItemIds('631249289145，635607974988 650978994929,631249289145'), [
+    '631249289145', '635607974988', '650978994929',
+  ]);
+  assert.throws(() => parseItemIds('631249289145,bad-id'), /只能包含数字商品 ID/);
+  assert.throws(() => parseItemIds(Array.from({ length: 101 }, (_, index) => index + 1).join(',')), /最多支持 100/);
+});
+
+test('device selection keeps identity fields and the requested terminal metrics', () => {
+  const fields = [
+    { code: 'item_id', deviceType: 'none' },
+    { code: 'overall_uv', deviceType: '0' },
+    { code: 'wireless_uv', deviceType: '2' },
+    { code: 'pc_uv', deviceType: '1' },
+  ];
+  assert.equal(resolveDeviceSelection('所有终端', true), 'all');
+  assert.equal(resolveDeviceSelection('无线端', true), 'wireless');
+  assert.deepEqual(filterFieldsByDevice(fields, 'pc').map((field) => field.code), ['item_id', 'pc_uv']);
+  assert.throws(() => resolveDeviceSelection('pc', false), /不支持终端类型筛选/);
+});
+
+test('direct product master carries selected item IDs and all terminal fields', async () => {
+  const responses = [
+    { data: ['day'] },
+    { data: [{ columnName: 'is_online', columnNameZh: '商品状态', filterType: 'enum', columnEnums: ['Y', 'N'] }] },
+    { data: { needFilterDeviceType: true, indicators: {
+      item_id: { columnNameZh: '商品ID', dataType: 'STRING', bizType: 'index', deviceType: 'none', columnIndex: 1 },
+      overall_uv: { columnNameZh: '总体访客数', dataType: 'BIGINT', bizType: 'index', deviceType: '0', columnIndex: 2 },
+      wireless_uv: { columnNameZh: '无线访客数', dataType: 'BIGINT', bizType: 'index', deviceType: '2', columnIndex: 3 },
+      pc_uv: { columnNameZh: 'PC访客数', dataType: 'BIGINT', bizType: 'index', deviceType: '1', columnIndex: 4 },
+    } } },
+    { data: [{ id: 2053, haveAuth: true }] },
+  ];
+  const master = await buildDirectSycmMaster({}, {
+    dataPlatform: '生意参谋', dataType: '商品', dataDimension: '整体', dateType: 'day',
+    fields: 'all', device: 'all', itemIds: '631249289145,635607974988,650978994929',
+    request: async () => responses.shift(),
+  });
+  assert.deepEqual(JSON.parse(master.itemIds), ['631249289145', '635607974988', '650978994929']);
+  assert.deepEqual(JSON.parse(master.indicators), ['item_id', 'overall_uv', 'wireless_uv', 'pc_uv']);
+  assert.deepEqual(JSON.parse(master.dims), { is_online: ['Y', 'N'] });
+  assert.equal(master.directDevice, 'all');
+});
+
 test('requested date range must stay inside the live SYCM allowance', () => {
   const validRange = { startDate: '2025-07-15', endDate: '2026-08-18' };
   assert.doesNotThrow(() => assertRequestedDateRange({
@@ -273,4 +323,27 @@ test('fetchSycmDownload pins the official download host and validates XLSX magic
     () => fetchSycmDownload('https://example.com/reports/test.xlsx'),
     /不受信任的下载地址/,
   );
+});
+
+test('downloaded workbook summary reconciles requested and returned product IDs', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('data');
+  sheet.addRow(['统计日期', '店铺名称', '商品ID', '支付金额']);
+  sheet.addRow(['2025-07-15', '测试店', '635607974988', 0]);
+  sheet.addRow(['2025-08-01', '测试店', '635607974988', 1]);
+  const summary = await inspectSycmWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()), [
+    '631249289145', '635607974988', '650978994929',
+  ], { dateType: 'day' });
+  assert.equal(summary.rows, 2);
+  assert.deepEqual(summary.returnedItemIds, ['635607974988']);
+  assert.deepEqual(summary.itemIdsWithoutRows, ['631249289145', '650978994929']);
+  assert.deepEqual(summary.dataPeriod, { startDate: '2025-07-15', endDate: '2025-08-01' });
+});
+
+test('downloaded workbook validation requires daily and requested product identity columns', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('data').addRow(['店铺名称', '支付金额']);
+  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  await assert.rejects(() => inspectSycmWorkbook(buffer, [], { dateType: 'day' }), /缺少“统计日期”列/);
+  await assert.rejects(() => inspectSycmWorkbook(buffer, ['635607974988']), /缺少“商品ID”列/);
 });

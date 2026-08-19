@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import ExcelJS from '@excel.js/exceljs';
 
 import { resolveApiDelayRange, waitBeforeTaobaoApiRequest } from '../api-policy.mjs';
 import { withAuthenticatedTaobaoSession } from '../browser-session.mjs';
@@ -123,9 +124,16 @@ export async function runSycmFetch(opts = {}) {
   }
   if (reportId && reportName) throw new Error('--report-id 与 --report-name 只能使用一个');
   if ((reportId || reportName) && direct) throw new Error('母版模式与直接维度模式不能同时使用');
-  const startDate = parseIsoDate(opts.startDate, '--start-date');
-  const endDate = parseIsoDate(opts.endDate, '--end-date');
-  if (startDate > endDate) throw new Error('--start-date 不能晚于 --end-date');
+  const useAllHistory = Boolean(opts.allHistory);
+  if (useAllHistory && (opts.startDate || opts.endDate)) {
+    throw new Error('--all-history 不能与 --start-date/--end-date 同时使用');
+  }
+  let startDate = useAllHistory ? '' : parseIsoDate(opts.startDate, '--start-date');
+  let endDate = useAllHistory ? '' : parseIsoDate(opts.endDate, '--end-date');
+  if (!useAllHistory && startDate > endDate) throw new Error('--start-date 不能晚于 --end-date');
+  if ((reportId || reportName) && (opts.itemIds || opts.device)) {
+    throw new Error('--item-ids/--device 仅支持直接维度模式');
+  }
   if (!opts.out) throw new Error('缺少 --out；请指定新的 .xlsx 输出文件');
   const outPath = path.resolve(String(opts.out));
   if (path.extname(outPath).toLowerCase() !== '.xlsx') throw new Error('--out 必须是 .xlsx 文件');
@@ -140,11 +148,22 @@ export async function runSycmFetch(opts = {}) {
       ? await getSycmReportById(page, reportId, delayRange)
       : reportName
         ? await findSycmReportByName(page, reportName, delayRange)
-        : await buildDirectSycmMaster(page, { ...direct, fields: opts.fields, filters: opts.filters, delayRange });
+        : await buildDirectSycmMaster(page, {
+          ...direct,
+          fields: opts.fields,
+          filters: opts.filters,
+          itemIds: opts.itemIds,
+          device: opts.device,
+          delayRange,
+        });
     if ((reportId || reportName) && opts.fields) {
       master = await selectSycmReportFields(page, master, opts.fields, delayRange);
     }
     const validRange = await getSycmValidDateRange(page, master, delayRange);
+    if (useAllHistory) {
+      startDate = validRange.startDate;
+      endDate = validRange.endDate;
+    }
     assertRequestedDateRange({ startDate, endDate, validRange });
 
     const temporaryName = `tbcli-temp-${randomUUID().slice(0, 8)}`;
@@ -166,14 +185,19 @@ export async function runSycmFetch(opts = {}) {
       await waitBeforeTaobaoApiRequest(page, delayRange);
       const buffer = await fetchSycmDownload(download.url, { timeoutMs });
       await assertPageNotVerifying(page);
+      const workbookSummary = await inspectSycmWorkbook(buffer, parseJsonArray(master.itemIds), {
+        dateType: master.dateType,
+      });
       const written = await writeNewFile(outPath, buffer);
       output = {
         masterReport: master.id ? normalizeSycmReport(master) : normalizeDirectSycmReport(master),
         requestedPeriod: { startDate, endDate },
+        allHistory: useAllHistory,
         validPeriod: validRange,
         output: outPath,
         bytes: written.size,
         mode: written.mode,
+        workbook: workbookSummary,
         temporaryReportDeleted: false,
       };
     } catch (error) {
@@ -190,11 +214,11 @@ export async function runSycmFetch(opts = {}) {
       }
     }
     if (operationError) {
-      if (cleanupError) operationError.message += `；临时报表清理也失败：${cleanupError.message}`;
+      if (cleanupError) operationError.message += `；临时报表 ${temporary.reportName} (${temporary.id}) 清理也失败：${cleanupError.message}`;
       throw operationError;
     }
     if (cleanupError) {
-      throw new Error(`数据文件已生成，但临时报表清理失败：${cleanupError.message}；output: ${outPath}`);
+      throw new Error(`数据文件已生成，但临时报表 ${temporary.reportName} (${temporary.id}) 清理失败：${cleanupError.message}；output: ${outPath}`);
     }
 
     if (opts.json) console.log(JSON.stringify(output, null, 2));
@@ -255,7 +279,7 @@ export async function getSycmCatalog(page, {
 }
 
 export async function buildDirectSycmMaster(page, {
-  dataPlatform, dataType, dataDimension, dateType = '', fields, filters, delayRange,
+  dataPlatform, dataType, dataDimension, dateType = '', fields, filters, itemIds, device, delayRange,
   request = requestSycmJson,
 } = {}) {
   const config = { channelName: '天猫淘宝', dataPlatform, dataType, dataDimension };
@@ -271,15 +295,22 @@ export async function buildDirectSycmMaster(page, {
     method: 'POST', body: { ...config, dateType: resolvedDateType, dims }, delayRange,
   });
   const availableFields = normalizeIndicators(indicatorResponse.data?.indicators);
-  const selected = resolveFieldSelection(fields, availableFields);
+  const resolvedDevice = resolveDeviceSelection(device, Boolean(indicatorResponse.data?.needFilterDeviceType));
+  const deviceFields = filterFieldsByDevice(availableFields, resolvedDevice);
+  const selected = resolveFieldSelection(fields, deviceFields);
+  const selectedItemIds = parseItemIds(itemIds);
+  if (selectedItemIds.length && dataType !== '商品') {
+    throw new Error('--item-ids 仅支持商品数据粒度');
+  }
   const shopsResponse = await request(page, `${FETCH_DATA_PREFIX}getAllShopListWithNoAuth.json`, { delayRange });
   const shopIds = (shopsResponse.data || []).filter((shop) => shop.haveAuth !== false).map((shop) => String(shop.id));
   if (!shopIds.length) throw new Error('当前账号没有可用于取数的已授权店铺');
   return {
     datasource: '电商后台', channelName: '天猫淘宝', dataPlatform, dataType, dataDimension, dateType: resolvedDateType,
     shopIds: JSON.stringify(shopIds), indicators: JSON.stringify(selected.map((field) => field.code)),
-    dims: JSON.stringify(dims), customFilters: '{}', itemIds: '[]', isAutoUpdate: '0',
+    dims: JSON.stringify(dims), customFilters: '{}', itemIds: JSON.stringify(selectedItemIds), isAutoUpdate: '0',
     autoUpdateCycle: 1, isDataFormat: 'N', directFieldNames: selected.map((field) => field.name),
+    directDevice: resolvedDevice, directItemIds: selectedItemIds,
   };
 }
 
@@ -535,6 +566,48 @@ export async function fetchSycmDownload(value, {
   return buffer;
 }
 
+export async function inspectSycmWorkbook(buffer, requestedItemIds = [], { dateType = '' } = {}) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) throw new Error('生意参谋 Excel 没有工作表');
+  const headers = [];
+  for (let column = 1; column <= sheet.columnCount; column += 1) {
+    headers.push(String(sheet.getCell(1, column).text || '').trim());
+  }
+  const dateColumn = headers.indexOf('统计日期') + 1;
+  const itemIdColumn = headers.indexOf('商品ID') + 1;
+  if (dateType === 'day' && !dateColumn) throw new Error('生意参谋分日 Excel 缺少“统计日期”列');
+  if (requestedItemIds.length && !itemIdColumn) throw new Error('生意参谋指定商品 Excel 缺少“商品ID”列');
+  const returnedItemIds = new Set();
+  const dates = [];
+  let dataRows = 0;
+  for (let row = 2; row <= sheet.rowCount; row += 1) {
+    const values = sheet.getRow(row).values;
+    if (!Array.isArray(values) || values.slice(1).every((value) => value == null || String(value).trim() === '')) continue;
+    dataRows += 1;
+    if (itemIdColumn) {
+      const itemId = String(sheet.getCell(row, itemIdColumn).text || '').trim();
+      if (itemId) returnedItemIds.add(itemId);
+    }
+    if (dateColumn) {
+      const date = String(sheet.getCell(row, dateColumn).text || '').trim().slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(date)) dates.push(date);
+    }
+  }
+  const requested = [...new Set((requestedItemIds || []).map(String))];
+  dates.sort();
+  return {
+    sheet: sheet.name,
+    rows: dataRows,
+    columns: headers.length,
+    headers,
+    returnedItemIds: [...returnedItemIds],
+    itemIdsWithoutRows: requested.filter((itemId) => !returnedItemIds.has(itemId)),
+    dataPeriod: dates.length ? { startDate: dates[0], endDate: dates.at(-1) } : null,
+  };
+}
+
 async function ensureSycmPage(context, delayRange) {
   let page = context.pages().find((candidate) => {
     try { return new URL(candidate.url()).hostname === 'sycm.taobao.com'; } catch { return false; }
@@ -601,6 +674,8 @@ function normalizeDirectSycmReport(report) {
     indicatorCount: indicators.length,
     indicators,
     fieldNames: report.directFieldNames || [],
+    device: report.directDevice || 'all',
+    itemIds: report.directItemIds || parseJsonArray(report.itemIds),
     filters: parseJsonObject(report.dims),
   };
 }
@@ -665,6 +740,38 @@ function applyFilterOptions(filterDefinitions, rawOptions) {
     dims[definition.code] = values;
   }
   return dims;
+}
+
+export function parseItemIds(value) {
+  if (value == null || String(value).trim() === '') return [];
+  const tokens = String(value).split(/[\s,，]+/).map((token) => token.trim()).filter(Boolean);
+  const unique = [...new Set(tokens)];
+  const invalid = unique.filter((token) => !/^\d+$/.test(token));
+  if (invalid.length) throw new Error(`--item-ids 只能包含数字商品 ID：${invalid.join('、')}`);
+  if (unique.length > 100) throw new Error('--item-ids 最多支持 100 个商品 ID');
+  return unique;
+}
+
+export function resolveDeviceSelection(value, needFilterDeviceType = false) {
+  const normalized = String(value || 'all').trim().toLowerCase();
+  const aliases = new Map([
+    ['all', 'all'], ['所有终端', 'all'], ['全部终端', 'all'],
+    ['overall', 'overall'], ['总体', 'overall'], ['整体', 'overall'],
+    ['wireless', 'wireless'], ['无线', 'wireless'], ['无线端', 'wireless'],
+    ['pc', 'pc'], ['pc端', 'pc'],
+  ]);
+  const selected = aliases.get(normalized);
+  if (!selected) throw new Error('--device 只能是 all、overall、wireless、pc（也接受对应中文名称）');
+  if (!needFilterDeviceType && selected !== 'all') {
+    throw new Error('该维度不支持终端类型筛选');
+  }
+  return selected;
+}
+
+export function filterFieldsByDevice(fields, device) {
+  if (device === 'all') return fields;
+  const deviceType = { overall: '0', wireless: '2', pc: '1' }[device];
+  return fields.filter((field) => field.deviceType == null || field.deviceType === 'none' || field.deviceType === deviceType);
 }
 
 export function resolveFieldSelection(rawFields, availableFields) {
