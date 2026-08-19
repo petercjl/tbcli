@@ -47,3 +47,10 @@ test('creates final-delivery workbook without technical price columns', async ()
   assert.equal(reopened.getWorksheet('商品列表').getCell('B5').value, '938081659876');
   assert.equal(reopened.getWorksheet('SKU明细').getCell('C5').value, '6000043614756');
 });
+
+test('labels a single explicitly requested page in the overview', () => {
+  const source = sampleSource();
+  source.pageNumbers = [2];
+  const workbook = buildShopProductsWorkbook(source);
+  assert.equal(workbook.getWorksheet('概览').getCell('B7').value, '第2页，每页 30 条');
+});

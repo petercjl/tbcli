@@ -18,6 +18,13 @@ export async function withBrowserSession(opts, callback) {
   }
 }
 
+export async function withAuthenticatedTaobaoSession(opts, callback) {
+  return withBrowserSession(opts, async (session) => {
+    await assertTaobaoLoggedIn(session.context);
+    return callback(session);
+  });
+}
+
 export function hasTaobaoLoginCookies(cookies) {
   const names = new Set(cookies.map((cookie) => cookie.name));
   return names.has('cookie2') && [...LOGIN_COOKIE_NAMES].some((name) => names.has(name));

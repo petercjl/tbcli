@@ -39,7 +39,7 @@ export function buildShopProductsWorkbook(source) {
     ['店铺名称', source.shop.name],
     ['店铺ID', source.shop.shopId],
     ['卖家ID', source.shop.sellerId],
-    ['分页', formatPagination(source.pagesFetched, source.pageSize)],
+    ['分页', formatPagination(source.pageNumbers, source.pagesFetched, source.pageSize)],
     ['数据源URL', source.shop.url],
     ['生成时间', formatShanghaiTime(source.fetchedAt)],
     ['商品数', { formula: `COUNTA('商品列表'!B5:B${source.items.length + 4})`, result: source.items.length }],
@@ -146,7 +146,17 @@ function formatShanghaiTime(value) {
   });
 }
 
-function formatPagination(pagesFetched, pageSize) {
+function formatPagination(pageNumbers, pagesFetched, pageSize) {
+  const requested = Array.isArray(pageNumbers)
+    ? [...new Set(pageNumbers.map(Number).filter((value) => value >= 1))]
+    : [];
+  if (requested.length === 1) return `第${requested[0]}页，每页 ${pageSize} 条`;
+  if (requested.length > 1) {
+    const contiguous = requested.every((value, index) => index === 0 || value === requested[index - 1] + 1);
+    return contiguous
+      ? `第${requested[0]}–${requested.at(-1)}页，每页 ${pageSize} 条`
+      : `第${requested.join('、')}页，每页 ${pageSize} 条`;
+  }
   const pages = Number(pagesFetched || 0);
   return pages <= 1 ? `第1页，每页 ${pageSize} 条` : `第1–${pages}页，每页 ${pageSize} 条`;
 }

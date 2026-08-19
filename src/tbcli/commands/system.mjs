@@ -2,20 +2,38 @@ import fs from 'node:fs';
 
 import { withBrowserSession, assertTaobaoLoggedIn } from '../browser-session.mjs';
 import { DEFAULT_CDP, DEFAULT_CHROME_PATH, DEFAULT_PROFILE_DIR } from '../config.mjs';
-
-const CAPABILITIES = [
-  { command: 'browser open', maturity: 'stable', description: '打开统一电商浏览器' },
-  { command: 'logistics get', maturity: 'stable', description: '查询淘宝订单物流详情' },
-  { command: 'shop products', maturity: 'stable', description: '导出淘宝/天猫店铺商品列表' },
-  { command: 'doctor', maturity: 'stable', description: '检查 Chrome、CDP 和淘宝登录状态' },
-  { command: 'dev pages', maturity: 'development', description: '列出当前可用页面' },
-  { command: 'dev inspect', maturity: 'development', description: '检查店铺页面能力与安全识别字段' },
-  { command: 'dev capture', maturity: 'development', description: '限时捕获淘宝/天猫 API 请求元数据' },
-];
+import { businessCapabilities, technicalCapabilities } from '../command-registry.mjs';
 
 export function runCapabilities(opts = {}) {
-  if (opts.json) console.log(JSON.stringify(CAPABILITIES, null, 2));
-  else for (const entry of CAPABILITIES) console.log(`${entry.maturity}\t${entry.command}\t${entry.description}`);
+  const capabilities = businessCapabilities();
+  const result = {
+    tool: 'tbcli',
+    audience: 'ecommerce-operator',
+    usageHint: '用户可直接按 examplePrompt 的句式向 Agent 提出需求；Agent 应据此调用 commandTemplate。',
+    capabilities,
+  };
+  if (opts.all) result.technicalCapabilities = technicalCapabilities();
+  if (opts.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  console.log('tbcli 当前可以帮你完成：');
+  for (const [index, entry] of capabilities.entries()) {
+    console.log(`\n${index + 1}. ${entry.name}`);
+    console.log(`   ${entry.description}`);
+    console.log(`   你可以说：“${entry.examplePrompt}”`);
+    console.log(`   需要提供：${entry.requiredInputs.join('、')}`);
+    console.log(`   交付结果：${entry.delivery}`);
+  }
+  console.log('\n不知道怎么开始？可以直接问 Agent：“这个 tbcli 有哪些能力？”');
+
+  if (opts.all) {
+    console.log('\n内部与开发工具：');
+    for (const entry of result.technicalCapabilities) {
+      console.log(`- ${entry.command}：${entry.description}（${entry.maturity}）`);
+    }
+  }
 }
 
 export async function runDoctor(opts = {}) {

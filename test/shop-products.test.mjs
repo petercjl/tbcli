@@ -20,3 +20,18 @@ test('normalizes encoded prices and SKU rows without inventing a price', () => {
   assert.equal(result.items[0].title, '商品 A');
   assert.equal(result.items[0].skuCount, 1);
 });
+
+test('preserves an explicitly requested product page number', () => {
+  const result = normalizeShopProducts({
+    seller: { shopName: '测试店' },
+    shopId: '1',
+    sellerId: '2',
+    shopUrl: 'https://x.tmall.com/category.htm?pageNo=2',
+    totalCount: 510,
+    pagesFetched: 1,
+    pageNumbers: [2],
+    rawItems: [],
+  });
+  assert.deepEqual(result.pageNumbers, [2]);
+  assert.equal(result.pagesFetched, 1);
+});

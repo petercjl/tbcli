@@ -9,6 +9,7 @@
   "files": [
     "scripts",
     "src",
+    "skill",
     "README.md"
   ],
   "engines": {

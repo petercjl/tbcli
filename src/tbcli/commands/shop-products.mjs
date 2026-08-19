@@ -1,13 +1,20 @@
 import path from 'node:path';
-import { assertTaobaoLoggedIn, withBrowserSession } from '../browser-session.mjs';
-import { writeCsv } from '../format.mjs';
+import { withAuthenticatedTaobaoSession } from '../browser-session.mjs';
 import {
-  assertPageNotVerifying,
-  createVerificationError,
-  isVerificationSignal,
-  VERIFICATION_ERROR_CODE,
-} from '../taobao-guard.mjs';
-import { enrichEncodedPrices } from '../price-decoder.mjs';
+  resolvePageActionDelayRange,
+  waitBeforeTaobaoApiRequest,
+} from '../api-policy.mjs';
+import { writeCsv } from '../format.mjs';
+import { enrichEncodedPrices, readVisiblePrices } from '../price-decoder.mjs';
+import {
+  openInitialShopProductPage,
+  prepareShopProductPage,
+} from '../shop-pagination.mjs';
+import { readShopProductPage } from '../shop-search-parser.mjs';
+import {
+  resolveShopProductsCheckpointPath,
+  writeShopProductsCheckpoint,
+} from '../shop-products-cache.mjs';
 import { writeShopProductsXlsx } from '../shop-products-xlsx.mjs';
 
 const CSV_COLUMNS = [
@@ -17,46 +24,25 @@ const CSV_COLUMNS = [
 
 export async function runShopProducts(opts) {
   const shopUrl = String(opts.url || '').trim();
-  if (!shopUrl && !(opts.shopId && opts.sellerId)) {
-    throw new Error('缺少 --url；也可同时提供 --shop-id 和 --seller-id');
+  if (!shopUrl) throw new Error('缺少 --url；店铺商品分页必须从真实店铺页面开始');
+
+  let pageSize = 0;
+  if (opts.pageSize != null) {
+    throw new Error('店铺每页商品数由真实页面布局决定，不支持手工设置 --page-size');
   }
-
-  const pageSize = boundedInteger(opts.pageSize, 30, 1, 30, '--page-size');
   const maxPages = boundedInteger(opts.maxPages, 0, 0, 10000, '--max-pages');
-  const fixedDelay = opts.delayMs == null ? null : boundedInteger(opts.delayMs, 0, 0, 60000, '--delay-ms');
-  const minDelayMs = fixedDelay ?? boundedInteger(opts.minDelayMs, 1000, 0, 60000, '--min-delay-ms');
-  const maxDelayMs = fixedDelay ?? boundedInteger(opts.maxDelayMs, 2000, 0, 60000, '--max-delay-ms');
-  if (maxDelayMs < minDelayMs) throw new Error('--max-delay-ms 不能小于 --min-delay-ms');
+  const targetPage = boundedInteger(opts.page, 0, 0, 10000, '--page');
+  if (targetPage && maxPages) throw new Error('--page 与 --max-pages 不能同时使用');
+  const outPath = opts.out ? path.resolve(opts.out) : '';
 
-  await withBrowserSession({ ...opts, startUrl: shopUrl || 'https://www.taobao.com/' }, async ({ context }) => {
-    await assertTaobaoLoggedIn(context);
-    let createdPage = false;
+  await withAuthenticatedTaobaoSession({ ...opts, startUrl: shopUrl || 'https://www.taobao.com/' }, async ({ context }) => {
     let page;
+    let checkpointPath = '';
+    let checkpoint = null;
+    let latestOutput = null;
     try {
-      if (shopUrl) {
-        page = await context.newPage();
-        createdPage = true;
-      } else {
-        page = findShopPage(context.pages(), shopUrl);
-        if (!page) {
-          page = await context.newPage();
-          createdPage = true;
-        }
-      }
-      if (shopUrl && page.url() !== shopUrl) {
-        await page.goto(shopUrl, { waitUntil: 'domcontentloaded' });
-      }
-      await assertPageNotVerifying(page);
-      try {
-        await page.waitForFunction(
-          () => window.lib?.mtop?.request && (window.g_config?.shopId || window.g_config?.seller?.shopId),
-          null,
-          { timeout: 20000 },
-        );
-      } catch (error) {
-        await assertPageNotVerifying(page);
-        throw error;
-      }
+      page = await context.newPage();
+      const firstPageAction = await openInitialShopProductPage(page, shopUrl, opts);
 
       const seller = await page.evaluate(() => ({
         shopId: String(window.g_config?.shopId || window.g_config?.seller?.shopId || ''),
@@ -72,27 +58,72 @@ export async function runShopProducts(opts) {
       const sellerId = String(opts.sellerId || seller.sellerId || '');
       if (!shopId || !sellerId) throw new Error('无法从店铺页识别 shopId/sellerId');
 
+      checkpointPath = resolveShopProductsCheckpointPath({
+        outPath,
+        shopId,
+        cachePath: opts.cachePath,
+      });
       const rawItems = [];
       const seen = new Set();
-      let pageNo = 1;
+      const visiblePriceItems = [];
+      const pageActions = targetPage > 1 ? [firstPageAction] : [];
+      const pageNumbers = [];
+      let pageNo = targetPage || 1;
       let hasNext = true;
       let totalCount = 0;
-      while (hasNext && (!maxPages || pageNo <= maxPages)) {
-        await assertPageNotVerifying(page);
-        await sleep(randomDelayMs(minDelayMs, maxDelayMs));
-        const result = await requestProductPage(
-          page,
-          { shopId, sellerId, page: pageNo, pageSize },
-          { minDelayMs, maxDelayMs },
-        );
-        totalCount = Number(result.totalCnt || totalCount || 0);
+      checkpoint = buildCheckpoint({
+        status: 'in-progress',
+        shopUrl,
+        seller,
+        shopId,
+        sellerId,
+        pageSize,
+        maxPages,
+        totalCount,
+        rawItems,
+        pagesFetched: 0,
+        pageNumbers,
+        nextPage: pageNo,
+        pageActions,
+      });
+      writeShopProductsCheckpoint(checkpointPath, checkpoint);
+      process.stderr.write(`断点文件：${checkpointPath}\n`);
+
+      while (hasNext && (targetPage ? pageNumbers.length < 1 : (!maxPages || pageNumbers.length < maxPages))) {
+        const pageAction = pageNo === 1
+          ? firstPageAction
+          : await prepareShopProductPage(page, pageNo, opts);
+        pageActions.push(pageAction);
+        const visibleItems = await readVisiblePrices(page, pageNo);
+        visiblePriceItems.push(...visibleItems);
+
+        const result = await readShopProductPage(page, pageNo);
+        if (!pageSize) pageSize = result.data.length;
         for (const item of result.data || []) {
           const itemId = String(item?.itemId || '');
           if (!itemId || seen.has(itemId)) continue;
           seen.add(itemId);
           rawItems.push(item);
         }
+        totalCount = rawItems.length;
         hasNext = result.hasNext === true || result.hasNext === 'true';
+        pageNumbers.push(pageNo);
+        checkpoint = buildCheckpoint({
+          status: 'in-progress',
+          shopUrl,
+          seller,
+          shopId,
+          sellerId,
+          pageSize,
+          maxPages,
+          totalCount,
+          rawItems,
+          pagesFetched: pageNumbers.length,
+          pageNumbers,
+          nextPage: pageNo + 1,
+          pageActions,
+        });
+        writeShopProductsCheckpoint(checkpointPath, checkpoint);
         process.stderr.write(`\r店铺商品：第 ${pageNo} 页，已获取 ${rawItems.length}/${totalCount || '?'} 条`);
         pageNo += 1;
       }
@@ -105,22 +136,29 @@ export async function runShopProducts(opts) {
         shopUrl: page.url(),
         totalCount,
         rawItems,
-        pagesFetched: pageNo - 1,
+        pagesFetched: pageNumbers.length,
+        pageNumbers,
         pageSize,
-        requestDelayMs: { min: minDelayMs, max: maxDelayMs },
+        requestDelayMs: resolvePageActionDelayRange(opts),
       });
-      const outPath = opts.out ? path.resolve(opts.out) : '';
+      latestOutput = output;
       const isXlsx = outPath.toLowerCase().endsWith('.xlsx');
       if (isXlsx) {
         process.stderr.write('正在还原店铺列表价格...\n');
+        const detailDelayRange = resolvePageActionDelayRange(opts);
         const priceResult = await enrichEncodedPrices({
           page,
           items: output.items,
           totalCount: output.totalCount,
           shopUrl,
-          delayBeforeRequest: () => sleep(randomDelayMs(minDelayMs, maxDelayMs)),
+          prefetchedVisibleItems: visiblePriceItems,
+          allowedShopPages: output.pageNumbers,
+          navigateToShopPage: (targetPageNo) => prepareShopProductPage(page, targetPageNo, opts),
+          delayBeforeRequest: () => waitBeforeTaobaoApiRequest(page, detailDelayRange),
           onProgress: ({ phase, pageNo: webPage, itemId, found, total }) => {
-            if (phase === 'detail') {
+            if (phase === 'direct') {
+              process.stderr.write(`\r价格直接还原：已完成 ${found}/${total} 条`);
+            } else if (phase === 'detail') {
               process.stderr.write(`\r价格补充：商品 ${itemId}，已找到 ${found}/${total} 条`);
             } else {
               process.stderr.write(`\r价格匹配：网页第 ${webPage} 页，已找到 ${found}/${total} 条`);
@@ -128,8 +166,9 @@ export async function runShopProducts(opts) {
           },
         });
         process.stderr.write('\n');
-        output.priceDecodedCount = priceResult.decodedCount;
+        output.priceDirectDecodedCount = priceResult.directDecodedCount;
         output.pricePagesScanned = priceResult.scannedPages;
+        output.priceDecodedCount = output.items.filter((item) => item.price !== '').length;
         await writeShopProductsXlsx(outPath, output);
       } else if (outPath.toLowerCase().endsWith('.csv')) {
         writeCsv(outPath, output.items, CSV_COLUMNS);
@@ -142,74 +181,51 @@ export async function runShopProducts(opts) {
       if (opts.json) console.log(JSON.stringify(output, null, 2));
       else {
         console.log(`Taobao shop products: ${output.shop.name} (${output.shop.shopId})`);
-        console.log(`exported=${output.exportedCount}, total=${output.totalCount}, pages=${output.pagesFetched}`);
+        console.log(`exported=${output.exportedCount}, total=${output.totalCount}, pages=${output.pageNumbers.join(',')}`);
         if (isXlsx) console.log(`price=${output.priceDecodedCount}/${output.exportedCount}`);
-        else console.log('price=encoded（JSON/CSV 保留接口原始价格状态；Excel 会自动还原展示价格）');
+        else console.log(`price=${output.items.filter((item) => item.price !== '').length}/${output.exportedCount}`);
         if (outPath) console.log(`output: ${outPath}`);
+        console.log(`checkpoint: ${checkpointPath}`);
       }
-    } finally {
-      if (createdPage && !opts.keepPage && page) await page.close().catch(() => {});
+      checkpoint = {
+        ...checkpoint,
+        status: 'complete',
+        output,
+      };
+      writeShopProductsCheckpoint(checkpointPath, checkpoint);
+    } catch (error) {
+      if (checkpointPath && checkpoint) {
+        checkpoint = {
+          ...checkpoint,
+          status: 'stopped',
+          output: latestOutput || checkpoint.output,
+          error: {
+            code: error?.code || 'SHOP_PRODUCTS_STOPPED',
+            message: String(error?.message || error),
+          },
+        };
+        writeShopProductsCheckpoint(checkpointPath, checkpoint);
+        process.stderr.write(`\n获取已停止，已保留断点数据：${checkpointPath}\n`);
+      }
+      throw error;
     }
+    // Intentionally keep the ecommerce browser page open so the user can
+    // inspect the exact state after success or a guarded stop.
   });
 }
 
-async function requestProductPage(page, data, delayRange) {
-  let lastError;
-  for (let attempt = 1; attempt <= 5; attempt += 1) {
-    try {
-      await assertPageNotVerifying(page);
-      const response = await page.evaluate(async (requestData) => {
-        if (!window.lib?.mtop?.request) throw new Error('店铺页 MTOP 客户端尚未就绪');
-        let result;
-        try {
-          result = await Promise.race([
-            window.lib.mtop.request({
-              api: 'mtop.taobao.shop.simple.item.fetch',
-              v: '1.0',
-              data: { ...requestData, feature: '{}' },
-            }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('MTOP 请求 20 秒超时')), 20000)),
-          ]);
-        } catch (error) {
-          return {
-            clientError: typeof error === 'string' ? error : JSON.stringify(error || {}),
-            url: location.href,
-            title: document.title,
-          };
-        }
-        return { result, url: location.href, title: document.title };
-      }, data);
-      const signal = `${response?.clientError || ''}\n${response?.url || ''}\n${response?.title || ''}\n${JSON.stringify(response?.result?.ret || [])}`;
-      if (response?.clientError || isVerificationSignal(signal)) {
-        throw createVerificationError(response?.clientError || response?.title || 'MTOP 风控信号');
-      }
-      const result = response?.result;
-      const success = Array.isArray(result?.ret) && result.ret.some((entry) => String(entry).startsWith('SUCCESS'));
-      if (!success) throw new Error(`MTOP ${JSON.stringify(result?.ret || [])}`);
-      if (!result?.data || !Array.isArray(result.data.data)) throw new Error('商品接口响应缺少 data 数组');
-      return result.data;
-    } catch (error) {
-      lastError = error;
-      if (error?.code === VERIFICATION_ERROR_CODE || isVerificationSignal(error?.message)) throw error;
-      try {
-        await assertPageNotVerifying(page);
-      } catch (guardError) {
-        throw guardError;
-      }
-      if (attempt < 5) {
-        await sleep(randomDelayMs(delayRange.minDelayMs, delayRange.maxDelayMs));
-      }
-    }
-  }
-  throw new Error(`商品第 ${data.page} 页请求失败：${lastError?.message || lastError}`);
-}
-
-export function randomDelayMs(min, max, random = Math.random) {
-  if (max <= min) return min;
-  return min + Math.floor(random() * (max - min + 1));
-}
-
-export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, totalCount, rawItems, pagesFetched, pageSize = 30, requestDelayMs = null }) {
+export function normalizeShopProducts({
+  seller,
+  shopId,
+  sellerId,
+  shopUrl,
+  totalCount,
+  rawItems,
+  pagesFetched,
+  pageNumbers = null,
+  pageSize = 60,
+  requestDelayMs = null,
+}) {
   const shopName = String(seller?.shopName || '');
   const items = rawItems.map((item) => ({
     shopName,
@@ -234,30 +250,20 @@ export function normalizeShopProducts({ seller, shopId, sellerId, shopUrl, total
     })),
   }));
   return {
-    channel: 'taobao-browser-mtop',
+    channel: 'taobao-shop-page',
     fetchedAt: new Date().toISOString(),
     shop: { name: shopName, shopId, sellerId, url: shopUrl },
     totalCount: Number(totalCount || items.length),
     exportedCount: items.length,
     pagesFetched,
+    pageNumbers: Array.isArray(pageNumbers) && pageNumbers.length
+      ? pageNumbers.map(Number)
+      : Array.from({ length: Number(pagesFetched || 0) }, (_, index) => index + 1),
     pageSize,
     requestDelayMs,
-    priceNote: 'priceStatus=encoded 表示淘宝列表接口返回加密价格，price 留空；encodedPrice 保留原始值供后续解码。',
+    priceNote: 'price 为店铺列表页面展示价格；仅在页面未提供明文时保留 encodedPrice 供安全还原。',
     items,
   };
-}
-
-function findShopPage(pages, shopUrl) {
-  if (shopUrl) {
-    try {
-      const target = new URL(shopUrl).hostname;
-      const exact = pages.find((page) => {
-        try { return new URL(page.url()).hostname === target; } catch { return false; }
-      });
-      if (exact) return exact;
-    } catch {}
-  }
-  return pages.find((page) => /\.(?:taobao|tmall)\.com\//.test(page.url())) || null;
 }
 
 function normalizeUrl(value) {
@@ -274,6 +280,40 @@ function boundedInteger(value, fallback, min, max, option) {
   return parsed;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function buildCheckpoint({
+  status,
+  shopUrl,
+  seller,
+  shopId,
+  sellerId,
+  pageSize,
+  maxPages,
+  totalCount,
+  rawItems,
+  pagesFetched,
+  pageNumbers,
+  nextPage,
+  pageActions,
+}) {
+  return {
+    status,
+    requestedUrl: shopUrl,
+    requestedMaxPages: maxPages || null,
+    pagesFetched,
+    nextPage: Number(nextPage || pagesFetched + 1),
+    pageNumbers: [...(pageNumbers || [])],
+    pageActions: [...pageActions],
+    output: normalizeShopProducts({
+      seller,
+      shopId,
+      sellerId,
+      shopUrl,
+      totalCount,
+      rawItems,
+      pagesFetched,
+      pageNumbers,
+      pageSize,
+      requestDelayMs: null,
+    }),
+  };
 }
