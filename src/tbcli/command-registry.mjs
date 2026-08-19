@@ -129,12 +129,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     capability: {
       id: 'sycm-date-range-fetch',
       name: '按指定日期获取生意参谋报表',
-      description: '可复用已有母版，也可直接指定生意参谋/无界的数据粒度、维度和字段，按日期生成完整 Excel；完成后自动清理临时报表。',
-      examplePrompt: '获取【店铺-整体】报表，时间段：【开始日期】至【结束日期】',
-      requiredInputs: ['母版报表，或平台+粒度+维度', '开始日期', '结束日期', '新的 Excel 输出路径'],
-      optionalInputs: ['字段名称/代码（默认全部）', '筛选项', '生成超时时间', '请求间隔（默认1000-2000毫秒）'],
+      description: '可复用已有母版，也可直接指定生意参谋/无界的数据粒度、维度和字段，按指定日期或当前全部可取历史生成完整 Excel；商品维度支持批量商品 ID 和终端类型；完成后自动清理临时报表。',
+      examplePrompt: '获取【商品-整体】指定商品的全部历史分日数据，终端类型选择所有终端',
+      requiredInputs: ['母版报表，或平台+粒度+维度', '指定日期或全部可取历史', '新的 Excel 输出路径'],
+      optionalInputs: ['字段名称/代码（默认全部）', '商品 ID（最多100个）', '终端类型', '筛选项', '生成超时时间', '请求间隔（默认1000-2000毫秒）'],
       delivery: '指定日期范围的生意参谋完整 Excel 数据文件',
-      commandTemplate: 'tbcli sycm fetch --data-platform <平台> --data-type <粒度> --data-dimension <维度> [--date-type <day|week|month|customDaySum>] [--fields <字段,...>] --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD> --out <数据.xlsx>',
+      commandTemplate: 'tbcli sycm fetch --data-platform <平台> --data-type <粒度> --data-dimension <维度> [--date-type <day|week|month|customDaySum>] [--fields <字段,...>] [--device <all|overall|wireless|pc>] [--item-ids <ID,...>] (--all-history | --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>) --out <数据.xlsx>',
     },
   },
   {

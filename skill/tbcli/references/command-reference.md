@@ -41,10 +41,12 @@ tbcli sycm catalog [--data-platform '<平台>' [--data-type '<粒度>' [--data-d
 tbcli sycm reports [--keyword '<名称>'] [--page N] [--page-size 100] [--json]
 tbcli sycm export (--report-id ID | --report-name '<名称>') --out '<new.xlsx>' [--json]
 tbcli sycm fetch (--report-id ID | --report-name '<名称>') --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out '<new.xlsx>' [--json]
-tbcli sycm fetch --data-platform '<平台>' --data-type '<粒度>' --data-dimension '<维度>' [--date-type day|week|month|customDaySum] [--fields 'all|字段,...'] [--filter '名称=值,...'] --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out '<new.xlsx>' --json
+tbcli sycm fetch --data-platform '<平台>' --data-type '<粒度>' --data-dimension '<维度>' [--date-type day|week|month|customDaySum] [--fields 'all|字段,...'] [--device all|overall|wireless|pc] [--item-ids 'ID,...'] [--filter '名称=值,...'] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out '<new.xlsx>' --json
 ```
 
 Direct mode is the default for recurring extraction. Saved-report mode preserves a report's stored fields and filters. Every dimension owns its own field catalog and valid date range.
+
+`--item-ids` accepts up to 100 numeric IDs in direct 商品 mode. `--all-history` uses the dimension's current complete `validPeriod` and is mutually exclusive with explicit dates. `--device all` retains overall, wireless, and PC field groups; the other accepted values select one group while preserving identity fields.
 
 ## Shop products
 
