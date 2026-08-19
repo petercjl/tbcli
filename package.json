@@ -13,7 +13,7 @@
     "README.md"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "^20.19.0 || >=22.12.0"
   },
   "repository": {
     "type": "git",
@@ -29,7 +29,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "dependencies": {
-    "@excel.js/exceljs": "^0.9.0",
+    "@excel.js/exceljs": "^0.13.0",
     "fontkit": "^2.0.4",
     "playwright-core": "^1.61.1"
   },
