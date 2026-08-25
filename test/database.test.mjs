@@ -6,6 +6,7 @@ import test from 'node:test';
 import ExcelJS from '@excel.js/exceljs';
 import {
   defaultAggregation,
+  assertMaintainerAccess,
   discoverImportFiles,
   ensureWarehouseSchema,
   getDatasetCoverage,
@@ -208,7 +209,16 @@ test('loads config and reads a matching protected pgpass entry', async () => {
     readerUser: 'tb_agent', ingestUser: 'tb_ingest', pgpassFile,
   }));
   const config = await loadDatabaseConfig(configFile);
+  assert.equal(config.accessMode, 'maintainer');
   assert.equal(await readPgpassPassword(config, 'tb_agent'), 'secret:value');
+});
+
+test('rejects warehouse writes from a read-only client configuration', () => {
+  assert.throws(
+    () => assertMaintainerAccess({ accessMode: 'read-only' }),
+    /只读模式/,
+  );
+  assert.doesNotThrow(() => assertMaintainerAccess({ accessMode: 'maintainer' }));
 });
 
 test('builds a parameterized business query from cataloged fields', async () => {

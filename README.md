@@ -136,6 +136,24 @@ tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
   --mode replace-range --start-date 2026-08-20 --end-date 2026-08-24 --json
 ```
 
+For an employee who only queries the warehouse, create a separate local
+read-only configuration. The administrator supplies the LAN host, database name,
+and read-only role plus that user's protected password file by an approved
+private channel; never add the password file to the npm package, the Skill, Git,
+or shared folders.
+
+```bash
+tbcli db configure-reader \
+  --host '<LAN database host>' --database '<database>' \
+  --reader-user '<read-only role>' --pgpass-file '<protected pgpass path>'
+tbcli db access-check --json
+```
+
+`configure-reader` marks the local configuration as read-only. `db init` and
+`db import` reject that configuration before attempting a write. `access-check`
+confirms that the configured query account can connect but has no database,
+schema, or table write privileges.
+
 `db coverage` mechanically reports covered and missing dates inside the explicit
 caller-supplied interval. The companion Skill, not the CLI, decides which tables
 and periods to maintain. Imports are source-hash idempotent. `append` refuses

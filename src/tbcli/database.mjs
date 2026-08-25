@@ -195,6 +195,7 @@ export async function loadDatabaseConfig(configPath = '') {
   const raw = JSON.parse(await fsp.readFile(resolvedPath, 'utf8'));
   const config = {
     version: raw.version || 1,
+    accessMode: raw.accessMode || 'maintainer',
     host: process.env.TBCLI_DB_HOST || raw.host,
     port: Number(process.env.TBCLI_DB_PORT || raw.port || 5432),
     database: process.env.TBCLI_DB_NAME || raw.database,
@@ -203,10 +204,19 @@ export async function loadDatabaseConfig(configPath = '') {
     pgpassFile: path.resolve(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
     configPath: resolvedPath,
   };
+  if (!['maintainer', 'read-only'].includes(config.accessMode)) {
+    throw new Error(`数据库配置 accessMode 无效：${config.accessMode}`);
+  }
   for (const key of ['host', 'database', 'readerUser', 'ingestUser', 'pgpassFile']) {
     if (!config[key]) throw new Error(`数据库配置缺少 ${key}`);
   }
   return config;
+}
+
+export function assertMaintainerAccess(config) {
+  if (config.accessMode === 'read-only') {
+    throw new Error('当前数据库配置是只读模式；初始化和导入仅允许由授权维护人员使用维护者配置执行');
+  }
 }
 
 function parsePgpassLine(line) {

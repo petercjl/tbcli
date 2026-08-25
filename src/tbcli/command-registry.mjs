@@ -48,6 +48,18 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '配置公司电商数据仓库连接（不保存密码）',
   },
   {
+    key: 'db configure-reader',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '配置员工本机的只读公司电商数据仓库连接（不保存密码）',
+  },
+  {
+    key: 'db access-check',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '验证当前查询账号可连接且不拥有数据库、建表或数据写入权限',
+  },
+  {
     key: 'db status',
     maturity: 'stable',
     audience: 'internal',

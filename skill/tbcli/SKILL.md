@@ -168,6 +168,28 @@ Use this flow when the user asks what data has been imported or asks a business 
 
 ### 1. Check the warehouse and discover its live scope
 
+For an employee who needs first-time company-warehouse access, first confirm
+that an authorized administrator has privately provisioned a local protected
+pgpass file **and separately supplied the non-secret connection tuple** (LAN
+host, database name, and read-only role). Never inspect the pgpass file to infer
+that tuple, and never request, print, transmit, or create a database password in
+a chat, Skill, repository, npm package, or shared folder. If any tuple value is
+missing, stop with `DATABASE_UNAVAILABLE` and ask the administrator for that
+non-secret value. Then run:
+
+```bash
+tbcli db configure-reader --host '<LAN database host>' --database '<database>' \
+  --reader-user '<read-only role>' --pgpass-file '<protected pgpass path>' --json
+tbcli db access-check --json
+```
+
+`configure-reader` creates a local configuration with `accessMode: read-only`
+and does not write a password. `access-check` must report `readOnly: true`
+before continuing to warehouse discovery. A read-only configuration is only for
+`db status`, `db datasets`, `db fields`, `db coverage`, and `db query`; `db
+init` and `db import` are explicitly rejected. If the config already exists, do
+not overwrite it: ask the administrator to inspect or replace it deliberately.
+
 Run:
 
 ```bash
@@ -242,7 +264,7 @@ tbcli db import --input '<Excel文件>' --dataset '<业务表>' \
 
 `db init` only initializes or upgrades tbcli's technical warehouse schema. `db coverage` reports coverage inside the caller-supplied interval and does not choose a business maintenance window. For imports, `append` rejects overlapping dates; `replace-range` atomically replaces one declared range; `replace-all` atomically rebuilds one dataset. An explicit `--dataset` allows a single incremental file whose name is not a full-history canonical name, but the importer still validates required headers and date bounds. Keep `--reimport` exceptional and limited to an exact source correction. After import, rerun `db coverage` and `db datasets`, then reconcile file identity, mode, rows, declared coverage, actual data range, and fields.
 
-Database configuration is also an administrator task. `tbcli db configure` stores connection metadata only; credentials stay in the separately protected pgpass file. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine.
+Database configuration is also an administrator task. `tbcli db configure` stores connection metadata only; credentials stay in the separately protected pgpass file. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine. Do not give employees a maintenance configuration or its pgpass credential.
 
 ### 5. Warehouse QA and handoff
 
@@ -273,6 +295,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 - **Partial multi-target result:** preserve completed new files, identify failed targets, and do not rerun successful targets unless requested.
 - **Unsupported capability:** report `CONTRACT_UNSUPPORTED` and the closest discoverable stable command; do not fall back to raw private APIs.
 - **Warehouse unavailable:** report `DATABASE_UNAVAILABLE`, preserve the business question, and ask an administrator to configure or restore the approved warehouse connection. Do not request credentials from an employee or substitute a public/Tailscale endpoint.
+- **Reader access check fails:** stop before any warehouse query. Report only the failed privilege category; ask the administrator to correct the reader role or local configuration. Never compensate by using a maintenance credential.
 
 ## Evolution Rule
 

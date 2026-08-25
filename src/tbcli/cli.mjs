@@ -19,6 +19,8 @@ import { runSycmCatalog, runSycmExport, runSycmFetch, runSycmReports } from './c
 import { runSkillInstall, runSkillSource, runSkillStatus, runSkillUpdate } from './commands/skill.mjs';
 import {
   runDatabaseConfigure,
+  runDatabaseConfigureReader,
+  runDatabaseAccessCheck,
   runDatabaseCoverage,
   runDatabaseDatasets,
   runDatabaseFields,
@@ -49,6 +51,8 @@ const COMMAND_HANDLERS = Object.freeze({
   'skill install': runSkillInstall,
   'skill update': runSkillUpdate,
   'db configure': runDatabaseConfigure,
+  'db configure-reader': runDatabaseConfigureReader,
+  'db access-check': runDatabaseAccessCheck,
   'db status': runDatabaseStatus,
   'db init': runDatabaseInit,
   'db coverage': runDatabaseCoverage,
@@ -84,6 +88,8 @@ export function usage() {
   tbcli sycm fetch (--report-id ID | --report-name NAME) --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--timeout-ms 120000] [--json]
   tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--date-type day|week|month|customDaySum] [--fields all|FIELD,...] [--device all|overall|wireless|pc] [--item-ids ID,...] [--filter NAME=VALUE,...] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out report.xlsx [--json]
   tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
+  tbcli db configure-reader --host HOST --database NAME --reader-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
+  tbcli db access-check [--config FILE] [--json]
   tbcli db status [--config FILE] [--json]
   tbcli db init [--config FILE] [--json]
   tbcli db coverage --dataset NAME [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--config FILE] [--json]
