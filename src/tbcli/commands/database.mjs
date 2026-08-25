@@ -2,6 +2,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import {
   connectDatabase,
+  checkDatabaseWriteAccess,
   assertMaintainerAccess,
   DEFAULT_DATABASE_CONFIG,
   discoverImportFiles,
@@ -140,6 +141,16 @@ export async function runDatabaseAccessCheck(args) {
       && !['insert', 'update', 'delete'].some((key) => Number(privileges.tables[key]) > 0);
     if (!readOnly) throw new Error('数据库只读权限检查失败：当前查询账号拥有写入或建库/建表权限，请停止使用并联系管理员');
     printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port, database: row.database, user: row.user, readOnly, privileges }, args.json);
+  } finally { await client.end(); }
+}
+
+export async function runDatabaseWriteCheck(args) {
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try {
+    const result = await checkDatabaseWriteAccess(client);
+    printResult({ accessMode: config.accessMode, host: config.host, port: config.port, ...result }, args.json);
   } finally { await client.end(); }
 }
 

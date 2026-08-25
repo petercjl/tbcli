@@ -276,6 +276,143 @@ export async function connectDatabase(config, role = 'reader') {
   return client;
 }
 
+const WRITE_CHECK_TABLE_REQUIREMENTS = Object.freeze({
+  'meta.datasets': ['SELECT', 'INSERT', 'UPDATE'],
+  'meta.dataset_fields': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'meta.import_files': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  'raw.sycm_rows': ['SELECT', 'INSERT', 'DELETE'],
+});
+
+async function getWriteCheckResidue(client, datasetKey, sourcePrefix) {
+  const result = await client.query(`
+    SELECT
+      (SELECT count(*)::int FROM meta.datasets WHERE dataset_key=$1) AS datasets,
+      (SELECT count(*)::int FROM meta.dataset_fields WHERE dataset_key=$1) AS dataset_fields,
+      (SELECT count(*)::int FROM meta.import_files WHERE dataset_key=$1 OR source_sha256 LIKE $2) AS import_files,
+      (SELECT count(*)::int FROM raw.sycm_rows WHERE dataset_key=$1 OR source_sha256 LIKE $2) AS sycm_rows
+  `, [datasetKey, `${sourcePrefix}%`]);
+  const row = result.rows[0];
+  return {
+    datasets: Number(row.datasets),
+    datasetFields: Number(row.dataset_fields),
+    importFiles: Number(row.import_files),
+    sycmRows: Number(row.sycm_rows),
+  };
+}
+
+export async function checkDatabaseWriteAccess(client) {
+  const identity = await client.query('SELECT current_database() AS database,current_user AS user');
+  const privileges = { tables: {}, sequences: {} };
+  const missing = [];
+
+  for (const [relation, required] of Object.entries(WRITE_CHECK_TABLE_REQUIREMENTS)) {
+    privileges.tables[relation] = {};
+    const relationResult = await client.query('SELECT to_regclass($1) IS NOT NULL AS exists', [relation]);
+    const exists = Boolean(relationResult.rows[0].exists);
+    for (const privilege of required) {
+      const result = exists
+        ? await client.query('SELECT has_table_privilege(current_user,$1,$2) AS allowed', [relation, privilege])
+        : { rows: [{ allowed: false }] };
+      const allowed = exists && Boolean(result.rows[0].allowed);
+      privileges.tables[relation][privilege.toLowerCase()] = allowed;
+      if (!exists) missing.push(`${relation}:MISSING`);
+      else if (!allowed) missing.push(`${relation}:${privilege}`);
+    }
+  }
+
+  const sequenceRelation = await client.query("SELECT to_regclass('raw.sycm_rows_id_seq') IS NOT NULL AS exists");
+  const sequenceExists = Boolean(sequenceRelation.rows[0].exists);
+  const sequence = sequenceExists
+    ? await client.query("SELECT has_sequence_privilege(current_user,'raw.sycm_rows_id_seq','USAGE') AS allowed")
+    : { rows: [{ allowed: false }] };
+  privileges.sequences['raw.sycm_rows_id_seq'] = { usage: Boolean(sequenceExists && sequence.rows[0].allowed) };
+  if (!sequenceExists) missing.push('raw.sycm_rows_id_seq:MISSING');
+  else if (!sequence.rows[0].allowed) missing.push('raw.sycm_rows_id_seq:USAGE');
+
+  if (missing.length) {
+    throw new Error(`数据库写权限检查失败；缺少必需权限：${[...new Set(missing)].join(', ')}`);
+  }
+
+  const probeId = crypto.randomUUID().replaceAll('-', '');
+  const datasetKey = `__tbcli_write_check_${probeId}`;
+  const sourcePrefix = `tbcli-write-check-${probeId}`;
+  let began = false;
+  let rolledBack = false;
+  let probe = null;
+
+  try {
+    await client.query('BEGIN');
+    began = true;
+    await client.query(`
+      INSERT INTO meta.datasets(dataset_key,platform,data_type,data_dimension,grain,source_path,loaded_at)
+      VALUES($1,'tbcli','write-check','transaction-rollback','day','',now())
+    `, [datasetKey]);
+    await client.query(`
+      INSERT INTO meta.dataset_fields(dataset_key,field_name,ordinal,field_kind,default_aggregation)
+      VALUES($1,'probe-primary',1,'metric','sum'),($1,'probe-delete',2,'metric','sum')
+    `, [datasetKey]);
+    await client.query(`
+      INSERT INTO meta.import_files(source_sha256,dataset_key,source_file,row_count,min_date,max_date,coverage_start,coverage_end,import_mode)
+      VALUES($2,$1,'write-check.xlsx',2,'2099-01-01','2099-01-01','2099-01-01','2099-01-01','append'),
+            ($3,$1,'write-check-delete.xlsx',0,NULL,NULL,NULL,NULL,'append')
+    `, [datasetKey, `${sourcePrefix}-primary`, `${sourcePrefix}-delete`]);
+    await client.query(`
+      INSERT INTO raw.sycm_rows(dataset_key,grain,stat_date,row_data,source_file,source_sha256,source_row)
+      VALUES($1,'day','2099-01-01','{"probe":true}','write-check.xlsx',$2,1),
+            ($1,'day','2099-01-01','{"probe":true}','write-check-delete.xlsx',$3,2)
+    `, [datasetKey, `${sourcePrefix}-primary`, `${sourcePrefix}-delete`]);
+    await client.query('UPDATE meta.datasets SET row_count=2 WHERE dataset_key=$1', [datasetKey]);
+    await client.query("UPDATE meta.dataset_fields SET ordinal=3 WHERE dataset_key=$1 AND field_name='probe-primary'", [datasetKey]);
+    await client.query('UPDATE meta.import_files SET row_count=1 WHERE source_sha256=$1', [`${sourcePrefix}-primary`]);
+    await client.query('DELETE FROM raw.sycm_rows WHERE source_sha256=$1', [`${sourcePrefix}-delete`]);
+    await client.query('DELETE FROM meta.import_files WHERE source_sha256=$1', [`${sourcePrefix}-delete`]);
+    await client.query("DELETE FROM meta.dataset_fields WHERE dataset_key=$1 AND field_name='probe-delete'", [datasetKey]);
+
+    probe = await getWriteCheckResidue(client, datasetKey, sourcePrefix);
+    const expected = { datasets: 1, datasetFields: 1, importFiles: 1, sycmRows: 1 };
+    if (Object.keys(expected).some((key) => probe[key] !== expected[key])) {
+      throw new Error(`事务内探针结果异常：${JSON.stringify(probe)}`);
+    }
+
+    await client.query('ROLLBACK');
+    rolledBack = true;
+  } catch (error) {
+    if (began && !rolledBack) {
+      try {
+        await client.query('ROLLBACK');
+        rolledBack = true;
+      } catch (rollbackError) {
+        throw new Error(`数据库写权限检查失败，且事务回滚失败：${rollbackError.message}`, { cause: error });
+      }
+    }
+    const residue = await getWriteCheckResidue(client, datasetKey, sourcePrefix).catch(() => null);
+    const residueCount = residue ? Object.values(residue).reduce((sum, value) => sum + value, 0) : null;
+    throw new Error(`数据库写权限检查失败：${error.message}；事务${rolledBack ? '已回滚' : '未开始'}${residueCount == null ? '，无法复核残留' : `，残留记录 ${residueCount} 条`}`, { cause: error });
+  }
+
+  const residue = await getWriteCheckResidue(client, datasetKey, sourcePrefix);
+  const residueCount = Object.values(residue).reduce((sum, value) => sum + value, 0);
+  if (residueCount !== 0) {
+    throw new Error(`数据库写权限检查失败：事务回滚后仍有 ${residueCount} 条探针记录残留`);
+  }
+
+  return {
+    ok: true,
+    connected: true,
+    database: identity.rows[0].database,
+    user: identity.rows[0].user,
+    privileges,
+    probe: {
+      inserted: true,
+      updated: true,
+      deleted: true,
+      rolledBack,
+      residue,
+      residueCount,
+    },
+  };
+}
+
 export async function sha256File(file) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');

@@ -7,6 +7,7 @@ import ExcelJS from '@excel.js/exceljs';
 import {
   defaultAggregation,
   assertMaintainerAccess,
+  checkDatabaseWriteAccess,
   discoverImportFiles,
   ensureWarehouseSchema,
   getDatasetCoverage,
@@ -219,6 +220,63 @@ test('rejects warehouse writes from a read-only client configuration', () => {
     /只读模式/,
   );
   assert.doesNotThrow(() => assertMaintainerAccess({ accessMode: 'maintainer' }));
+});
+
+function writeCheckClient({ failOnRawInsert = false } = {}) {
+  const calls = [];
+  let rolledBack = false;
+  return {
+    calls,
+    async query(text, values) {
+      const sql = String(text).trim();
+      calls.push({ text: sql, values });
+      if (sql === 'ROLLBACK') rolledBack = true;
+      if (sql === 'SELECT current_database() AS database,current_user AS user') {
+        return { rows: [{ database: 'commerce_analytics', user: 'tb_ingest' }] };
+      }
+      if (sql.includes('to_regclass')) return { rows: [{ exists: true }] };
+      if (sql.includes('has_table_privilege') || sql.includes('has_sequence_privilege')) {
+        return { rows: [{ allowed: true }] };
+      }
+      if (sql.includes('(SELECT count(*)::int FROM meta.datasets')) {
+        return { rows: [rolledBack
+          ? { datasets: 0, dataset_fields: 0, import_files: 0, sycm_rows: 0 }
+          : { datasets: 1, dataset_fields: 1, import_files: 1, sycm_rows: 1 }] };
+      }
+      if (failOnRawInsert && sql.startsWith('INSERT INTO raw.sycm_rows')) {
+        throw new Error('permission denied for table sycm_rows');
+      }
+      return { rows: [], rowCount: 1 };
+    },
+  };
+}
+
+test('write check exercises importer DML and rolls back with zero residue', async () => {
+  const client = writeCheckClient();
+  const result = await checkDatabaseWriteAccess(client);
+  assert.equal(result.ok, true);
+  assert.equal(result.user, 'tb_ingest');
+  assert.equal(result.probe.inserted, true);
+  assert.equal(result.probe.updated, true);
+  assert.equal(result.probe.deleted, true);
+  assert.equal(result.probe.rolledBack, true);
+  assert.equal(result.probe.residueCount, 0);
+  assert.ok(client.calls.some((call) => call.text === 'BEGIN'));
+  assert.ok(client.calls.some((call) => call.text === 'ROLLBACK'));
+  assert.ok(client.calls.some((call) => call.text.startsWith('INSERT INTO raw.sycm_rows')));
+  assert.ok(client.calls.some((call) => call.text.startsWith('UPDATE meta.datasets')));
+  assert.ok(client.calls.some((call) => call.text.startsWith('DELETE FROM raw.sycm_rows')));
+  assert.equal(client.calls.some((call) => call.text === 'COMMIT'), false);
+});
+
+test('write check rolls back after a failed probe and reports zero residue', async () => {
+  const client = writeCheckClient({ failOnRawInsert: true });
+  await assert.rejects(
+    () => checkDatabaseWriteAccess(client),
+    /permission denied for table sycm_rows；事务已回滚，残留记录 0 条/,
+  );
+  assert.ok(client.calls.some((call) => call.text === 'ROLLBACK'));
+  assert.equal(client.calls.some((call) => call.text === 'COMMIT'), false);
 });
 
 test('builds a parameterized business query from cataloged fields', async () => {

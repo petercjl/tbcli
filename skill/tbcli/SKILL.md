@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, SKU, 关键词, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, SKU, 关键词, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
 ---
 
 # tbcli
@@ -256,13 +256,14 @@ Use only for an authorized maintainer who asks to initialize, inspect coverage, 
 
 ```bash
 tbcli db init --json
+tbcli db write-check --json
 tbcli db coverage --dataset '<业务表>' --start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>' --json
 tbcli db import --input '<Excel文件>' --dataset '<业务表>' \
   --mode '<append|replace-range|replace-all>' \
   [--start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>'] --json
 ```
 
-`db init` only initializes or upgrades tbcli's technical warehouse schema. `db coverage` reports coverage inside the caller-supplied interval and does not choose a business maintenance window. For imports, `append` rejects overlapping dates; `replace-range` atomically replaces one declared range; `replace-all` atomically rebuilds one dataset. An explicit `--dataset` allows a single incremental file whose name is not a full-history canonical name, but the importer still validates required headers and date bounds. Keep `--reimport` exceptional and limited to an exact source correction. After import, rerun `db coverage` and `db datasets`, then reconcile file identity, mode, rows, declared coverage, actual data range, and fields.
+`db init` only initializes or upgrades tbcli's technical warehouse schema. When an authorized maintainer asks to verify write access, run `db write-check`; require `ok: true`, `probe.rolledBack: true`, and `probe.residueCount: 0` before treating the writer configuration as valid. When the request is to verify both reader and writer access, run `db access-check --json` first and `db write-check --json` second; require `readOnly: true` for the configured reader and the write-check conditions above for the configured ingest role. The write check performs representative insert/update/delete operations inside one transaction, rolls it back, and refuses a read-only configuration. Do not replace either check with raw SQL or an ad-hoc script. `db coverage` reports coverage inside the caller-supplied interval and does not choose a business maintenance window. For imports, `append` rejects overlapping dates; `replace-range` atomically replaces one declared range; `replace-all` atomically rebuilds one dataset. An explicit `--dataset` allows a single incremental file whose name is not a full-history canonical name, but the importer still validates required headers and date bounds. Keep `--reimport` exceptional and limited to an exact source correction. After import, rerun `db coverage` and `db datasets`, then reconcile file identity, mode, rows, declared coverage, actual data range, and fields.
 
 Database configuration is also an administrator task. `tbcli db configure` stores connection metadata only; credentials stay in the separately protected pgpass file. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine. Do not give employees a maintenance configuration or its pgpass credential.
 

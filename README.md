@@ -132,6 +132,7 @@ tbcli db configure \
   --reader-user '<read-only role>' --ingest-user '<import role>' \
   --pgpass-file '<protected pgpass path>'
 tbcli db init --json
+tbcli db write-check --json
 tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
   --mode replace-range --start-date 2026-08-20 --end-date 2026-08-24 --json
 ```
@@ -153,6 +154,13 @@ tbcli db access-check --json
 `db import` reject that configuration before attempting a write. `access-check`
 confirms that the configured query account can connect but has no database,
 schema, or table write privileges.
+
+For an authorized maintainer, `tbcli db write-check --json` verifies the
+configured `ingestUser` against the tables and sequence used by imports. It
+performs representative insert, update, and delete operations inside one
+transaction, always rolls that transaction back, and then confirms that no
+probe rows remain. It refuses a read-only configuration and never prints the
+database password.
 
 `db coverage` mechanically reports covered and missing dates inside the explicit
 caller-supplied interval. The companion Skill, not the CLI, decides which tables

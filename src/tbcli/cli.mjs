@@ -21,6 +21,7 @@ import {
   runDatabaseConfigure,
   runDatabaseConfigureReader,
   runDatabaseAccessCheck,
+  runDatabaseWriteCheck,
   runDatabaseCoverage,
   runDatabaseDatasets,
   runDatabaseFields,
@@ -53,6 +54,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'db configure': runDatabaseConfigure,
   'db configure-reader': runDatabaseConfigureReader,
   'db access-check': runDatabaseAccessCheck,
+  'db write-check': runDatabaseWriteCheck,
   'db status': runDatabaseStatus,
   'db init': runDatabaseInit,
   'db coverage': runDatabaseCoverage,
@@ -90,6 +92,7 @@ export function usage() {
   tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
   tbcli db configure-reader --host HOST --database NAME --reader-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
   tbcli db access-check [--config FILE] [--json]
+  tbcli db write-check [--config FILE] [--json]
   tbcli db status [--config FILE] [--json]
   tbcli db init [--config FILE] [--json]
   tbcli db coverage --dataset NAME [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--config FILE] [--json]

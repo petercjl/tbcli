@@ -64,6 +64,15 @@ test('bundled Skill routes warehouse questions through discovery and semantic qu
   assert.match(skill, /descriptive average/);
 });
 
+test('bundled Skill routes maintainer read-write verification through stable checks', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  assert.match(skill, /检查数据库读写权限/);
+  assert.match(skill, /db access-check --json` first and `db write-check --json` second/);
+  assert.match(skill, /probe\.rolledBack: true/);
+  assert.match(skill, /probe\.residueCount: 0/);
+  assert.match(skill, /Do not replace either check with raw SQL or an ad-hoc script/);
+});
+
 test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');

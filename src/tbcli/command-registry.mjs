@@ -60,6 +60,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '验证当前查询账号可连接且不拥有数据库、建表或数据写入权限',
   },
   {
+    key: 'db write-check',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '验证授权维护账号具备导入所需的数据写入权限，并通过事务回滚确认不留下测试数据',
+  },
+  {
     key: 'db status',
     maturity: 'stable',
     audience: 'internal',
