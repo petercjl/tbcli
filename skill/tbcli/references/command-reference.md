@@ -25,12 +25,14 @@ unsupported `--no-sandbox` warning, stop authentication, upgrade tbcli, close
 that browser, and start `auth login` again. Never work around a slider by
 disabling the sandbox or repeatedly retrying verification.
 
-For npm installs, use `npm install -g @petercjl/tbcli@0.5.1`, verify with
-`tbcli --version`, then check the current Agent with `tbcli skill status --agent
-<agent>`. If absent, run `tbcli skill install --agent <agent>`. Update only a
-stale managed copy with `tbcli skill update --agent <agent>`; a current linked
-Skill already follows the upgraded package and a current copy needs no action.
-Stop without overwriting an unmanaged directory, foreign link, or broken link.
+For npm installs, use `tbcli update --agent <agent> --json`. This is the stable
+upgrade boundary: it upgrades the CLI package, then installs an absent Skill or
+updates a stale managed copy, and finally requires the Skill state to be
+`current`. A current linked Skill already follows the upgraded package. Stop
+without overwriting an unmanaged directory, foreign link, or broken link. If a
+legacy release does not recognize `tbcli update`, bootstrap once with `npm
+install -g @petercjl/tbcli@latest`, then immediately run the unified update
+command. Do not keep npm and Skill upgrades as separate routine steps.
 For a source checkout, use the repository's update workflow instead of
 installing over it globally.
 
@@ -85,13 +87,14 @@ Use only for the supported browser-session document workflows exposed by tbcli. 
 ## Companion Skill lifecycle
 
 ```bash
+tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir '<root>') --json
 tbcli skill source --json
 tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir '<root>')
 tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir '<root>') [--mode auto|link|copy]
 tbcli skill update (--agent codex|agents|openclaw|sealseek | --target-dir '<root>')
 ```
 
-The bundled source is canonical. Installations refuse to replace existing unmanaged Skill directories. Link mode is preferred where supported; managed copies carry a digest and are updated recoverably.
+The bundled source is canonical. Installations refuse to replace existing unmanaged Skill directories. Link mode is preferred where supported; managed copies carry a digest and are updated recoverably. Normal CLI use performs a cached npm version check at most once every six hours. When stderr prints an update notice, preserve the current business command and offer the unified update command; do not silently mutate global packages during an unrelated task.
 
 ## Company warehouse access
 

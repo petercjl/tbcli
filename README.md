@@ -33,6 +33,19 @@ Use `--target-dir <agent-skill-root>` for another host. On platforms that
 support directory links, linked installations read the bundled source directly;
 managed copies can be refreshed with `tbcli skill update`.
 
+For later upgrades, use the unified updater instead of running npm and Skill
+updates separately:
+
+```bash
+tbcli update --agent sealseek --json
+```
+
+Replace `sealseek` with `codex`, `agents`, or `openclaw` for the current host.
+The command upgrades the global npm package, installs or refreshes the bundled
+Skill for that Agent, and verifies the final CLI version and Skill state. Normal
+tbcli commands check npm at most once every six hours and print a throttled
+notice when a newer version exists; the reminder never blocks business work.
+
 Reuse an existing SYCM (生意参谋) data-fetch report instead of rebuilding the
 same report in the web UI each time:
 
@@ -272,18 +285,19 @@ tbcli to the latest version, close the Chrome using the fixed Profile, and run
 `tbcli auth login` again. Do not continue entering credentials or repeatedly
 attempt the slider in that unsafe browser session.
 
-For npm installations, the fixed release can be installed and verified with:
+For npm installations that already provide the unified updater, upgrade and
+verify both the CLI and Skill with:
 
 ```bash
-npm install -g @petercjl/tbcli@0.5.1
-tbcli --version
-tbcli skill status --agent sealseek
+tbcli update --agent sealseek --json
 ```
 
-If the SealSeek Skill status reports a managed copy rather than a link, refresh
-it with `tbcli skill update --agent sealseek` before starting `tbcli auth login`.
-Source-checkout developers should update through their repository workflow
-instead of replacing that checkout with a global npm package.
+The result must show the new CLI version and `skill.current: true` before
+starting `tbcli auth login`. If an old release does not yet recognize `tbcli
+update`, bootstrap once with `npm install -g @petercjl/tbcli@latest`, then use
+the unified command for all later updates. Source-checkout developers should
+update through their repository workflow instead of replacing that checkout
+with a global npm package.
 
 ## Verification safety rule
 

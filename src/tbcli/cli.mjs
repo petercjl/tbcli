@@ -11,6 +11,7 @@ import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
+import { runUnifiedUpdate } from './commands/update.mjs';
 import { runDevCapture, runDevInspect, runDevPages } from './commands/dev.mjs';
 import { runDocumentGet } from './commands/document.mjs';
 import { runDocumentTree } from './commands/document-tree.mjs';
@@ -34,9 +35,11 @@ import {
 } from './commands/database.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
 import { runVersion } from './version.mjs';
+import { maybePrintUpdateNotice } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
   version: runVersion,
+  update: runUnifiedUpdate,
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
@@ -79,6 +82,7 @@ export function usage() {
   console.log(`Usage:
   tbcli --version
   tbcli version
+  tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--json]
   tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
@@ -123,6 +127,7 @@ Environment:
   TBCLI_REMOTE_DEBUGGING_PORT   Chrome remote debugging port, default ${DEFAULT_DEBUGGING_PORT}
   TBCLI_CHROME_PATH   Chrome binary path, default ${DEFAULT_CHROME_PATH}
   TBCLI_DB_CONFIG   Ecommerce warehouse connection config; passwords stay in its pgpass file
+  TBCLI_UPDATE_CHECK   Set to 0 to disable the cached npm update reminder
 
 Notes:
   - 不知道 tbcli 能做什么？可直接问 Agent：“这个 tbcli 有哪些能力？”
@@ -136,6 +141,7 @@ Notes:
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
+  await maybePrintUpdateNotice(args);
   if (args.version) {
     runVersion();
     return;

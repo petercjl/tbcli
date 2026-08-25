@@ -6,6 +6,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '查看当前 tbcli 版本',
   },
   {
+    key: 'update',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '升级 npm 安装的 tbcli CLI，并同步安装或更新指定 Agent 的配套 Skill，最后验证两者状态',
+  },
+  {
     key: 'auth login',
     maturity: 'stable',
     audience: 'internal',

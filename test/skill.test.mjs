@@ -83,6 +83,16 @@ test('bundled Skill keeps database credentials outside managed install directori
   assert.match(skill, /勿将密码发送到聊天/);
 });
 
+test('bundled Skill uses one verified command for CLI and Skill updates', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  assert.match(skill, /tbcli update --agent/);
+  assert.match(skill, /cli\.afterVersion/);
+  assert.match(skill, /skill\.state: current/);
+  assert.match(skill, /skill\.current: true/);
+  assert.match(skill, /throttled update notice/);
+  assert.match(skill, /do not mutate a global installation without an explicit update request/);
+});
+
 test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');

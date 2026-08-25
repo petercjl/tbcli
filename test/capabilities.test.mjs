@@ -25,6 +25,13 @@ test('version command is a stable internal capability', () => {
   assert.equal(command?.audience, 'internal');
 });
 
+test('unified CLI and Skill update is a stable internal capability', () => {
+  const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'update');
+  assert.equal(command?.maturity, 'stable');
+  assert.equal(command?.audience, 'internal');
+  assert.match(command.description, /CLI.*Skill/);
+});
+
 test('direct SYCM fetch advertises its date granularity option', () => {
   const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'sycm fetch');
   assert.match(command.capability.commandTemplate, /--date-type/);
