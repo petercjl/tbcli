@@ -17,6 +17,16 @@ import { runDocumentTree } from './commands/document-tree.mjs';
 import { runAiDianjingExport } from './commands/ai-dianjing.mjs';
 import { runSycmCatalog, runSycmExport, runSycmFetch, runSycmReports } from './commands/sycm-reports.mjs';
 import { runSkillInstall, runSkillSource, runSkillStatus, runSkillUpdate } from './commands/skill.mjs';
+import {
+  runDatabaseConfigure,
+  runDatabaseCoverage,
+  runDatabaseDatasets,
+  runDatabaseFields,
+  runDatabaseImport,
+  runDatabaseInit,
+  runDatabaseQuery,
+  runDatabaseStatus,
+} from './commands/database.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
 import { runVersion } from './version.mjs';
 
@@ -38,6 +48,14 @@ const COMMAND_HANDLERS = Object.freeze({
   'skill status': runSkillStatus,
   'skill install': runSkillInstall,
   'skill update': runSkillUpdate,
+  'db configure': runDatabaseConfigure,
+  'db status': runDatabaseStatus,
+  'db init': runDatabaseInit,
+  'db coverage': runDatabaseCoverage,
+  'db import': runDatabaseImport,
+  'db datasets': runDatabaseDatasets,
+  'db fields': runDatabaseFields,
+  'db query': runDatabaseQuery,
   capabilities: runCapabilities,
   doctor: runDoctor,
   'dev pages': runDevPages,
@@ -65,6 +83,14 @@ export function usage() {
   tbcli sycm export (--report-id ID | --report-name NAME) --out report.xlsx [--timeout-ms 120000] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json]
   tbcli sycm fetch (--report-id ID | --report-name NAME) --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--timeout-ms 120000] [--json]
   tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--date-type day|week|month|customDaySum] [--fields all|FIELD,...] [--device all|overall|wireless|pc] [--item-ids ID,...] [--filter NAME=VALUE,...] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out report.xlsx [--json]
+  tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
+  tbcli db status [--config FILE] [--json]
+  tbcli db init [--config FILE] [--json]
+  tbcli db coverage --dataset NAME [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--config FILE] [--json]
+  tbcli db import --input FILE_OR_DIR [--dataset NAME] [--mode append|replace-range|replace-all] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--reimport] [--config FILE] [--json]
+  tbcli db datasets [--config FILE] [--json]
+  tbcli db fields --dataset NAME [--config FILE] [--json]
+  tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
@@ -81,6 +107,7 @@ Environment:
   TBCLI_CHROME_PROFILE   Chrome profile dir, default ${DEFAULT_PROFILE_DIR}
   TBCLI_REMOTE_DEBUGGING_PORT   Chrome remote debugging port, default ${DEFAULT_DEBUGGING_PORT}
   TBCLI_CHROME_PATH   Chrome binary path, default ${DEFAULT_CHROME_PATH}
+  TBCLI_DB_CONFIG   Ecommerce warehouse connection config; passwords stay in its pgpass file
 
 Notes:
   - 不知道 tbcli 能做什么？可直接问 Agent：“这个 tbcli 有哪些能力？”

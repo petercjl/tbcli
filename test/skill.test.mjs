@@ -50,6 +50,75 @@ test('bundled Skill routes product IDs, all history, and all terminals through d
   assert.match(skill, /最多 100/);
 });
 
+test('bundled Skill routes warehouse questions through discovery and semantic query without SQL', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  assert.match(skill, /tbcli db datasets --json/);
+  assert.match(skill, /tbcli db fields --dataset '<业务表>' --json/);
+  assert.match(skill, /tbcli db query/);
+  assert.match(skill, /latest available date/);
+  assert.match(skill, /最近 N 个有数据日期/);
+  assert.match(skill, /at least one imported source row/);
+  assert.match(skill, /prefer the narrowest dataset/);
+  assert.match(skill, /not a distinct visitor\/UV count/);
+  assert.match(skill, /Never ask the employee to write SQL/);
+  assert.match(skill, /descriptive average/);
+});
+
+test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');
+  assert.match(skill, /references\/report-maintenance\.md/);
+  assert.match(maintenance, /当前自然年/);
+  assert.match(maintenance, /tbcli db coverage/);
+  assert.match(maintenance, /--mode replace-range/);
+  assert.match(maintenance, /--mode replace-all/);
+  assert.match(maintenance, /商品-整体.*--fields all --device overall/);
+  assert.match(maintenance, /商品-SKU.*--fields all --device overall/);
+  assert.match(maintenance, /商品-整体必须使用 `--device overall --filter '商品状态=Y,N'`/);
+  assert.match(maintenance, /经营投产比.*不传 `--device`/);
+  assert.match(maintenance, /商品-流量来源.*item-traffic-source.*精确使用旧版维度 `流量来源`/);
+  assert.match(maintenance, /禁止选 `流量来源\(新版\)`/);
+  assert.match(maintenance, /支付金额筛选.*访客数筛选.*不设置上下限/);
+  assert.match(maintenance, /最后一次访问来源.*nearest/);
+  assert.match(maintenance, /所有商品.*不传 `--item-ids`/);
+  assert.match(maintenance, /100,000 行/);
+  assert.match(maintenance, /14 天/);
+  assert.match(maintenance, /一级流量来源.*二级流量来源.*三级流量来源/);
+  assert.match(maintenance, /不得导入单次全历史或任何触及 100,000 行上限的文件/);
+  assert.match(skill, /商品-流量来源详情.*精确指旧版/);
+  assert.match(maintenance, /商品-流量来源详情.*item-traffic-source-detail.*流量来源详情/);
+  assert.match(maintenance, /禁止选 `流量来源详情\(新版\)`/);
+  assert.match(maintenance, /搜索来源.*关键词推广\(原直通车\),手淘搜索,关键词推广/);
+  assert.match(maintenance, /搜索词类型.*搜索词.*归属原则/);
+  assert.match(maintenance, /23 列/);
+  assert.match(maintenance, /任何分片若返回恰好 100,000 行.*二分/);
+  assert.match(skill, /商品-整体退款分布.*整体退款分布/);
+  assert.match(maintenance, /商品-整体退款分布.*item-refund-overall.*整体退款分布/);
+  assert.match(maintenance, /商品-整体退款分布没有筛选项和终端拆分/);
+  assert.match(maintenance, /成功退款金额.*成功退款子订单数.*成功退款人数/);
+  assert.match(maintenance, /90 天区间/);
+  assert.match(maintenance, /商品-整体退款分布-分日-全部商品/);
+  assert.match(skill, /商品-退款原因分布.*退款原因分布/);
+  assert.match(skill, /商品-流失竞店分布.*流失竞店分布/);
+  assert.match(skill, /商品-退款SKU分布.*退款SKU分布/);
+  assert.match(maintenance, /商品-退款原因分布.*item-refund-reason/);
+  assert.match(maintenance, /时间类型=pay,rfd.*退款场景=ALL.*退款时间=全部,支付30分钟内,30分钟-24小时,24小时-7天,7天-15天,15天以上/);
+  assert.match(maintenance, /商品-流失竞店分布.*item-loss-competitor/);
+  assert.match(maintenance, /退款后状态.*samepay,otherpay,loss,notbuy-strong,notbuy-weak,notbuy/);
+  assert.match(maintenance, /商品-退款SKU分布.*item-refund-sku/);
+  assert.match(maintenance, /16 列.*11 列.*12 列/s);
+  assert.match(maintenance, /不得跨 `时间类型`.*直接相加/);
+  assert.match(maintenance, /平台对某个已请求枚举没有返回明细行.*不能擅自删除该枚举/);
+  assert.match(skill, /exactly 100,000 data rows/);
+  assert.match(skill, /TRUNCATED_EXPORT/);
+  assert.match(skill, /下载历史数据并上传数据库/);
+  assert.match(maintenance, /恰好 100,000 行.*实际日期未覆盖目录完整区间.*禁止入库/);
+  assert.match(maintenance, /维护默认设置优先于/);
+  assert.match(maintenance, /维护流程禁止使用/);
+  assert.match(maintenance, /不会.*自行决定维护范围|不自行决定维护范围/);
+  assert.doesNotMatch(maintenance, /tbcli sycm sync/);
+});
+
 test('npm package includes the canonical companion Skill source', async () => {
   const packageJson = JSON.parse(await fs.readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'));
   assert.ok(packageJson.files.includes('skill'));

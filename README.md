@@ -92,6 +92,59 @@ The full-dimension `sycm catalog --json` result also includes the selected time
 granularity and live `validPeriod`, allowing multi-report tasks to validate every
 requested period before any workbook is created.
 
+## Company ecommerce warehouse
+
+`tbcli` can import its canonical full-history Excel exports into PostgreSQL and
+answer parameterized business questions without exposing SQL to employees. The
+warehouse connection is configured by an administrator; day-to-day Agents use a
+read-only role.
+
+```bash
+# Discover available tables and exact fields.
+tbcli db status --json
+tbcli db datasets --json
+tbcli db fields --dataset '商品-整体' --json
+tbcli db coverage --dataset '商品-整体' \
+  --start-date 2026-01-01 --end-date 2026-08-24 --json
+
+# Example: top five products by payment amount in an explicit period.
+tbcli db query \
+  --dataset '商品-整体' \
+  --metrics '支付金额,商品访客数,支付件数' \
+  --start-date 2026-07-21 --end-date 2026-08-19 \
+  --group-by item --order-by '支付金额' --limit 5 --json
+```
+
+Agents must resolve natural-language dates against `db datasets` coverage and
+must discover exact metric names with `db fields`. Query filters and grouping are
+limited to the stable semantic options shown by `tbcli --help`; there is no raw
+SQL command. Additive metrics use `sum`. Rate, ROI, CTR, CPC, average, unit-price,
+and cost-like fields currently use a descriptive `avg`, which must not be
+presented as an exact recomputed cross-period ratio.
+
+For an authorized data maintainer, configure connection metadata and then import
+a file or directory. Passwords are not stored in the JSON config; they remain in
+a protected PostgreSQL password file (mode `600` on macOS/Linux).
+
+```bash
+tbcli db configure \
+  --host '<LAN database host>' --database '<database>' \
+  --reader-user '<read-only role>' --ingest-user '<import role>' \
+  --pgpass-file '<protected pgpass path>'
+tbcli db init --json
+tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
+  --mode replace-range --start-date 2026-08-20 --end-date 2026-08-24 --json
+```
+
+`db coverage` mechanically reports covered and missing dates inside the explicit
+caller-supplied interval. The companion Skill, not the CLI, decides which tables
+and periods to maintain. Imports are source-hash idempotent. `append` refuses
+date overlap, `replace-range` atomically replaces one declared period, and
+`replace-all` atomically rebuilds one dataset. A single incremental workbook can
+be identified with `--dataset`; required headers and declared date bounds are
+still validated. `TBCLI_DB_CONFIG` can select a non-default metadata config on
+another machine.
+
 Read a DingTalk online document through the authorized ecommerce-browser
 session and export its structured content without turning Wiki compilation into
 a CLI concern:

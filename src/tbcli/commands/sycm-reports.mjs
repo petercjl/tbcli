@@ -584,7 +584,10 @@ export async function inspectSycmWorkbook(buffer, requestedItemIds = [], { dateT
   let dataRows = 0;
   for (let row = 2; row <= sheet.rowCount; row += 1) {
     const values = sheet.getRow(row).values;
-    if (!Array.isArray(values) || values.slice(1).every((value) => value == null || String(value).trim() === '')) continue;
+    if (!Array.isArray(values) || values.slice(1).every((value) => {
+      const normalized = value == null ? '' : String(value).trim();
+      return normalized === '' || normalized.toUpperCase() === 'NULL';
+    })) continue;
     dataRows += 1;
     if (itemIdColumn) {
       const itemId = String(sheet.getCell(row, itemIdColumn).text || '').trim();

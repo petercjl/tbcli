@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, shop-product exports, order logistics, AI点睛 reports, and supported DingTalk document tasks. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 店铺-整体, 商品-整体, SKU, 关键词, 流量来源, 无界账户/计划/人群/商品主体, 指定商品ID, 所有历史数据, 终端类型, 最近N天分日数据, or asks what tbcli can do. Translate natural-language report names, periods, fields, and filters into stable CLI commands and deliver verified files.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, SKU, 关键词, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
 ---
 
 # tbcli
@@ -36,12 +36,13 @@ If `command -v tbcli` fails, return `CLI_UNAVAILABLE`. Do not recreate a stable 
 
 1. Run `command -v tbcli`, `tbcli --help`, and `tbcli capabilities --json`. Use the live CLI rather than recalled syntax.
 2. Parse the user's intent into one or more targets. Identify required URLs/IDs, platform, data type, dimension, date granularity, period, fields, filters, and delivery directory.
-3. Resolve relative dates using the user's local date. For completed daily data, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. State the resolved dates.
-4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**.
+3. Resolve relative dates using the user's local date. For completed daily data fetched from the platform, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. Warehouse questions instead use the selected dataset's latest available date as defined in **Company Warehouse Flow**. State the resolved dates.
+4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
 5. Choose a new output path. Read-only check every explicit path first. Never overwrite an existing file; use a clear new filename or ask when naming materially matters.
 6. Execute targets sequentially so request pacing and partial failures remain understandable. Use `--json` when structured verification is useful.
 7. Verify each output: existence, nonzero size, expected file type, requested date coverage, key headers, and target identity. For Excel, inspect the workbook rather than trusting only the exit code.
-8. Deliver all output paths and a compact reconciliation: requested targets, resolved dates, fields/filter choices, successes, partial results, and platform limitations.
+8. Treat any all-history Excel with exactly 100,000 data rows, or whose actual data period does not cover the requested/catalog period, as `TRUNCATED_EXPORT`. It is not a valid delivery or import source even when the CLI exited successfully. Preserve it only as a failed artifact, choose explicit contiguous date chunks, and rerun; when the target is in the maintained report list, read `references/report-maintenance.md` and use that table's fixed chunk contract. Never import or describe a truncated file as complete.
+9. Deliver all output paths and a compact reconciliation: requested targets, resolved dates, fields/filter choices, successes, partial results, and platform limitations.
 
 Return to Step 5 after resolving a preflight branch. Stop at an explicit failure terminal when authorization, verification, or a material user choice is missing.
 
@@ -57,6 +58,12 @@ Map `<数据粒度>-<数据维度>` as follows:
 - `商品-整体` → `--data-platform 生意参谋 --data-type 商品 --data-dimension 整体`
 - `商品-SKU` → `生意参谋 / 商品 / SKU`
 - `店铺-关键词` → `生意参谋 / 店铺 / 关键词`
+- `商品-流量来源` → `生意参谋 / 商品 / 流量来源`（精确指旧版；不得选近似维度 `流量来源(新版)`）
+- `商品-流量来源详情` → `生意参谋 / 商品 / 流量来源详情`（精确指旧版；不得选近似维度 `流量来源详情(新版)`）
+- `商品-整体退款分布` → `生意参谋 / 商品 / 整体退款分布`
+- `商品-退款原因分布` → `生意参谋 / 商品 / 退款原因分布`
+- `商品-流失竞店分布` → `生意参谋 / 商品 / 流失竞店分布`
+- `商品-退款SKU分布` → `生意参谋 / 商品 / 退款SKU分布`
 - `无界-账户` or `无界-基础报表-账户` → `无界 / 基础报表 / 账户`
 - Apply the same grammar to other live dimensions. Do not guess an unknown dimension; discover it with `tbcli sycm catalog`.
 
@@ -149,6 +156,106 @@ Require all of the following:
 
 If cleanup fails, preserve the downloaded file, report the exact temporary report ID/name, and do not claim full success. After an interrupted run, inspect `tbcli sycm reports --keyword 'tbcli-temp-' --json`; delete nothing manually without verifying tbcli ownership.
 
+## Report Maintenance Orchestration
+
+When the user asks to 补全近期缺失数据, 补全某张取数表, maintain the warehouse from取数报表, 全量重拉并入库, 下载历史数据并上传数据库, or asks to continue processing known maintained tables as part of the warehouse-building workflow, read [references/report-maintenance.md](references/report-maintenance.md) completely before deciding any dates or commands. That reference is the Skill-owned report list and business methodology.
+
+Keep the boundary explicit: the Agent and this Skill decide **what** to maintain; `tbcli` executes atomic commands with explicit targets and dates. Never replace this composition with an all-in-one sync command, and never let a CLI default decide what “近期” means.
+
+## Company Warehouse Flow
+
+Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers fields and calls semantic commands. Never ask the employee to write SQL, never expose a raw-SQL escape hatch, and never bypass `tbcli` with `psql` or an ad-hoc database script.
+
+### 1. Check the warehouse and discover its live scope
+
+Run:
+
+```bash
+tbcli db status --json
+tbcli db datasets --json
+```
+
+Treat `db datasets` as authoritative for dataset names, grain, available dates, row counts, and field counts. A warehouse query uses imported data and therefore does not require Taobao browser authentication. If connection configuration is absent or invalid, stop with `DATABASE_UNAVAILABLE`; do not invent a host, user, password, or database name.
+
+This warehouse rule takes precedence over Main Flow's platform-fetch date rule. Resolve relative periods against the selected dataset's latest available date, not blindly against today's date. For example, “最近30天” means the calendar interval from `max_date - 29 days` through `max_date`, inclusive. State the resolved dates and flag stale coverage when the dataset does not reach the expected recent period.
+
+If the user explicitly asks for “最近 N 个有数据日期” rather than a calendar interval, first run a day-grouped query ordered by `统计日期` descending with `--limit N`. “有数据日期” means at least one imported source row exists on that date; it does not mean a chosen metric is nonzero. Use the earliest and latest returned dates for the subsequent business query and disclose any gaps. If the user instead means N dates where a particular metric is nonzero, report that the current semantic query contract cannot express that filter rather than silently changing the definition.
+
+### 2. Translate business language into a semantic query
+
+Choose exactly one dataset, then discover its current fields. If several datasets contain the requested metrics, prefer the narrowest dataset whose name and grain directly match the business subject and whose fields are sufficient; for ordinary product performance, prefer `商品-整体` over a wider specialized dataset such as `商品-经营投产比`. Use the specialized dataset when the question explicitly concerns its subject. Do not combine datasets implicitly.
+
+```bash
+tbcli db fields --dataset '<业务表>' --json
+```
+
+Map the request only to returned field names and one supported grouping:
+
+- overall company/store trend → `day`
+- one grand total → `total`
+- 商品排行/商品对比 → `item`
+- SKU排行/对比 → `sku`
+- 关键词排行/搜索词分析 → `keyword`
+- 连带商品分析 → `related-item`
+- 商品流量来源分析 → `traffic-source`
+- 商品搜索词/流量来源详情分析 → `search-term`
+- 店铺对比 → `shop`
+
+`item`, `sku`, `keyword`, `related-item`, `traffic-source`, and `search-term` groupings aggregate across every shop present in the selected dataset unless the result also groups by shop; the current CLI supports one grouping at a time. State this when a multi-shop warehouse is configured.
+
+Then run:
+
+```bash
+tbcli db query \
+  --dataset '<业务表>' \
+  --metrics '<指标1,指标2>' \
+  [--start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>'] \
+  [--group-by '<total|day|shop|item|sku|keyword|related-item|traffic-source|search-term>'] \
+  [--item-ids '<ID1,ID2,...>'] \
+  [--keyword '<包含文本>'] \
+  [--order-by '<返回字段>'] [--asc] [--limit '<1-1000>'] \
+  --json
+```
+
+Use the dataset's default metrics only when the user did not name a metric. The CLI parameterizes filters and permits at most 12 metrics and 1,000 returned groups. Preserve the CLI's returned `dataset`, `period`, `groupBy`, `metrics[].aggregation`, `rowCount`, and rows when explaining the result.
+
+### 3. Respect metric semantics
+
+- Additive fields such as金额、人数、件数、访客数 default to `sum`.
+- A sum of daily visitor counts is a sum of daily visitors, not a distinct visitor/UV count across the whole period. Use that exact wording when the distinction matters.
+- Rate, ratio, ROI, CTR, CPC, CPM, average, unit-price, and cost-like fields default to `avg` in the current warehouse catalog.
+- An `avg` over imported daily rows is a descriptive average, not necessarily the platform's exact recomputed cross-period ratio. Never present it as an exact official period total.
+- For a decision that depends on a derived metric, prefer querying its additive numerator and denominator and recomputing from totals only when the business formula is known. If the formula is not registered, disclose the limitation and ask for the desired business definition instead of guessing.
+- Do not sum percentage, rate, ROI, average, cost-per-unit, or unit-price fields.
+
+### 4. Import and coverage primitives (administrator branch)
+
+Use only for an authorized maintainer who asks to initialize, inspect coverage, or load tbcli-downloaded workbooks:
+
+```bash
+tbcli db init --json
+tbcli db coverage --dataset '<业务表>' --start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>' --json
+tbcli db import --input '<Excel文件>' --dataset '<业务表>' \
+  --mode '<append|replace-range|replace-all>' \
+  [--start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>'] --json
+```
+
+`db init` only initializes or upgrades tbcli's technical warehouse schema. `db coverage` reports coverage inside the caller-supplied interval and does not choose a business maintenance window. For imports, `append` rejects overlapping dates; `replace-range` atomically replaces one declared range; `replace-all` atomically rebuilds one dataset. An explicit `--dataset` allows a single incremental file whose name is not a full-history canonical name, but the importer still validates required headers and date bounds. Keep `--reimport` exceptional and limited to an exact source correction. After import, rerun `db coverage` and `db datasets`, then reconcile file identity, mode, rows, declared coverage, actual data range, and fields.
+
+Database configuration is also an administrator task. `tbcli db configure` stores connection metadata only; credentials stay in the separately protected pgpass file. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine.
+
+### 5. Warehouse QA and handoff
+
+Require all of the following:
+
+- connection succeeds with the read-only role for employee queries;
+- the chosen dataset and every metric exist in live catalogs;
+- resolved dates fall inside the imported range;
+- returned grouping matches the business question;
+- the result states row count, sort direction, date scope, and aggregation semantics;
+- zero rows is reported as “当前筛选范围无数据”, not as proof that a product or keyword never existed;
+- analysis distinguishes source facts from interpretation and calls out stale coverage or derived-metric limitations.
+
 ## Other Stable Tasks
 
 Read [references/command-reference.md](references/command-reference.md) when the request concerns shop products, logistics, AI点睛, DingTalk documents, browser startup, or the full command catalog. Do not load it for an ordinary SYCM report request.
@@ -165,6 +272,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 - **Existing output:** select a new path; never bypass overwrite protection.
 - **Partial multi-target result:** preserve completed new files, identify failed targets, and do not rerun successful targets unless requested.
 - **Unsupported capability:** report `CONTRACT_UNSUPPORTED` and the closest discoverable stable command; do not fall back to raw private APIs.
+- **Warehouse unavailable:** report `DATABASE_UNAVAILABLE`, preserve the business question, and ask an administrator to configure or restore the approved warehouse connection. Do not request credentials from an employee or substitute a public/Tailscale endpoint.
 
 ## Evolution Rule
 
