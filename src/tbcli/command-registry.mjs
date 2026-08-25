@@ -54,6 +54,18 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '配置员工本机的只读公司电商数据仓库连接（不保存密码）',
   },
   {
+    key: 'db credential-path',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '查看不会被 npm 或 Skill 更新覆盖的数据库凭证推荐路径及当前路径安全状态',
+  },
+  {
+    key: 'db credential-set',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '验证稳定凭证文件后备份并更新数据库配置中的凭证路径，不读取或显示密码',
+  },
+  {
     key: 'db access-check',
     maturity: 'stable',
     audience: 'internal',

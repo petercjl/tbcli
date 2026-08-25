@@ -20,6 +20,8 @@ import { runSkillInstall, runSkillSource, runSkillStatus, runSkillUpdate } from 
 import {
   runDatabaseConfigure,
   runDatabaseConfigureReader,
+  runDatabaseCredentialPath,
+  runDatabaseCredentialSet,
   runDatabaseAccessCheck,
   runDatabaseWriteCheck,
   runDatabaseCoverage,
@@ -53,6 +55,8 @@ const COMMAND_HANDLERS = Object.freeze({
   'skill update': runSkillUpdate,
   'db configure': runDatabaseConfigure,
   'db configure-reader': runDatabaseConfigureReader,
+  'db credential-path': runDatabaseCredentialPath,
+  'db credential-set': runDatabaseCredentialSet,
   'db access-check': runDatabaseAccessCheck,
   'db write-check': runDatabaseWriteCheck,
   'db status': runDatabaseStatus,
@@ -89,8 +93,10 @@ export function usage() {
   tbcli sycm export (--report-id ID | --report-name NAME) --out report.xlsx [--timeout-ms 120000] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json]
   tbcli sycm fetch (--report-id ID | --report-name NAME) --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--timeout-ms 120000] [--json]
   tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--date-type day|week|month|customDaySum] [--fields all|FIELD,...] [--device all|overall|wireless|pc] [--item-ids ID,...] [--filter NAME=VALUE,...] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out report.xlsx [--json]
-  tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
-  tbcli db configure-reader --host HOST --database NAME --reader-user USER --pgpass-file FILE [--port 5432] [--config FILE] [--json]
+  tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
+  tbcli db configure-reader --host HOST --database NAME --reader-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
+  tbcli db credential-path [--config FILE] [--json]
+  tbcli db credential-set --pgpass-file FILE [--config FILE] [--json]
   tbcli db access-check [--config FILE] [--json]
   tbcli db write-check [--config FILE] [--json]
   tbcli db status [--config FILE] [--json]

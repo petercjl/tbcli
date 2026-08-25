@@ -1,10 +1,12 @@
 import fsp from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import {
   connectDatabase,
   checkDatabaseWriteAccess,
   assertMaintainerAccess,
   DEFAULT_DATABASE_CONFIG,
+  DEFAULT_DATABASE_PGPASS,
   discoverImportFiles,
   ensureWarehouseSchema,
   importWorkbook,
@@ -13,6 +15,8 @@ import {
   listDatasets,
   loadDatabaseConfig,
   queryBusinessData,
+  resolveDatabaseCredentialPath,
+  validateDatabaseCredentialFile,
 } from '../database.mjs';
 
 function printResult(value, json) {
@@ -34,9 +38,10 @@ async function writeDatabaseConfig(configPath, config, json) {
 
 export async function runDatabaseConfigure(args) {
   const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
-  for (const key of ['host', 'database', 'readerUser', 'ingestUser', 'pgpassFile']) {
+  for (const key of ['host', 'database', 'readerUser', 'ingestUser']) {
     if (!args[key]) throw new Error(`缺少 --${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
   }
+  const pgpassFile = await validateDatabaseCredentialFile(args.pgpassFile);
   const config = {
     version: 2,
     accessMode: 'maintainer',
@@ -45,16 +50,17 @@ export async function runDatabaseConfigure(args) {
     database: args.database,
     readerUser: args.readerUser,
     ingestUser: args.ingestUser,
-    pgpassFile: path.resolve(args.pgpassFile),
+    pgpassFile,
   };
   await writeDatabaseConfig(configPath, config, args.json);
 }
 
 export async function runDatabaseConfigureReader(args) {
   const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
-  for (const key of ['host', 'database', 'readerUser', 'pgpassFile']) {
+  for (const key of ['host', 'database', 'readerUser']) {
     if (!args[key]) throw new Error(`缺少 --${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
   }
+  const pgpassFile = await validateDatabaseCredentialFile(args.pgpassFile);
   const config = {
     version: 2,
     accessMode: 'read-only',
@@ -64,9 +70,44 @@ export async function runDatabaseConfigureReader(args) {
     readerUser: args.readerUser,
     // Keep the configuration structurally complete while preventing all writer commands below.
     ingestUser: args.readerUser,
-    pgpassFile: path.resolve(args.pgpassFile),
+    pgpassFile,
   };
   await writeDatabaseConfig(configPath, config, args.json);
+}
+
+export async function runDatabaseCredentialPath(args) {
+  const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
+  let configuredPath = null;
+  let configuredSafe = null;
+  try {
+    const raw = JSON.parse(await fsp.readFile(configPath, 'utf8'));
+    if (raw.pgpassFile) {
+      configuredPath = path.resolve(raw.pgpassFile);
+      try {
+        resolveDatabaseCredentialPath(configuredPath);
+        configuredSafe = true;
+      } catch {
+        configuredSafe = false;
+      }
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  printResult({ recommendedPath: DEFAULT_DATABASE_PGPASS, configPath, configuredPath, configuredSafe }, args.json);
+}
+
+export async function runDatabaseCredentialSet(args) {
+  if (!args.pgpassFile) throw new Error(`缺少 --pgpass-file；推荐稳定位置：${DEFAULT_DATABASE_PGPASS}`);
+  const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
+  const pgpassFile = await validateDatabaseCredentialFile(args.pgpassFile);
+  const raw = JSON.parse(await fsp.readFile(configPath, 'utf8'));
+  const backupPath = `${configPath}.backup-${new Date().toISOString().replace(/\D/g, '').slice(0, 17)}`;
+  await fsp.copyFile(configPath, backupPath, fsConstants.COPYFILE_EXCL);
+  await fsp.chmod(backupPath, 0o600);
+  const next = { ...raw, pgpassFile };
+  await fsp.writeFile(configPath, `${JSON.stringify(next, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await fsp.chmod(configPath, 0o600);
+  printResult({ updated: true, configPath, backupPath, pgpassFile }, args.json);
 }
 
 export async function runDatabaseStatus(args) {

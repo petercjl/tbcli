@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import ExcelJS from '@excel.js/exceljs';
 import {
+  DEFAULT_DATABASE_PGPASS,
   defaultAggregation,
   assertMaintainerAccess,
   checkDatabaseWriteAccess,
@@ -17,8 +18,11 @@ import {
   loadDatabaseConfig,
   queryBusinessData,
   readPgpassPassword,
+  resolveDatabaseCredentialPath,
   resolveDataset,
+  validateDatabaseCredentialFile,
 } from '../src/tbcli/database.mjs';
+import { runDatabaseCredentialSet } from '../src/tbcli/commands/database.mjs';
 
 test('identifies only canonical all-history workbook names', () => {
   assert.equal(identifyDataset('店铺-整体-全部历史-分日-所有终端-2025至2026.xlsx').key, 'shop-overall');
@@ -212,6 +216,67 @@ test('loads config and reads a matching protected pgpass entry', async () => {
   const config = await loadDatabaseConfig(configFile);
   assert.equal(config.accessMode, 'maintainer');
   assert.equal(await readPgpassPassword(config, 'tb_agent'), 'secret:value');
+});
+
+test('uses a stable user config path for database credentials', () => {
+  assert.equal(resolveDatabaseCredentialPath(), DEFAULT_DATABASE_PGPASS);
+  assert.doesNotMatch(DEFAULT_DATABASE_PGPASS, /node_modules/i);
+  assert.throws(
+    () => resolveDatabaseCredentialPath(path.join(os.tmpdir(), 'node_modules', '@petercjl', 'tbcli', '.pgpass')),
+    /升级会删除该文件/,
+  );
+  assert.throws(
+    () => resolveDatabaseCredentialPath(path.join(os.tmpdir(), '.sealseek', 'skill_pool', 'tbcli', '.pgpass')),
+    /Skill 安装目录/,
+  );
+});
+
+test('validates an existing credential file and rejects a missing one', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-credential-'));
+  const credentialFile = path.join(dir, 'pgpass');
+  await fs.writeFile(credentialFile, 'placeholder\n', { mode: 0o600 });
+  assert.equal(await validateDatabaseCredentialFile(credentialFile), credentialFile);
+  await assert.rejects(validateDatabaseCredentialFile(path.join(dir, 'missing')), /密码文件不存在/);
+});
+
+test('rejects a legacy config that stores credentials in node_modules', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-unsafe-config-'));
+  const configFile = path.join(dir, 'database.json');
+  await fs.writeFile(configFile, JSON.stringify({
+    host: '192.168.0.20', port: 5432, database: 'commerce_analytics',
+    readerUser: 'tb_agent', ingestUser: 'tb_ingest',
+    pgpassFile: path.join(dir, 'node_modules', '@petercjl', 'tbcli', '.pgpass'),
+  }));
+  await assert.rejects(loadDatabaseConfig(configFile), /不能放在 tbcli\/npm\/Skill 安装目录中/);
+});
+
+test('credential-set backs up config and changes only the credential path', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-credential-set-'));
+  const configFile = path.join(dir, 'database.json');
+  const credentialFile = path.join(dir, 'pgpass');
+  const original = {
+    version: 2, accessMode: 'read-only', host: '192.168.0.20', port: 5432,
+    database: 'commerce_analytics', readerUser: 'tb_agent', ingestUser: 'tb_agent',
+    pgpassFile: '/legacy/unsafe/location',
+  };
+  await fs.writeFile(configFile, `${JSON.stringify(original, null, 2)}\n`, { mode: 0o600 });
+  await fs.writeFile(credentialFile, 'placeholder\n', { mode: 0o600 });
+  const output = [];
+  const previousLog = console.log;
+  console.log = (value) => output.push(value);
+  try {
+    await runDatabaseCredentialSet({ config: configFile, pgpassFile: credentialFile, json: true });
+  } finally {
+    console.log = previousLog;
+  }
+  const next = JSON.parse(await fs.readFile(configFile, 'utf8'));
+  assert.deepEqual(next, { ...original, pgpassFile: credentialFile });
+  const files = await fs.readdir(dir);
+  const backupName = files.find((name) => name.startsWith('database.json.backup-'));
+  assert.ok(backupName);
+  assert.deepEqual(JSON.parse(await fs.readFile(path.join(dir, backupName), 'utf8')), original);
+  const result = JSON.parse(output[0]);
+  assert.equal(result.pgpassFile, credentialFile);
 });
 
 test('rejects warehouse writes from a read-only client configuration', () => {

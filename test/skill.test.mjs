@@ -73,6 +73,16 @@ test('bundled Skill routes maintainer read-write verification through stable che
   assert.match(skill, /Do not replace either check with raw SQL or an ad-hoc script/);
 });
 
+test('bundled Skill keeps database credentials outside managed install directories', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  assert.match(skill, /tbcli db credential-path --json/);
+  assert.match(skill, /tbcli db credential-set --pgpass-file/);
+  assert.match(skill, /\.config\/tbcli\/pgpass/);
+  assert.match(skill, /node_modules/);
+  assert.match(skill, /npm.*Skill.*升级.*覆盖/s);
+  assert.match(skill, /勿将密码发送到聊天/);
+});
+
 test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');

@@ -3,12 +3,47 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import ExcelJS from '@excel.js/exceljs';
 import pg from 'pg';
 
 const { Client } = pg;
 
 export const DEFAULT_DATABASE_CONFIG = path.join(os.homedir(), '.config', 'tbcli', 'database.json');
+export const DEFAULT_DATABASE_PGPASS = path.join(os.homedir(), '.config', 'tbcli', 'pgpass');
+const TBCLI_PACKAGE_ROOT = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
+
+function isInsidePath(parent, child) {
+  const relative = path.relative(parent, child);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+export function resolveDatabaseCredentialPath(input = '') {
+  const resolved = path.resolve(input || DEFAULT_DATABASE_PGPASS);
+  const segments = resolved.split(path.sep).map((part) => part.toLowerCase());
+  const isManagedSkillPath = segments.some(
+    (part, index) => ['skills', 'skill_pool'].includes(part) && segments[index + 1] === 'tbcli',
+  );
+  if (segments.includes('node_modules') || isManagedSkillPath || isInsidePath(TBCLI_PACKAGE_ROOT, resolved)) {
+    throw new Error(`数据库密码文件不能放在 tbcli/npm/Skill 安装目录中，升级会删除该文件；请迁移到稳定用户配置目录：${DEFAULT_DATABASE_PGPASS}`);
+  }
+  return resolved;
+}
+
+export async function validateDatabaseCredentialFile(input = '') {
+  const resolved = resolveDatabaseCredentialPath(input);
+  let stat;
+  try {
+    stat = await fsp.stat(resolved);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`数据库密码文件不存在：${resolved}；请由管理员通过私密渠道在稳定用户配置目录创建该文件，勿将密码发送到聊天中`);
+    }
+    throw error;
+  }
+  if (!stat.isFile()) throw new Error(`数据库密码路径不是普通文件：${resolved}`);
+  return resolved;
+}
 
 const COMMON_DIMENSIONS = new Set([
   '统计日期', '店铺名称', '商品ID', '商品名称', '商品标题', '商品状态', 'SKU ID', 'SKU名称',
@@ -201,7 +236,7 @@ export async function loadDatabaseConfig(configPath = '') {
     database: process.env.TBCLI_DB_NAME || raw.database,
     readerUser: process.env.TBCLI_DB_READER_USER || raw.readerUser,
     ingestUser: process.env.TBCLI_DB_INGEST_USER || raw.ingestUser,
-    pgpassFile: path.resolve(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
+    pgpassFile: resolveDatabaseCredentialPath(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
     configPath: resolvedPath,
   };
   if (!['maintainer', 'read-only'].includes(config.accessMode)) {
@@ -243,11 +278,20 @@ function pgpassMatches(value, expected) {
 
 export async function readPgpassPassword(config, user) {
   if (process.env.TBCLI_DB_PASSWORD) return process.env.TBCLI_DB_PASSWORD;
-  const stat = await fsp.stat(config.pgpassFile);
-  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
-    throw new Error(`数据库密码文件权限必须为 600：${config.pgpassFile}`);
+  const safePath = resolveDatabaseCredentialPath(config.pgpassFile);
+  let stat;
+  try {
+    stat = await fsp.stat(safePath);
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      throw new Error(`数据库密码文件不存在：${safePath}；请由管理员恢复到稳定用户配置目录，勿将密码发送到聊天中`);
+    }
+    throw error;
   }
-  const lines = (await fsp.readFile(config.pgpassFile, 'utf8')).split(/\r?\n/);
+  if (process.platform !== 'win32' && (stat.mode & 0o077) !== 0) {
+    throw new Error(`数据库密码文件权限必须为 600：${safePath}`);
+  }
+  const lines = (await fsp.readFile(safePath, 'utf8')).split(/\r?\n/);
   for (const line of lines) {
     if (!line || line.startsWith('#')) continue;
     const [host, port, database, entryUser, password] = parsePgpassLine(line);

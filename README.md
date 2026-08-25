@@ -124,13 +124,15 @@ presented as an exact recomputed cross-period ratio.
 
 For an authorized data maintainer, configure connection metadata and then import
 a file or directory. Passwords are not stored in the JSON config; they remain in
-a protected PostgreSQL password file (mode `600` on macOS/Linux).
+a protected PostgreSQL password file (mode `600` on macOS/Linux). The default
+credential path is `~/.config/tbcli/pgpass` (under the Windows user profile as
+well). This stable user configuration path is outside npm and Skill installation
+directories, so package upgrades do not replace it.
 
 ```bash
 tbcli db configure \
   --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>' --ingest-user '<import role>' \
-  --pgpass-file '<protected pgpass path>'
+  --reader-user '<read-only role>' --ingest-user '<import role>'
 tbcli db init --json
 tbcli db write-check --json
 tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
@@ -140,15 +142,30 @@ tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
 For an employee who only queries the warehouse, create a separate local
 read-only configuration. The administrator supplies the LAN host, database name,
 and read-only role plus that user's protected password file by an approved
-private channel; never add the password file to the npm package, the Skill, Git,
-or shared folders.
+private channel; never add the password file to the npm package, `node_modules`,
+the Skill installation directory, Git, or shared folders. `tbcli` rejects those
+upgrade-managed paths.
 
 ```bash
 tbcli db configure-reader \
   --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>' --pgpass-file '<protected pgpass path>'
+  --reader-user '<read-only role>'
 tbcli db access-check --json
 ```
+
+To inspect the recommended location or repair an older configuration that used
+an unsafe package path, first have the administrator privately provision a new
+protected pgpass file at the recommended path (or another stable user-owned
+path), then update only the reference:
+
+```bash
+tbcli db credential-path --json
+tbcli db credential-set --pgpass-file '<stable protected pgpass path>' --json
+tbcli db access-check --json
+```
+
+`credential-set` validates the new file, rejects package-managed paths, backs up
+the existing metadata configuration, and never reads or prints the password.
 
 `configure-reader` marks the local configuration as read-only. `db init` and
 `db import` reject that configuration before attempting a write. `access-check`
