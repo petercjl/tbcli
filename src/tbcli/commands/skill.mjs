@@ -30,6 +30,10 @@ export async function runSkillStatus(opts = {}) {
 }
 
 export async function runSkillInstall(opts = {}) {
+  console.log(JSON.stringify(await installSkill(opts), null, 2));
+}
+
+export async function installSkill(opts = {}) {
   const root = resolveTargetRoot(opts);
   const destination = path.join(root, SKILL_NAME);
   if (await pathExists(destination, { includeBrokenLink: true })) {
@@ -42,16 +46,19 @@ export async function runSkillInstall(opts = {}) {
   await fs.mkdir(root, { recursive: true });
   if (mode === 'link') await fs.symlink(SOURCE, destination, process.platform === 'win32' ? 'junction' : 'dir');
   else await installManagedCopy(destination);
-  console.log(JSON.stringify({ ...await getSkillStatus(root), action: 'installed' }, null, 2));
+  return { ...await getSkillStatus(root), action: 'installed' };
 }
 
 export async function runSkillUpdate(opts = {}) {
+  console.log(JSON.stringify(await updateSkill(opts), null, 2));
+}
+
+export async function updateSkill(opts = {}) {
   const root = resolveTargetRoot(opts);
   const before = await getSkillStatus(root);
   if (before.state === 'absent') throw new Error(`Skill 尚未安装：${before.destination}`);
   if (before.state === 'current') {
-    console.log(JSON.stringify({ ...before, action: 'unchanged' }, null, 2));
-    return;
+    return { ...before, action: 'unchanged' };
   }
   if (before.mode !== 'copy' || !before.managed) {
     throw new Error(`拒绝更新非 tbcli 管理的 Skill：${before.destination}`);
@@ -68,7 +75,16 @@ export async function runSkillUpdate(opts = {}) {
     if (!await pathExists(before.destination, { includeBrokenLink: true })) await fs.rename(backup, before.destination);
     throw error;
   }
-  console.log(JSON.stringify({ ...await getSkillStatus(root), action: 'updated', backup }, null, 2));
+  return { ...await getSkillStatus(root), action: 'updated', backup };
+}
+
+export async function ensureSkill(opts = {}) {
+  const root = resolveTargetRoot(opts);
+  const status = await getSkillStatus(root);
+  if (status.state === 'absent') return installSkill(opts);
+  if (status.state === 'current') return { ...status, action: 'unchanged' };
+  if (status.state === 'stale') return updateSkill(opts);
+  throw new Error(`拒绝替换非 tbcli 管理的 Skill：${status.destination}（状态：${status.state}）`);
 }
 
 export async function getSkillStatus(root) {

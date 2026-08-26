@@ -4,6 +4,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 
 import { resolveTargetRoot } from './skill.mjs';
+import { discoverSealseekWindows } from '../sealseek-windows.mjs';
 import { TBCLI_VERSION } from '../version.mjs';
 
 const execFileAsync = promisify(execFile);
@@ -65,6 +66,22 @@ function parseJsonOutput(output, label) {
 
 export async function performUnifiedUpdate(opts = {}, dependencies = {}) {
   const run = dependencies.run || runCaptured;
+  const platform = dependencies.platform || process.platform;
+  if (platform === 'win32' && opts.agent === 'sealseek') {
+    const environment = dependencies.environment || await (dependencies.discover || discoverSealseekWindows)();
+    await run(environment.nodePath, [environment.npmCli, 'install', '--global', '--prefix', environment.npmGlobalDir, '@petercjl/tbcli@latest']);
+    const setup = parseJsonOutput((await run(environment.nodePath, [environment.canonicalEntry, 'setup', 'sealseek', '--finalize', '--json'])).stdout, 'SealSeek 环境与 Skill 更新');
+    const versionResult = await run(environment.nodePath, [environment.canonicalEntry, '--version']);
+    const afterVersion = versionResult.stdout.trim().split(/\r?\n/).at(-1);
+    if (!afterVersion) throw new Error('CLI 升级后无法读取 canonical 版本');
+    if (!setup.ok || !setup.skill?.current) throw new Error(`CLI 已升级到 ${afterVersion}，但 Windows SealSeek 环境或 Skill 最终验证失败`);
+    return {
+      updated: true,
+      cli: { beforeVersion: TBCLI_VERSION, afterVersion, entry: environment.canonicalEntry, command: environment.canonicalCmd },
+      skill: { agent: 'sealseek', targetDir: setup.skill.destination, action: setup.skill.action, state: setup.skill.state, current: setup.skill.current },
+      sealseek: { restartRequired: setup.restartRequired, nextStep: setup.nextStep },
+    };
+  }
   const npm = dependencies.npm || await resolveNpmInvocation();
   const cliEntry = dependencies.cliEntry || process.argv[1];
   const node = dependencies.node || process.execPath;

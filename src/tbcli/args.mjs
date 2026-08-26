@@ -3,6 +3,8 @@ export function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--json') out.json = true;
+    else if (arg === '--fix') out.fix = true;
+    else if (arg === '--finalize') out.finalize = true;
     else if (arg === '--version' || arg === '-v') out.version = true;
     else if (arg === '--all') out.all = true;
     else if (arg === '--all-history') out.allHistory = true;

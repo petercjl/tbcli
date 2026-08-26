@@ -105,3 +105,22 @@ test('unified update installs a missing managed Skill', async () => {
   );
   assert.equal(result.skill.action, 'installed');
 });
+
+test('Windows SealSeek update uses the canonical prefix and newly installed entry', async () => {
+  const environment = {
+    nodePath: 'C:\\Managed\\node.exe', npmCli: 'C:\\Managed\\npm-cli.js', npmGlobalDir: 'C:\\Global',
+    canonicalEntry: 'C:\\Global\\node_modules\\@petercjl\\tbcli\\scripts\\tbcli.mjs', canonicalCmd: 'C:\\Global\\tbcli.cmd',
+  };
+  const calls = [];
+  const run = async (command, args) => {
+    calls.push({ command, args });
+    if (args.includes('--finalize')) return { stdout: JSON.stringify({ ok: true, restartRequired: false, skill: { action: 'updated', state: 'current', current: true, destination: 'C:\\Skills\\tbcli' } }) };
+    if (args.includes('--version')) return { stdout: '0.7.0\n' };
+    return { stdout: '' };
+  };
+  const result = await performUnifiedUpdate({ agent: 'sealseek' }, { platform: 'win32', environment, run });
+  assert.deepEqual(calls[0].args, [environment.npmCli, 'install', '--global', '--prefix', environment.npmGlobalDir, '@petercjl/tbcli@latest']);
+  assert.deepEqual(calls[1].args, [environment.canonicalEntry, 'setup', 'sealseek', '--finalize', '--json']);
+  assert.equal(result.cli.afterVersion, '0.7.0');
+  assert.equal(result.skill.current, true);
+});

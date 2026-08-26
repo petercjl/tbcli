@@ -4,6 +4,8 @@ import { withBrowserSession, assertTaobaoLoggedIn } from '../browser-session.mjs
 import { DEFAULT_CHROME_PATH, DEFAULT_PROFILE_DIR } from '../config.mjs';
 import { businessCapabilities, technicalCapabilities } from '../command-registry.mjs';
 import { TBCLI_VERSION } from '../version.mjs';
+import { inspectSealseekWindows } from '../sealseek-windows.mjs';
+import { finalizeSealseekSetup } from './setup.mjs';
 
 export function runCapabilities(opts = {}) {
   const capabilities = businessCapabilities();
@@ -38,6 +40,13 @@ export function runCapabilities(opts = {}) {
 }
 
 export async function runDoctor(opts = {}) {
+  if (opts.agent === 'sealseek') {
+    const result = opts.fix ? await finalizeSealseekSetup(opts) : await inspectSealseekWindows();
+    if (opts.json) console.log(JSON.stringify(result, null, 2));
+    else for (const [key, value] of Object.entries(result)) console.log(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
   const result = {
     version: TBCLI_VERSION,
     node: process.version,

@@ -93,6 +93,18 @@ test('bundled Skill uses one verified command for CLI and Skill updates', async 
   assert.match(skill, /do not mutate a global installation without an explicit update request/);
 });
 
+test('bundled Skill has a portable Windows SealSeek adapter', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  const adapter = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'windows-sealseek.md'), 'utf8');
+  assert.match(skill, /references\/windows-sealseek\.md/);
+  assert.match(adapter, /runtime-info\.json/);
+  assert.match(adapter, /tbcli\.cmd doctor --agent sealseek/);
+  assert.match(adapter, /setup sealseek --json/);
+  assert.match(adapter, /Do not require.*ExecutionPolicy/s);
+  assert.doesNotMatch(adapter, /pechen/i);
+  assert.doesNotMatch(adapter, /node-v\d/i);
+});
+
 test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');

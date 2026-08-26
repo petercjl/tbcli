@@ -12,6 +12,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '升级 npm 安装的 tbcli CLI，并同步安装或更新指定 Agent 的配套 Skill，最后验证两者状态',
   },
   {
+    key: 'setup sealseek',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '在 Windows SealSeek 中发现托管 Node、配置稳定执行路径、安装配套 Skill，并规避 PowerShell shim 冲突',
+  },
+  {
     key: 'auth login',
     maturity: 'stable',
     audience: 'internal',
@@ -312,7 +318,7 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     key: 'doctor',
     maturity: 'stable',
     audience: 'internal',
-    description: '检查 Chrome、浏览器会话和淘宝登录状态',
+    description: '检查 Chrome 与淘宝登录状态，或检查并修复 Windows SealSeek 的 tbcli 执行环境',
   },
   {
     key: 'dev pages',

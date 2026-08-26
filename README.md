@@ -19,6 +19,14 @@ tbcli capabilities
 tbcli doctor
 ```
 
+Windows SealSeek already includes a managed Node.js. It does not need a separate
+Node installation, manual PATH editing, or a PowerShell ExecutionPolicy change.
+After the initial npm bootstrap, run `tbcli setup sealseek --json`; this reads
+SealSeek's own runtime metadata, backs up and merges its execution-path config,
+installs the companion Skill, and provides a restart instruction. The complete
+PATH-independent bootstrap is documented in the bundled Skill reference
+`references/windows-sealseek.md`.
+
 The companion Agent Skill is bundled with the CLI and is the natural-language
 usage contract for all stable commands. Discover or install the canonical Skill:
 
@@ -45,6 +53,8 @@ The command upgrades the global npm package, installs or refreshes the bundled
 Skill for that Agent, and verifies the final CLI version and Skill state. Normal
 tbcli commands check npm at most once every six hours and print a throttled
 notice when a newer version exists; the reminder never blocks business work.
+On Windows SealSeek, use `tbcli.cmd update --agent sealseek --json`; it installs
+into the canonical directory reported by SealSeek and verifies that exact entry.
 
 Reuse an existing SYCM (生意参谋) data-fetch report instead of rebuilding the
 same report in the web UI each time:

@@ -12,6 +12,7 @@ import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
 import { runUnifiedUpdate } from './commands/update.mjs';
+import { runSealseekSetup } from './commands/setup.mjs';
 import { runDevCapture, runDevInspect, runDevPages } from './commands/dev.mjs';
 import { runDocumentGet } from './commands/document.mjs';
 import { runDocumentTree } from './commands/document-tree.mjs';
@@ -40,6 +41,7 @@ import { maybePrintUpdateNotice } from './update.mjs';
 const COMMAND_HANDLERS = Object.freeze({
   version: runVersion,
   update: runUnifiedUpdate,
+  'setup sealseek': runSealseekSetup,
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
@@ -83,6 +85,7 @@ export function usage() {
   tbcli --version
   tbcli version
   tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--json]
+  tbcli setup sealseek [--json]
   tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
@@ -115,7 +118,7 @@ export function usage() {
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
   tbcli skill update (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli capabilities [--json] [--all]
-  tbcli doctor [--json]
+  tbcli doctor [--agent sealseek] [--fix] [--json]
   tbcli dev pages [--json]
   tbcli dev inspect [--url SHOP_URL]
   tbcli dev capture [--url SHOP_URL] [--duration-ms 15000]

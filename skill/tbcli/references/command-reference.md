@@ -9,6 +9,7 @@ tbcli auth login [--timeout-ms 300000] [--json]
 tbcli auth status [--json]
 tbcli browser open [--url '<URL>']
 tbcli doctor [--json]
+tbcli doctor --agent sealseek [--fix] [--json]
 tbcli capabilities [--json] [--all]
 ```
 
@@ -87,6 +88,7 @@ Use only for the supported browser-session document workflows exposed by tbcli. 
 ## Companion Skill lifecycle
 
 ```bash
+tbcli setup sealseek --json
 tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir '<root>') --json
 tbcli skill source --json
 tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir '<root>')
@@ -95,6 +97,10 @@ tbcli skill update (--agent codex|agents|openclaw|sealseek | --target-dir '<root
 ```
 
 The bundled source is canonical. Installations refuse to replace existing unmanaged Skill directories. Link mode is preferred where supported; managed copies carry a digest and are updated recoverably. Normal CLI use performs a cached npm version check at most once every six hours. When stderr prints an update notice, preserve the current business command and offer the unified update command; do not silently mutate global packages during an unrelated task.
+
+For Windows SealSeek, read `windows-sealseek.md` before installation or updates.
+Use the managed runtime discovered from runtime-info and invoke `.cmd` launchers;
+do not require manual PATH edits or a PowerShell ExecutionPolicy change.
 
 ## Company warehouse access
 

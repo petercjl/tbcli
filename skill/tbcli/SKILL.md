@@ -21,6 +21,12 @@ tbcli skill install --agent codex
 
 Use `--agent agents`, `openclaw`, or `sealseek`, or `--target-dir <agent-skill-root>`. Linked installs update immediately; use `tbcli skill update` only for a managed copy. Refresh the host Skill catalog if it snapshots metadata.
 
+When the host is Windows SealSeek, read
+[references/windows-sealseek.md](references/windows-sealseek.md) completely
+before installation, command discovery, diagnosis, or updating. Its managed
+runtime and `.cmd` rules replace the generic PATH probes below; after the adapter
+passes, return to this Skill's main flow.
+
 ### Unified update contract
 
 When the user explicitly asks to update or upgrade tbcli, run exactly one
@@ -42,23 +48,27 @@ Normal tbcli commands may print a throttled update notice on stderr. During an
 unrelated business request, finish or safely stop that request and report the
 notice; do not mutate a global installation without an explicit update request.
 If a legacy CLI does not recognize `tbcli update`, bootstrap it once with `npm
-install -g @petercjl/tbcli@latest`, then return to the unified command. A source
-checkout follows its repository update workflow instead of global npm update.
+install -g @petercjl/tbcli@latest`, then return to the unified command. On
+Windows SealSeek, use the adapter's runtime-info bootstrap instead of relying on
+bare `npm`, `node`, or `tbcli`. A source checkout follows its repository update
+workflow instead of global npm update.
 
 ## Runtime Contract
 
 - **Input:** a supported business task plus identifiers, URLs, report paths, dates, fields, filters, and output preference when applicable.
 - **Strategy:** discover the live CLI, normalize the intent, preflight dependencies and all targets, execute stable commands, then verify outputs.
 - **Output:** requested business data or a new file, with paths, covered period, command outcome, and limitations.
-- **Dependencies:** `tbcli` on `PATH`; a supported Chrome; the fixed tbcli browser Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
+- **Dependencies:** a discoverable `tbcli` entry (or the Windows SealSeek adapter's managed-runtime entry); a supported Chrome; the fixed tbcli browser Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
 - **Permissions:** use only the current user's authorized account and visible data. Never extract or persist cookies, tokens, or session headers.
 - **Success:** every requested target completes, every output is new and readable, its scope matches the request, and temporary SYCM reports are cleaned.
 
-If `command -v tbcli` fails, return `CLI_UNAVAILABLE`. Do not recreate a stable tbcli workflow with raw HTTP, browser scripting, or an ad-hoc script.
+If generic command discovery fails, return `CLI_UNAVAILABLE`. On Windows
+SealSeek, follow its adapter before declaring failure. Do not recreate a stable
+tbcli workflow with raw HTTP, browser scripting, or an ad-hoc script.
 
 ## Main Flow
 
-1. Run `command -v tbcli`, `tbcli --help`, and `tbcli capabilities --json`. Use the live CLI rather than recalled syntax.
+1. Discover the live CLI, then run `tbcli --help` and `tbcli capabilities --json`. On POSIX use `command -v tbcli`; on Windows SealSeek use its adapter and invoke `tbcli.cmd`. Use live syntax rather than recalled syntax.
 2. Parse the user's intent into one or more targets. Identify required URLs/IDs, platform, data type, dimension, date granularity, period, fields, filters, and delivery directory.
 3. Resolve relative dates using the user's local date. For completed daily data fetched from the platform, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. Warehouse questions instead use the selected dataset's latest available date as defined in **Company Warehouse Flow**. State the resolved dates.
 4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
