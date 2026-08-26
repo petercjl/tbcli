@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户, 转化周期, SKU, 关键词, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
 ---
 
 # tbcli
@@ -99,6 +99,7 @@ Map `<数据粒度>-<数据维度>` as follows:
 - `商品-流失竞店分布` → `生意参谋 / 商品 / 流失竞店分布`
 - `商品-退款SKU分布` → `生意参谋 / 商品 / 退款SKU分布`
 - `无界-账户` or `无界-基础报表-账户` → `无界 / 基础报表 / 账户`；维护默认使用 `15天转化`
+- `无界-计划/人群/商品主体/创意/单元/关键词` → `无界 / 基础报表 / <精确维度>`；维护默认同样使用 `15天转化`
 - Apply the same grammar to other live dimensions. Do not guess an unknown dimension; discover it with `tbcli sycm catalog`.
 
 When the user names multiple tables, create one Excel per table unless they explicitly ask for a merged workbook. Keep the same resolved period across all compatible targets.
@@ -285,7 +286,7 @@ tbcli db query \
   --dataset '<业务表>' \
   --metrics '<指标1,指标2>' \
   [--start-date '<YYYY-MM-DD>' --end-date '<YYYY-MM-DD>'] \
-  [--group-by '<total|day|shop|item|sku|keyword|related-item|traffic-source|search-term>'] \
+  [--group-by '<total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative>'] \
   [--item-ids '<ID1,ID2,...>'] \
   [--keyword '<包含文本>'] \
   [--order-by '<返回字段>'] [--asc] [--limit '<1-1000>'] \

@@ -86,6 +86,13 @@ tbcli sycm fetch \
   --date-type day --fields all --filter '转化周期=15天转化' --all-history \
   --out ./无界-账户-分日-15天转化.xlsx --json
 
+# The same maintained contract applies to Wujie plan, audience, product subject,
+# creative, unit, and keyword dimensions. Large keyword history is date-chunked.
+tbcli sycm fetch \
+  --data-platform '无界' --data-type '基础报表' --data-dimension '计划' \
+  --date-type day --fields all --filter '转化周期=15天转化' --all-history \
+  --out ./无界-计划-分日-15天转化.xlsx --json
+
 # Fetch selected products over the complete currently available daily history.
 tbcli sycm fetch \
   --data-platform '生意参谋' --data-type '商品' --data-dimension '整体' \
@@ -147,6 +154,11 @@ tbcli db query \
 tbcli db query \
   --dataset '无界-账户' --metrics '展现量,点击量,花费,总成交金额' \
   --group-by scene --order-by '花费' --limit 20 --json
+
+# Example: compare Wujie plan spend by plan identity.
+tbcli db query \
+  --dataset '无界-计划' --metrics '展现量,点击量,花费,总成交金额' \
+  --group-by plan --order-by '花费' --limit 50 --json
 ```
 
 Agents must resolve natural-language dates against `db datasets` coverage and

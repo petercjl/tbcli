@@ -52,6 +52,13 @@ test('identifies only canonical all-history workbook names', () => {
   assert.equal(resolveDataset('商品-退款SKU分布').dataDimension, '退款SKU分布');
   assert.equal(identifyDataset('无界-账户-分日-15天转化-2026-05-28至2026-08-25.xlsx').key, 'wujie-account');
   assert.equal(resolveDataset('无界-账户').dataDimension, '账户');
+  assert.equal(identifyDataset('无界-计划-分日-15天转化-2026-05-27至2026-08-24.xlsx').key, 'wujie-plan');
+  assert.equal(identifyDataset('无界-人群-分日-15天转化-2026-05-27至2026-08-24.xlsx').key, 'wujie-audience');
+  assert.equal(identifyDataset('无界-商品主体-分日-15天转化-2026-05-28至2026-08-25.xlsx').key, 'wujie-subject');
+  assert.equal(identifyDataset('无界-创意-分日-15天转化-2026-05-27至2026-08-24.xlsx').key, 'wujie-creative');
+  assert.equal(identifyDataset('无界-单元-分日-15天转化-2026-05-27至2026-08-24.xlsx').key, 'wujie-unit');
+  assert.equal(identifyDataset('无界-关键词-分日-15天转化-2026-07-26至2026-08-24.xlsx').key, 'wujie-keyword');
+  assert.equal(resolveDataset('无界-商品主体').dataDimension, '商品主体');
 });
 
 test('discovers canonical workbooks and reports ignored files', async () => {
@@ -216,6 +223,38 @@ test('imports Wujie account conversion-cycle and scene dimensions', async () => 
   assert.equal(insert.values[20], '15天转化');
   assert.equal(insert.values[21], '关键词推广');
   assert.equal(insert.values[22], '关键词推广');
+});
+
+test('imports Wujie campaign hierarchy and keyword identities', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-wujie-keyword-'));
+  const file = path.join(dir, 'wujie-keyword.xlsx');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('data');
+  sheet.addRow(['统计日期', '店铺名称', '转化周期', '场景名字', '原二级场景名字', '计划ID', '计划名字', '单元ID', '单元名字', '宝贝ID', '宝贝名称', '词类型', '词ID/词包ID', '词名字/词包名字', '花费']);
+  sheet.addRow(['2026-08-20', '示例店铺', '15天转化', '关键词推广', '关键词推广', 'p1', '计划一', 'u1', '单元一', 'i1', '宝贝一', '关键词', 'k1', '烤肉盘', 50]);
+  await workbook.xlsx.writeFile(file);
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      const call = typeof text === 'object' ? { text: text.text, values: text.values } : { text: String(text), values };
+      calls.push(call);
+      if (call.text.startsWith('SELECT row_count')) return { rowCount: 0, rows: [] };
+      if (call.text.startsWith('SELECT field_name')) return { rowCount: 0, rows: [] };
+      return { rowCount: 0, rows: [] };
+    },
+  };
+  const result = await importWorkbook(client, file, resolveDataset('无界-关键词'), {
+    mode: 'replace-all', startDate: '2026-08-20', endDate: '2026-08-20',
+  });
+  const insert = calls.find((call) => call.text.startsWith('INSERT INTO raw.sycm_rows'));
+  assert.equal(result.datasetKey, 'wujie-keyword');
+  assert.equal(insert.values[4], 'i1');
+  assert.equal(insert.values[5], '宝贝一');
+  assert.equal(insert.values[8], '烤肉盘');
+  assert.equal(insert.values[9], '关键词');
+  assert.equal(insert.values[23], 'p1');
+  assert.equal(insert.values[25], 'u1');
+  assert.equal(insert.values[33], 'k1');
 });
 
 test('imports old item traffic-source-detail search fields', async () => {
@@ -562,4 +601,23 @@ test('groups Wujie account metrics by conversion cycle and scene', async () => {
   assert.match(calls[1].text, /conversion_cycle AS "转化周期"/);
   assert.match(calls[1].text, /scene_name AS "场景名字"/);
   assert.match(calls[1].text, /GROUP BY conversion_cycle,scene_name,scene_name_old_level2/);
+});
+
+test('groups Wujie metrics by campaign hierarchy identities', async () => {
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      calls.push({ text, values });
+      if (text.includes('FROM meta.dataset_fields')) return {
+        rows: [{ field_name: '花费', default_aggregation: 'sum' }],
+      };
+      return { rowCount: 1, rows: [{ 计划ID: 'p1', 计划名字: '计划一', 花费: '50' }] };
+    },
+  };
+  const result = await queryBusinessData(client, {
+    dataset: '无界-计划', metrics: '花费', groupBy: 'plan', limit: 10,
+  });
+  assert.equal(result.datasetKey, 'wujie-plan');
+  assert.match(calls[1].text, /plan_id AS "计划ID"/);
+  assert.match(calls[1].text, /GROUP BY plan_id/);
 });

@@ -155,7 +155,16 @@ test('bundled Skill keeps recent report maintenance orchestration outside the CL
   assert.match(maintenance, /无界-账户.*wujie-account.*15天转化/);
   assert.match(maintenance, /转化周期=15天转化/);
   assert.match(maintenance, /68 列.*378 行/);
-  assert.match(maintenance, /无界-账户-分日-15天转化/);
+  assert.match(maintenance, /无界-<维度>-分日-15天转化/);
+  assert.match(skill, /无界-计划\/人群\/商品主体\/创意\/单元\/关键词/);
+  assert.match(maintenance, /无界-计划.*wujie-plan.*无界 \/ 基础报表 \/ 计划/);
+  assert.match(maintenance, /无界-人群.*wujie-audience/);
+  assert.match(maintenance, /无界-商品主体.*wujie-subject/);
+  assert.match(maintenance, /无界-创意.*wujie-creative/);
+  assert.match(maintenance, /无界-单元.*wujie-unit/);
+  assert.match(maintenance, /无界-关键词.*wujie-keyword.*最长 30 天连续分片/);
+  assert.match(maintenance, /8,153.*56,830.*50,005.*60,507.*44,940.*141,395/s);
+  assert.match(maintenance, /无界-关键词已验证单文件恰好返回 100,000 行/);
   assert.match(skill, /exactly 100,000 data rows/);
   assert.match(skill, /TRUNCATED_EXPORT/);
   assert.match(skill, /下载历史数据并上传数据库/);

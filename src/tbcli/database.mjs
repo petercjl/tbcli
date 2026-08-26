@@ -52,9 +52,59 @@ const COMMON_DIMENSIONS = new Set([
   '一级流量来源', '二级流量来源', '三级流量来源', '搜索词类型', '搜索词', '时间类型',
   '退款场景', '退款识别类型', '退款时间', '退款原因类型', '退款原因', '退款后状态',
   '流失商家ID', '流失商品ID', '转化周期', '场景名字', '原二级场景名字',
+  '计划ID', '计划名字', '单元ID', '单元名字', '人群名字', '主体ID', '主体类型', '主体名称',
+  '创意ID', '创意名字', '宝贝ID', '宝贝名称', '词类型', '词ID/词包ID', '词名字/词包名字',
 ]);
 
 export const DATASET_DEFINITIONS = Object.freeze([
+  {
+    key: 'wujie-plan',
+    name: '无界-计划',
+    platform: '无界', dataType: '基础报表', dataDimension: '计划', grain: 'day',
+    pattern: /^无界-计划-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '场景名字', '计划ID', '计划名字', '花费'],
+  },
+  {
+    key: 'wujie-audience',
+    name: '无界-人群',
+    platform: '无界', dataType: '基础报表', dataDimension: '人群', grain: 'day',
+    pattern: /^无界-人群-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '计划ID', '单元ID', '人群名字', '主体ID', '花费'],
+  },
+  {
+    key: 'wujie-subject',
+    name: '无界-商品主体',
+    platform: '无界', dataType: '基础报表', dataDimension: '商品主体', grain: 'day',
+    pattern: /^无界-商品主体-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '计划ID', '主体ID', '主体类型', '主体名称', '花费'],
+  },
+  {
+    key: 'wujie-creative',
+    name: '无界-创意',
+    platform: '无界', dataType: '基础报表', dataDimension: '创意', grain: 'day',
+    pattern: /^无界-创意-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '计划ID', '创意ID', '创意名字', '主体ID', '花费'],
+  },
+  {
+    key: 'wujie-unit',
+    name: '无界-单元',
+    platform: '无界', dataType: '基础报表', dataDimension: '单元', grain: 'day',
+    pattern: /^无界-单元-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '计划ID', '单元ID', '单元名字', '主体ID', '花费'],
+  },
+  {
+    key: 'wujie-keyword',
+    name: '无界-关键词',
+    platform: '无界', dataType: '基础报表', dataDimension: '关键词', grain: 'day',
+    pattern: /^无界-关键词-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '计划ID', '单元ID', '宝贝ID', '词类型', '词ID/词包ID', '词名字/词包名字', '花费'],
+  },
   {
     key: 'wujie-account',
     name: '无界-账户',
@@ -649,6 +699,17 @@ export async function ensureWarehouseSchema(client) {
       conversion_cycle text,
       scene_name text,
       scene_name_old_level2 text,
+      plan_id text,
+      plan_name text,
+      unit_id text,
+      unit_name text,
+      audience_name text,
+      subject_id text,
+      subject_type text,
+      subject_name text,
+      creative_id text,
+      creative_name text,
+      keyword_id text,
       row_data jsonb NOT NULL,
       source_file text NOT NULL,
       source_sha256 text NOT NULL,
@@ -669,9 +730,24 @@ export async function ensureWarehouseSchema(client) {
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS conversion_cycle text;
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS scene_name text;
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS scene_name_old_level2 text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS plan_id text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS plan_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS unit_id text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS unit_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS audience_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS subject_id text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS subject_type text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS subject_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS creative_id text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS creative_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS keyword_id text;
     CREATE INDEX IF NOT EXISTS sycm_rows_dataset_traffic_source_date_idx ON raw.sycm_rows(dataset_key, traffic_source, stat_date);
     CREATE INDEX IF NOT EXISTS sycm_rows_dataset_search_term_date_idx ON raw.sycm_rows(dataset_key, search_term, stat_date);
     CREATE INDEX IF NOT EXISTS sycm_rows_dataset_scene_date_idx ON raw.sycm_rows(dataset_key, scene_name, stat_date);
+    CREATE INDEX IF NOT EXISTS sycm_rows_dataset_plan_date_idx ON raw.sycm_rows(dataset_key, plan_id, stat_date);
+    CREATE INDEX IF NOT EXISTS sycm_rows_dataset_unit_date_idx ON raw.sycm_rows(dataset_key, unit_id, stat_date);
+    CREATE INDEX IF NOT EXISTS sycm_rows_dataset_subject_date_idx ON raw.sycm_rows(dataset_key, subject_id, stat_date);
+    CREATE INDEX IF NOT EXISTS sycm_rows_dataset_creative_date_idx ON raw.sycm_rows(dataset_key, creative_id, stat_date);
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS coverage_start date;
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS coverage_end date;
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS import_mode text NOT NULL DEFAULT 'append';
@@ -686,6 +762,8 @@ function batchInsertSql(rows) {
     'keyword', 'keyword_type', 'related_item_id', 'related_item_name', 'traffic_source_type',
     'traffic_source', 'traffic_source_level', 'attribution_principle', 'row_data', 'source_file',
     'search_source', 'search_term', 'conversion_cycle', 'scene_name', 'scene_name_old_level2',
+    'plan_id', 'plan_name', 'unit_id', 'unit_name', 'audience_name', 'subject_id', 'subject_type',
+    'subject_name', 'creative_id', 'creative_name', 'keyword_id',
     'source_sha256', 'source_row',
   ];
   const values = [];
@@ -818,12 +896,12 @@ export async function importWorkbook(client, file, dataset, {
         grain: dataset.grain,
         stat_date: statDate,
         shop_name: payload['店铺名称'],
-        item_id: payload['商品ID'],
-        item_name: payload['商品名称'] ?? payload['商品标题'],
+        item_id: payload['商品ID'] ?? payload['宝贝ID'],
+        item_name: payload['商品名称'] ?? payload['商品标题'] ?? payload['宝贝名称'],
         sku_id: payload['SKU ID'],
         sku_name: payload['SKU名称'],
-        keyword: payload['关键词'],
-        keyword_type: payload['关键词类型'],
+        keyword: payload['关键词'] ?? payload['词名字/词包名字'],
+        keyword_type: payload['关键词类型'] ?? payload['词类型'],
         related_item_id: payload['关联商品ID'],
         related_item_name: payload['关联商品名称'],
         traffic_source_type: payload['来源类型'] ?? payload['一级流量来源'],
@@ -835,6 +913,17 @@ export async function importWorkbook(client, file, dataset, {
         conversion_cycle: payload['转化周期'],
         scene_name: payload['场景名字'],
         scene_name_old_level2: payload['原二级场景名字'],
+        plan_id: payload['计划ID'],
+        plan_name: payload['计划名字'],
+        unit_id: payload['单元ID'],
+        unit_name: payload['单元名字'],
+        audience_name: payload['人群名字'],
+        subject_id: payload['主体ID'],
+        subject_type: payload['主体类型'],
+        subject_name: payload['主体名称'],
+        creative_id: payload['创意ID'],
+        creative_name: payload['创意名字'],
+        keyword_id: payload['词ID/词包ID'],
         row_data: JSON.stringify(payload),
         source_file: path.basename(file),
         source_sha256: sourceSha256,
@@ -1021,9 +1110,29 @@ export async function queryBusinessData(client, options) {
       select: ['conversion_cycle AS "转化周期"'],
       group: ['conversion_cycle'],
     },
+    plan: {
+      select: ['plan_id AS "计划ID"', 'max(plan_name) AS "计划名字"'],
+      group: ['plan_id'],
+    },
+    unit: {
+      select: ['plan_id AS "计划ID"', 'max(plan_name) AS "计划名字"', 'unit_id AS "单元ID"', 'max(unit_name) AS "单元名字"'],
+      group: ['plan_id', 'unit_id'],
+    },
+    audience: {
+      select: ['audience_name AS "人群名字"', 'subject_id AS "主体ID"', 'max(subject_type) AS "主体类型"', 'max(subject_name) AS "主体名称"'],
+      group: ['audience_name', 'subject_id'],
+    },
+    subject: {
+      select: ['subject_id AS "主体ID"', 'max(subject_type) AS "主体类型"', 'max(subject_name) AS "主体名称"'],
+      group: ['subject_id'],
+    },
+    creative: {
+      select: ['creative_id AS "创意ID"', 'max(creative_name) AS "创意名字"', 'subject_id AS "主体ID"', 'max(subject_name) AS "主体名称"'],
+      group: ['creative_id', 'subject_id'],
+    },
   };
   const grouping = groupDefinitions[groupBy];
-  if (!grouping) throw new Error(`不支持的分组：${groupBy}；可用 total,day,shop,item,sku,keyword,related-item,traffic-source,search-term,scene,conversion-cycle`);
+  if (!grouping) throw new Error(`不支持的分组：${groupBy}；可用 total,day,shop,item,sku,keyword,related-item,traffic-source,search-term,scene,conversion-cycle,plan,unit,audience,subject,creative`);
 
   const metricExpressions = requestedMetrics.map((metric) => {
     const aggregation = fieldMap.get(metric) || 'sum';

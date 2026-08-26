@@ -118,7 +118,7 @@ export function usage() {
   tbcli db import --input FILE_OR_DIR [--dataset NAME] [--mode append|replace-range|replace-all] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--reimport] [--config FILE] [--json]
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
-  tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
