@@ -202,43 +202,39 @@ Use this flow when the user asks what data has been imported or asks a business 
 
 ### 1. Check the warehouse and discover its live scope
 
-For an employee who needs first-time company-warehouse access, first confirm
-that an authorized administrator has privately provisioned a local protected
-pgpass file **and separately supplied the non-secret connection tuple** (LAN
-host, database name, and read-only role). Never inspect the pgpass file to infer
-that tuple, and never request, print, transmit, or create a database password in
-a chat, Skill, repository, npm package, or shared folder. If any tuple value is
-missing, stop with `DATABASE_UNAVAILABLE` and ask the administrator for that
-non-secret value.
-
-Before configuration, run `tbcli db credential-path --json`. The normal
-`recommendedPath` is `~/.config/tbcli/pgpass` (resolved under the current user
-profile on Windows). The administrator must privately provision the password
-file there, or at another stable user-owned location. Never place it under
-`node_modules`, the tbcli npm package, a managed Skill directory, Git, or a
-shared folder: npm 和 Skill 升级会覆盖这些受管理目录，并可能删除密码文件。
-勿将密码发送到聊天. When the recommended path is
-used, then run:
+For an employee who needs first-time company-warehouse access, ask for the local
+path of the encrypted company reader credential file downloaded from the
+approved internal document. The file may be in Downloads; do not ask the user
+to paste a database password or inspect/decrypt it manually. Then run:
 
 ```bash
-tbcli db configure-reader --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>' --json
+tbcli db setup-reader --credential-file '<downloaded .tbcred path>' --json
 tbcli db access-check --json
 ```
 
-`configure-reader` creates a local configuration with `accessMode: read-only`
-and does not write a password. `access-check` must report `readOnly: true`
-before continuing to warehouse discovery. A read-only configuration is only for
+`setup-reader` checks the existing local configuration first. If it is already a
+working reader, require `action: unchanged` and continue without importing or
+moving the downloaded file. Otherwise it decrypts the approved file, installs
+the local pgpass in the stable current-user config directory, writes only an
+`accessMode: read-only` connection, backs up broken reader files, and verifies
+actual privileges. It must never replace a maintainer configuration. Require
+`connected: true` and `readOnly: true` before continuing. A read-only
+configuration is only for
 `db status`, `db datasets`, `db fields`, `db coverage`, and `db query`; `db
-init` and `db import` are explicitly rejected. If the config already exists, do
-not overwrite it: ask the administrator to inspect or replace it deliberately.
+init` and `db import` are explicitly rejected.
 
-If `credential-path` reports `configuredSafe: false`, or any database command
-reports that the configured file is inside an upgrade-managed directory, do not
-ask for the password in chat and do not recreate it inside the package. Have the
-administrator privately provision a stable replacement file, then run:
+The downloaded `.tbcred` is an encrypted transport file, not the runtime pgpass.
+Its encryption avoids casual plaintext display; company-LAN reachability and the
+database reader role remain the actual access boundaries. Never copy its secret
+payload into this Skill, the npm package, Git, logs, or chat. Never distribute a
+maintainer credential. If setup fails, report `DATABASE_UNAVAILABLE` and ask the
+administrator for a fresh approved reader file; do not invent connection values.
+
+Legacy repair remains available only when an administrator has separately
+provisioned a protected pgpass file:
 
 ```bash
+tbcli db credential-path --json
 tbcli db credential-set --pgpass-file '<stable protected pgpass path>' --json
 tbcli db access-check --json
 ```
@@ -322,7 +318,7 @@ tbcli db import --input '<Excel文件>' --dataset '<业务表>' \
 
 `db init` only initializes or upgrades tbcli's technical warehouse schema. When an authorized maintainer asks to verify write access, run `db write-check`; require `ok: true`, `probe.rolledBack: true`, and `probe.residueCount: 0` before treating the writer configuration as valid. When the request is to verify both reader and writer access, run `db access-check --json` first and `db write-check --json` second; require `readOnly: true` for the configured reader and the write-check conditions above for the configured ingest role. The write check performs representative insert/update/delete operations inside one transaction, rolls it back, and refuses a read-only configuration. Do not replace either check with raw SQL or an ad-hoc script. `db coverage` reports coverage inside the caller-supplied interval and does not choose a business maintenance window. For imports, `append` rejects overlapping dates; `replace-range` atomically replaces one declared range; `replace-all` atomically rebuilds one dataset. An explicit `--dataset` allows a single incremental file whose name is not a full-history canonical name, but the importer still validates required headers and date bounds. Keep `--reimport` exceptional and limited to an exact source correction. After import, rerun `db coverage` and `db datasets`, then reconcile file identity, mode, rows, declared coverage, actual data range, and fields.
 
-Database configuration is also an administrator task. `tbcli db configure` stores connection metadata only; credentials stay in the separately protected pgpass file. Its default stable location is `~/.config/tbcli/pgpass`; an explicit `--pgpass-file` is allowed only for another stable user-owned path outside npm, `node_modules`, managed Skill directories, Git, and shared folders. Before configuring a maintainer, run `tbcli db credential-path --json`, privately provision the protected file, then omit `--pgpass-file` when using the recommended path. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine. Do not give employees a maintenance configuration or its pgpass credential.
+Database write configuration remains an administrator-only task. `tbcli db configure` stores connection metadata only; the maintainer credential stays in a separately protected pgpass file and must never enter an employee `.tbcred`. To create the employee transport artifact, an administrator uses `tbcli db credential-bundle-create` with the exact reader host, database, role, and protected source pgpass; the command requires exactly one matching reader record and writes a new file without overwrite. The default runtime credential location is `~/.config/tbcli/pgpass`; an explicit `--pgpass-file` is allowed only for another stable user-owned path outside npm, `node_modules`, managed Skill directories, and Git. Never print, copy into the Skill, or return database passwords. The default config may be overridden with `TBCLI_DB_CONFIG` for another machine. Do not give employees a maintenance configuration or its pgpass credential.
 
 ### 5. Warehouse QA and handoff
 

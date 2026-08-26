@@ -78,6 +78,18 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '验证稳定凭证文件后备份并更新数据库配置中的凭证路径，不读取或显示密码',
   },
   {
+    key: 'db credential-bundle-create',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '管理员从现有 pgpass 精确提取一个只读账号，生成可分发的加密只读凭证文件',
+  },
+  {
+    key: 'db setup-reader',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '员工使用公司加密密码文件配置数据库；已有可用只读凭证时自动跳过，否则安全导入并验证权限',
+  },
+  {
     key: 'db access-check',
     maturity: 'stable',
     audience: 'internal',

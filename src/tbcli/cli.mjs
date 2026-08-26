@@ -24,6 +24,8 @@ import {
   runDatabaseConfigureReader,
   runDatabaseCredentialPath,
   runDatabaseCredentialSet,
+  runDatabaseCredentialBundleCreate,
+  runDatabaseSetupReader,
   runDatabaseAccessCheck,
   runDatabaseWriteCheck,
   runDatabaseCoverage,
@@ -62,6 +64,8 @@ const COMMAND_HANDLERS = Object.freeze({
   'db configure-reader': runDatabaseConfigureReader,
   'db credential-path': runDatabaseCredentialPath,
   'db credential-set': runDatabaseCredentialSet,
+  'db credential-bundle-create': runDatabaseCredentialBundleCreate,
+  'db setup-reader': runDatabaseSetupReader,
   'db access-check': runDatabaseAccessCheck,
   'db write-check': runDatabaseWriteCheck,
   'db status': runDatabaseStatus,
@@ -104,6 +108,8 @@ export function usage() {
   tbcli db configure-reader --host HOST --database NAME --reader-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
   tbcli db credential-path [--config FILE] [--json]
   tbcli db credential-set --pgpass-file FILE [--config FILE] [--json]
+  tbcli db credential-bundle-create --host HOST --database NAME --reader-user USER (--pgpass-file FILE | --password-stdin) --out FILE [--port 5432] [--json]
+  tbcli db setup-reader --credential-file FILE [--config FILE] [--json]
   tbcli db access-check [--config FILE] [--json]
   tbcli db write-check [--config FILE] [--json]
   tbcli db status [--config FILE] [--json]

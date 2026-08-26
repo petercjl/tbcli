@@ -104,26 +104,28 @@ do not require manual PATH edits or a PowerShell ExecutionPolicy change.
 
 ## Company warehouse access
 
-Use the read-only setup only when an authorized administrator has already placed
-a password file in the employee's private local account and supplied the LAN
-host, database name, and read-only role separately. Do not read the password
-file to infer those values. The password itself never belongs in a prompt, Skill,
-Git repository, npm package, or shared folder.
+For employee onboarding, use the encrypted company reader credential file
+downloaded from the approved internal document. The employee supplies only its
+local path; never ask them to paste a password.
 
 ```bash
-tbcli db configure-reader --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>' --pgpass-file '<protected pgpass path>'
+tbcli db setup-reader --credential-file '<downloaded .tbcred path>' --json
 tbcli db access-check --json
 tbcli db status --json
 ```
 
-`configure-reader` writes only connection metadata and marks the configuration
-read-only. It never asks for, prints, or creates a password. `access-check`
-connects using the local protected password file and verifies that the reader
+`setup-reader` validates a working local reader first and returns `action:
+unchanged` without replacement. Otherwise it imports the approved encrypted
+file into the current user's stable configuration directory, creates a read-only
+configuration, backs up broken reader files, and verifies the account. It never
+replaces a maintainer configuration. `access-check` independently verifies that the reader
 cannot create a database/schema or insert, update, or delete warehouse rows.
 If the check fails, stop rather than querying or importing. `db init` and `db
-import` reject a read-only configuration. Administrators use `db configure` with
-an independently protected maintenance credential.
+import` reject a read-only configuration. The encrypted file prevents casual
+plaintext display; the company LAN and database reader role remain the real
+access controls. Administrators use `db configure` with an independently
+protected maintenance credential, which must never be placed in an employee
+bundle.
 
 ## Development-only commands
 

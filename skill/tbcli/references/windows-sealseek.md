@@ -18,6 +18,11 @@ Skill flow.
   creates a timestamped backup before a change.
 - Database configuration and pgpass files live outside npm and Skill directories
   and must survive setup and updates.
+- For employee database onboarding, accept the downloaded encrypted `.tbcred`
+  path from the user and run `tbcli.cmd db setup-reader --credential-file
+  '<path>' --json`. The command owns the stable local placement; do not move the
+  file into npm or the Skill directory and do not ask the user to paste a
+  password.
 
 ## Clean bootstrap when `tbcli` is not found
 

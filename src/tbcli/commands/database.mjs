@@ -3,6 +3,7 @@ import { constants as fsConstants } from 'node:fs';
 import path from 'node:path';
 import {
   connectDatabase,
+  checkDatabaseReadOnlyAccess,
   checkDatabaseWriteAccess,
   assertMaintainerAccess,
   DEFAULT_DATABASE_CONFIG,
@@ -18,9 +19,20 @@ import {
   resolveDatabaseCredentialPath,
   validateDatabaseCredentialFile,
 } from '../database.mjs';
+import {
+  createReaderCredentialBundle,
+  readReaderCredentialBundle,
+  serializeReaderPgpass,
+} from '../credential-bundle.mjs';
 
 function printResult(value, json) {
   console.log(json ? JSON.stringify(value, null, 2) : JSON.stringify(value, null, 2));
+}
+
+async function readStdinSecret() {
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8').replace(/[\r\n]+$/, '');
 }
 
 async function writeDatabaseConfig(configPath, config, json) {
@@ -110,6 +122,111 @@ export async function runDatabaseCredentialSet(args) {
   printResult({ updated: true, configPath, backupPath, pgpassFile }, args.json);
 }
 
+function backupSuffix() {
+  return new Date().toISOString().replace(/\D/g, '').slice(0, 17);
+}
+
+async function pathExists(file) {
+  try { await fsp.stat(file); return true; } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+async function verifyReaderConfig(configPath) {
+  const config = await loadDatabaseConfig(configPath);
+  if (config.accessMode !== 'read-only') throw new Error('当前配置不是员工只读配置');
+  const client = await connectDatabase(config, 'reader');
+  try { return { config, access: await checkDatabaseReadOnlyAccess(client) }; }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseCredentialBundleCreate(args) {
+  if (!args.out) throw new Error('缺少 --out；请指定加密只读凭证文件的输出路径');
+  for (const key of ['host', 'database', 'readerUser']) {
+    if (!args[key]) throw new Error(`缺少 --${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
+  }
+  if (Boolean(args.pgpassFile) === Boolean(args.passwordStdin)) {
+    throw new Error('必须且只能使用 --pgpass-file 或 --password-stdin 提供只读密码来源');
+  }
+  const out = path.resolve(args.out);
+  if (await pathExists(out)) throw new Error(`输出文件已存在，拒绝覆盖：${out}`);
+  const bundle = await createReaderCredentialBundle({
+    pgpassFile: args.pgpassFile,
+    password: args.passwordStdin ? await readStdinSecret() : undefined,
+    host: args.host,
+    port: Number(args.port || 5432),
+    database: args.database,
+    readerUser: args.readerUser,
+  });
+  await fsp.mkdir(path.dirname(out), { recursive: true });
+  await fsp.writeFile(out, `${JSON.stringify(bundle, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+  await fsp.chmod(out, 0o600);
+  printResult({ created: true, credentialFile: out, accessMode: 'read-only', readerUser: args.readerUser }, args.json);
+}
+
+export async function runDatabaseSetupReader(args) {
+  if (!args.credentialFile) throw new Error('缺少 --credential-file；请指定从公司内部文档下载的加密密码文件');
+  const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
+  if (await pathExists(configPath)) {
+    let raw;
+    try { raw = JSON.parse(await fsp.readFile(configPath, 'utf8')); } catch { raw = null; }
+    if ((raw?.accessMode || 'maintainer') === 'maintainer') {
+      throw new Error('检测到维护者配置；为保护写入权限，setup-reader 不会替换它');
+    }
+    try {
+      const current = await verifyReaderConfig(configPath);
+      printResult({ action: 'unchanged', configured: true, connected: true, accessMode: 'read-only',
+        configPath, pgpassFile: current.config.pgpassFile, ...current.access }, args.json);
+      return;
+    } catch {
+      // Broken read-only settings are backed up and repaired from the approved bundle below.
+    }
+  }
+
+  const { bundlePath, payload } = await readReaderCredentialBundle(args.credentialFile);
+  const pgpassFile = path.join(path.dirname(configPath), 'pgpass');
+  resolveDatabaseCredentialPath(pgpassFile);
+  const config = {
+    version: 2,
+    accessMode: 'read-only',
+    host: payload.host,
+    port: payload.port,
+    database: payload.database,
+    readerUser: payload.readerUser,
+    ingestUser: payload.readerUser,
+    pgpassFile,
+  };
+  await fsp.mkdir(path.dirname(configPath), { recursive: true });
+  const suffix = backupSuffix();
+  const backups = [];
+  for (const file of [...new Set([configPath, pgpassFile])]) {
+    if (await pathExists(file)) {
+      const backup = `${file}.backup-${suffix}`;
+      await fsp.copyFile(file, backup, fsConstants.COPYFILE_EXCL);
+      await fsp.chmod(backup, 0o600);
+      backups.push({ file, backup });
+    }
+  }
+  try {
+    await fsp.writeFile(pgpassFile, serializeReaderPgpass(payload), { encoding: 'utf8', mode: 0o600 });
+    await fsp.chmod(pgpassFile, 0o600);
+    await fsp.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+    await fsp.chmod(configPath, 0o600);
+    const verified = await verifyReaderConfig(configPath);
+    printResult({ action: backups.length ? 'repaired' : 'configured', configured: true, connected: true,
+      accessMode: 'read-only', configPath, pgpassFile, credentialFile: bundlePath,
+      backups: backups.map(({ backup }) => backup), ...verified.access }, args.json);
+  } catch (error) {
+    for (const file of [...new Set([configPath, pgpassFile])]) {
+      const entry = backups.find((candidate) => candidate.file === file);
+      if (entry) await fsp.copyFile(entry.backup, file);
+      else await fsp.rm(file, { force: true });
+    }
+    throw new Error(`只读凭证配置失败，已恢复原配置：${error.message}`);
+  }
+}
+
 export async function runDatabaseStatus(args) {
   const config = await loadDatabaseConfig(args.config);
   const client = await connectDatabase(config, 'reader');
@@ -157,31 +274,8 @@ export async function runDatabaseAccessCheck(args) {
   const config = await loadDatabaseConfig(args.config);
   const client = await connectDatabase(config, 'reader');
   try {
-    const result = await client.query(`
-      SELECT current_database() AS database,current_user AS user,
-        has_database_privilege(current_user,current_database(),'CREATE') AS database_create,
-        has_schema_privilege(current_user,'raw','CREATE') AS raw_create,
-        has_schema_privilege(current_user,'mart','CREATE') AS mart_create,
-        has_schema_privilege(current_user,'meta','CREATE') AS meta_create,
-        count(*)::int AS tables_total,
-        count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'SELECT'))::int AS tables_select,
-        count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'INSERT'))::int AS tables_insert,
-        count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'UPDATE'))::int AS tables_update,
-        count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'DELETE'))::int AS tables_delete
-      FROM pg_tables WHERE schemaname IN ('raw','mart','meta')
-      GROUP BY current_database(),current_user
-    `);
-    const row = result.rows[0];
-    const privileges = {
-      databaseCreate: row.database_create,
-      schemaCreate: { raw: row.raw_create, mart: row.mart_create, meta: row.meta_create },
-      tables: { total: row.tables_total, select: row.tables_select, insert: row.tables_insert, update: row.tables_update, delete: row.tables_delete },
-    };
-    const readOnly = !privileges.databaseCreate
-      && !Object.values(privileges.schemaCreate).some(Boolean)
-      && !['insert', 'update', 'delete'].some((key) => Number(privileges.tables[key]) > 0);
-    if (!readOnly) throw new Error('数据库只读权限检查失败：当前查询账号拥有写入或建库/建表权限，请停止使用并联系管理员');
-    printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port, database: row.database, user: row.user, readOnly, privileges }, args.json);
+    const result = await checkDatabaseReadOnlyAccess(client);
+    printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port, ...result }, args.json);
   } finally { await client.end(); }
 }
 

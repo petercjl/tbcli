@@ -162,19 +162,40 @@ tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
   --mode replace-range --start-date 2026-08-20 --end-date 2026-08-24 --json
 ```
 
-For an employee who only queries the warehouse, create a separate local
-read-only configuration. The administrator supplies the LAN host, database name,
-and read-only role plus that user's protected password file by an approved
-private channel; never add the password file to the npm package, `node_modules`,
-the Skill installation directory, Git, or shared folders. `tbcli` rejects those
-upgrade-managed paths.
+For an employee who only queries the warehouse, the administrator creates one
+encrypted reader credential bundle and distributes that file through the
+company's approved internal document. The bundle contains only the read-only
+role; it never contains the maintainer credential and is never bundled into npm,
+Git, or the companion Skill.
 
 ```bash
-tbcli db configure-reader \
-  --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>'
+tbcli db setup-reader --credential-file '<downloaded company reader credential.tbcred>' --json
 tbcli db access-check --json
 ```
+
+`setup-reader` first validates an existing local read-only configuration. If it
+works, the command returns `action: unchanged` and does not replace anything. If
+it is absent or broken, the command decrypts the approved bundle, stores a local
+pgpass file in the stable current-user configuration directory, writes a
+read-only configuration, and verifies the database privileges. Existing broken
+read-only files are backed up; a maintainer configuration is never replaced.
+
+The `.tbcred` file prevents casual plaintext disclosure, but it is not a second
+access-control boundary: the LAN restriction and database reader permissions
+remain authoritative.
+
+An administrator creates the distributable file from an existing protected
+pgpass file with an exact read-only tuple:
+
+```bash
+tbcli db credential-bundle-create \
+  --host '<LAN database host>' --database '<database>' \
+  --reader-user '<read-only role>' --pgpass-file '<protected pgpass path>' \
+  --out '<new reader credential.tbcred>' --json
+```
+
+The creator requires exactly one matching reader record, refuses to overwrite
+an existing output, and never includes another pgpass record.
 
 To inspect the recommended location or repair an older configuration that used
 an unsafe package path, first have the administrator privately provision a new
@@ -190,7 +211,7 @@ tbcli db access-check --json
 `credential-set` validates the new file, rejects package-managed paths, backs up
 the existing metadata configuration, and never reads or prints the password.
 
-`configure-reader` marks the local configuration as read-only. `db init` and
+The resulting employee configuration is read-only. `db init` and
 `db import` reject that configuration before attempting a write. `access-check`
 confirms that the configured query account can connect but has no database,
 schema, or table write privileges.

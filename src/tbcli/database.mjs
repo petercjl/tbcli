@@ -320,6 +320,34 @@ export async function connectDatabase(config, role = 'reader') {
   return client;
 }
 
+export async function checkDatabaseReadOnlyAccess(client) {
+  const result = await client.query(`
+    SELECT current_database() AS database,current_user AS user,
+      has_database_privilege(current_user,current_database(),'CREATE') AS database_create,
+      has_schema_privilege(current_user,'raw','CREATE') AS raw_create,
+      has_schema_privilege(current_user,'mart','CREATE') AS mart_create,
+      has_schema_privilege(current_user,'meta','CREATE') AS meta_create,
+      count(*)::int AS tables_total,
+      count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'SELECT'))::int AS tables_select,
+      count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'INSERT'))::int AS tables_insert,
+      count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'UPDATE'))::int AS tables_update,
+      count(*) FILTER (WHERE has_table_privilege(current_user,format('%I.%I',schemaname,tablename),'DELETE'))::int AS tables_delete
+    FROM pg_tables WHERE schemaname IN ('raw','mart','meta')
+    GROUP BY current_database(),current_user
+  `);
+  const row = result.rows[0];
+  const privileges = {
+    databaseCreate: row.database_create,
+    schemaCreate: { raw: row.raw_create, mart: row.mart_create, meta: row.meta_create },
+    tables: { total: row.tables_total, select: row.tables_select, insert: row.tables_insert, update: row.tables_update, delete: row.tables_delete },
+  };
+  const readOnly = !privileges.databaseCreate
+    && !Object.values(privileges.schemaCreate).some(Boolean)
+    && !['insert', 'update', 'delete'].some((key) => Number(privileges.tables[key]) > 0);
+  if (!readOnly) throw new Error('数据库只读权限检查失败：当前查询账号拥有写入或建库/建表权限，请停止使用并联系管理员');
+  return { database: row.database, user: row.user, readOnly, privileges };
+}
+
 const WRITE_CHECK_TABLE_REQUIREMENTS = Object.freeze({
   'meta.datasets': ['SELECT', 'INSERT', 'UPDATE'],
   'meta.dataset_fields': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],

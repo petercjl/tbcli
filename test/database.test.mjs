@@ -22,7 +22,15 @@ import {
   resolveDataset,
   validateDatabaseCredentialFile,
 } from '../src/tbcli/database.mjs';
-import { runDatabaseCredentialSet } from '../src/tbcli/commands/database.mjs';
+import {
+  createReaderCredentialBundle,
+  decryptReaderCredentialBundle,
+  serializeReaderPgpass,
+} from '../src/tbcli/credential-bundle.mjs';
+import {
+  runDatabaseCredentialSet,
+  runDatabaseSetupReader,
+} from '../src/tbcli/commands/database.mjs';
 
 test('identifies only canonical all-history workbook names', () => {
   assert.equal(identifyDataset('店铺-整体-全部历史-分日-所有终端-2025至2026.xlsx').key, 'shop-overall');
@@ -277,6 +285,65 @@ test('credential-set backs up config and changes only the credential path', asyn
   assert.deepEqual(JSON.parse(await fs.readFile(path.join(dir, backupName), 'utf8')), original);
   const result = JSON.parse(output[0]);
   assert.equal(result.pgpassFile, credentialFile);
+});
+
+test('encrypted reader bundle contains exactly the selected read-only credential', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-bundle-'));
+  const credentialFile = path.join(dir, 'source.pgpass');
+  await fs.writeFile(credentialFile, [
+    '192.168.0.20:5432:commerce_analytics:tb_agent:reader\\:secret',
+    '192.168.0.20:5432:commerce_analytics:tb_ingest:writer-secret',
+    '',
+  ].join('\n'), { mode: 0o600 });
+  const bundle = await createReaderCredentialBundle({
+    pgpassFile: credentialFile,
+    host: '192.168.0.20',
+    port: 5432,
+    database: 'commerce_analytics',
+    readerUser: 'tb_agent',
+  });
+  const serialized = JSON.stringify(bundle);
+  assert.doesNotMatch(serialized, /reader:secret|writer-secret/);
+  const payload = decryptReaderCredentialBundle(bundle);
+  assert.deepEqual(payload, {
+    version: 1,
+    accessMode: 'read-only',
+    host: '192.168.0.20',
+    port: 5432,
+    database: 'commerce_analytics',
+    readerUser: 'tb_agent',
+    password: 'reader:secret',
+  });
+  assert.equal(serializeReaderPgpass(payload), '192.168.0.20:5432:commerce_analytics:tb_agent:reader\\:secret\n');
+});
+
+test('encrypted reader bundles use unique ciphertext and detect tampering', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-bundle-random-'));
+  const credentialFile = path.join(dir, 'source.pgpass');
+  await fs.writeFile(credentialFile, '192.168.0.20:5432:commerce_analytics:tb_agent:secret\n', { mode: 0o600 });
+  const input = { pgpassFile: credentialFile, host: '192.168.0.20', port: 5432, database: 'commerce_analytics', readerUser: 'tb_agent' };
+  const first = await createReaderCredentialBundle(input);
+  const second = await createReaderCredentialBundle(input);
+  assert.notEqual(first.ciphertext, second.ciphertext);
+  const tampered = { ...first, ciphertext: `${first.ciphertext.slice(0, -4)}AAAA` };
+  assert.throws(() => decryptReaderCredentialBundle(tampered), /损坏、被修改或无法解密/);
+});
+
+test('reader setup never replaces a maintainer database configuration', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-bundle-maintainer-'));
+  const configFile = path.join(dir, 'database.json');
+  await fs.writeFile(configFile, JSON.stringify({
+    version: 2, accessMode: 'maintainer', host: '192.168.0.20', port: 5432,
+    database: 'commerce_analytics', readerUser: 'tb_agent', ingestUser: 'tb_ingest',
+    pgpassFile: path.join(dir, 'pgpass'),
+  }), { mode: 0o600 });
+  await assert.rejects(
+    () => runDatabaseSetupReader({ config: configFile, credentialFile: path.join(dir, 'missing.tbcred'), json: true }),
+    /不会替换它/,
+  );
+  const preserved = JSON.parse(await fs.readFile(configFile, 'utf8'));
+  assert.equal(preserved.accessMode, 'maintainer');
+  assert.equal(preserved.ingestUser, 'tb_ingest');
 });
 
 test('rejects warehouse writes from a read-only client configuration', () => {

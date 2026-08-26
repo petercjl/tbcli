@@ -9,6 +9,7 @@ export function parseArgs(argv) {
     else if (arg === '--all') out.all = true;
     else if (arg === '--all-history') out.allHistory = true;
     else if (arg === '--reimport') out.reimport = true;
+    else if (arg === '--password-stdin') out.passwordStdin = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
     else if (arg === '--out') out.out = argv[++index];
@@ -19,6 +20,7 @@ export function parseArgs(argv) {
     else if (arg === '--reader-user') out.readerUser = argv[++index];
     else if (arg === '--ingest-user') out.ingestUser = argv[++index];
     else if (arg === '--pgpass-file') out.pgpassFile = argv[++index];
+    else if (arg === '--credential-file') out.credentialFile = argv[++index];
     else if (arg === '--dataset') out.dataset = argv[++index];
     else if (arg === '--metrics') out.metrics = argv[++index];
     else if (arg === '--group-by') out.groupBy = argv[++index];
