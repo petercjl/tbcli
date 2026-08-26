@@ -174,9 +174,9 @@ export const COMMAND_DEFINITIONS = Object.freeze([
       description: '按业务表、指标、日期、商品、关键词和分析粒度查询公司数据仓库，无需员工编写 SQL。',
       examplePrompt: '分析最近30天各商品的支付金额和商品访客数，按支付金额从高到低排序',
       requiredInputs: ['业务数据集'],
-      optionalInputs: ['指标', '时间范围', '商品ID', '关键词', '分组方式', '排序和返回数量'],
+      optionalInputs: ['指标', '时间范围', '商品ID', '关键词', '投放场景', '转化周期', '分组方式', '排序和返回数量'],
       delivery: '结构化业务查询结果，包含实际指标聚合口径和数据范围',
-      commandTemplate: 'tbcli db query --dataset <业务表> [--metrics <指标,...>] [--start-date <日期>] [--end-date <日期>] [--group-by <day|item|sku|keyword|related-item|traffic-source|search-term|total>] [--item-ids <ID,...>] [--keyword <关键词>] [--order-by <指标>] [--limit <数量>] --json',
+      commandTemplate: 'tbcli db query --dataset <业务表> [--metrics <指标,...>] [--start-date <日期>] [--end-date <日期>] [--group-by <day|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|total>] [--item-ids <ID,...>] [--keyword <关键词>] [--order-by <指标>] [--limit <数量>] --json',
     },
   },
   {

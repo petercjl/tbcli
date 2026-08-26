@@ -123,9 +123,10 @@ cannot create a database/schema or insert, update, or delete warehouse rows.
 If the check fails, stop rather than querying or importing. `db init` and `db
 import` reject a read-only configuration. The encrypted file prevents casual
 plaintext display; the company LAN and database reader role remain the real
-access controls. Administrators use `db configure` with an independently
-protected maintenance credential, which must never be placed in an employee
-bundle.
+access controls. Administrators use `db configure --ingest-user '<maintainer
+role>'` with an independently protected maintenance credential. That single
+role serves both query and import commands under `accessMode: maintainer`; it
+must never be placed in an employee bundle.
 
 ## Development-only commands
 

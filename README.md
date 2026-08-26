@@ -80,6 +80,12 @@ tbcli sycm fetch \
   --start-date 2026-08-01 --end-date 2026-08-18 \
   --out ./店铺-整体-指定字段.xlsx
 
+# Fetch the complete current Wujie account history with the maintained 15-day conversion window.
+tbcli sycm fetch \
+  --data-platform '无界' --data-type '基础报表' --data-dimension '账户' \
+  --date-type day --fields all --filter '转化周期=15天转化' --all-history \
+  --out ./无界-账户-分日-15天转化.xlsx --json
+
 # Fetch selected products over the complete currently available daily history.
 tbcli sycm fetch \
   --data-platform '生意参谋' --data-type '商品' --data-dimension '整体' \
@@ -136,6 +142,11 @@ tbcli db query \
   --metrics '支付金额,商品访客数,支付件数' \
   --start-date 2026-07-21 --end-date 2026-08-19 \
   --group-by item --order-by '支付金额' --limit 5 --json
+
+# Example: compare Wujie account spend by advertising scene.
+tbcli db query \
+  --dataset '无界-账户' --metrics '展现量,点击量,花费,总成交金额' \
+  --group-by scene --order-by '花费' --limit 20 --json
 ```
 
 Agents must resolve natural-language dates against `db datasets` coverage and
@@ -155,7 +166,7 @@ directories, so package upgrades do not replace it.
 ```bash
 tbcli db configure \
   --host '<LAN database host>' --database '<database>' \
-  --reader-user '<read-only role>' --ingest-user '<import role>'
+  --ingest-user '<maintainer role>'
 tbcli db init --json
 tbcli db write-check --json
 tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
@@ -222,6 +233,11 @@ performs representative insert, update, and delete operations inside one
 transaction, always rolls that transaction back, and then confirms that no
 probe rows remain. It refuses a read-only configuration and never prints the
 database password.
+
+A maintainer configuration uses this single `ingestUser` identity for queries,
+coverage checks, status checks, and imports. It does not depend on the employee
+read-only role. Older maintainer configs that still contain `readerUser` remain
+compatible, but that value is ignored for maintainer database connections.
 
 `db coverage` mechanically reports covered and missing dates inside the explicit
 caller-supplied interval. The companion Skill, not the CLI, decides which tables

@@ -104,7 +104,7 @@ export function usage() {
   tbcli sycm export (--report-id ID | --report-name NAME) --out report.xlsx [--timeout-ms 120000] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json]
   tbcli sycm fetch (--report-id ID | --report-name NAME) --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out report.xlsx [--timeout-ms 120000] [--json]
   tbcli sycm fetch --data-platform NAME --data-type NAME --data-dimension NAME [--date-type day|week|month|customDaySum] [--fields all|FIELD,...] [--device all|overall|wireless|pc] [--item-ids ID,...] [--filter NAME=VALUE,...] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out report.xlsx [--json]
-  tbcli db configure --host HOST --database NAME --reader-user USER --ingest-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
+  tbcli db configure --host HOST --database NAME --ingest-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
   tbcli db configure-reader --host HOST --database NAME --reader-user USER [--pgpass-file FILE] [--port 5432] [--config FILE] [--json]
   tbcli db credential-path [--config FILE] [--json]
   tbcli db credential-set --pgpass-file FILE [--config FILE] [--json]
@@ -118,7 +118,7 @@ export function usage() {
   tbcli db import --input FILE_OR_DIR [--dataset NAME] [--mode append|replace-range|replace-all] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--reimport] [--config FILE] [--json]
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
-  tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]

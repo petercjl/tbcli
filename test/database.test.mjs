@@ -8,6 +8,7 @@ import {
   DEFAULT_DATABASE_PGPASS,
   defaultAggregation,
   assertMaintainerAccess,
+  checkDatabaseMaintainerAccess,
   checkDatabaseWriteAccess,
   discoverImportFiles,
   ensureWarehouseSchema,
@@ -49,6 +50,8 @@ test('identifies only canonical all-history workbook names', () => {
   assert.equal(resolveDataset('商品-流失竞店分布').dataDimension, '流失竞店分布');
   assert.equal(identifyDataset('商品-退款SKU分布-分日-全部商品-2025-07-21-2026-08-24.xlsx').key, 'item-refund-sku');
   assert.equal(resolveDataset('商品-退款SKU分布').dataDimension, '退款SKU分布');
+  assert.equal(identifyDataset('无界-账户-分日-15天转化-2026-05-28至2026-08-25.xlsx').key, 'wujie-account');
+  assert.equal(resolveDataset('无界-账户').dataDimension, '账户');
 });
 
 test('discovers canonical workbooks and reports ignored files', async () => {
@@ -76,6 +79,10 @@ test('classifies additive and derived metrics', () => {
   assert.equal(defaultAggregation('支付转化率'), 'avg');
   assert.equal(defaultAggregation('推广ROI'), 'avg');
   assert.equal(defaultAggregation('平均点击花费'), 'avg');
+  assert.equal(defaultAggregation('投入产出比'), 'avg');
+  assert.equal(defaultAggregation('千次展现花费'), 'avg');
+  assert.equal(defaultAggregation('人均成交金额'), 'avg');
+  assert.equal(defaultAggregation('花费'), 'sum');
 });
 
 test('lists a dataset field catalog in source order', async () => {
@@ -183,6 +190,34 @@ test('imports current item traffic-source hierarchy headers', async () => {
   assert.equal(insert.values[14], 2);
 });
 
+test('imports Wujie account conversion-cycle and scene dimensions', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-wujie-account-'));
+  const file = path.join(dir, 'wujie-account.xlsx');
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('data');
+  sheet.addRow(['统计日期', '店铺名称', '转化周期', '场景名字', '原二级场景名字', '展现量', '点击量', '花费']);
+  sheet.addRow(['2026-08-20', '示例店铺', '15天转化', '关键词推广', '关键词推广', 1000, 30, 50]);
+  await workbook.xlsx.writeFile(file);
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      const call = typeof text === 'object' ? { text: text.text, values: text.values } : { text: String(text), values };
+      calls.push(call);
+      if (call.text.startsWith('SELECT row_count')) return { rowCount: 0, rows: [] };
+      if (call.text.startsWith('SELECT field_name')) return { rowCount: 0, rows: [] };
+      return { rowCount: 0, rows: [] };
+    },
+  };
+  const result = await importWorkbook(client, file, resolveDataset('无界-账户'), {
+    mode: 'replace-all', startDate: '2026-08-20', endDate: '2026-08-20',
+  });
+  const insert = calls.find((call) => call.text.startsWith('INSERT INTO raw.sycm_rows'));
+  assert.equal(result.datasetKey, 'wujie-account');
+  assert.equal(insert.values[20], '15天转化');
+  assert.equal(insert.values[21], '关键词推广');
+  assert.equal(insert.values[22], '关键词推广');
+});
+
 test('imports old item traffic-source-detail search fields', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-traffic-source-detail-'));
   const file = path.join(dir, 'traffic-source-detail.xlsx');
@@ -224,6 +259,36 @@ test('loads config and reads a matching protected pgpass entry', async () => {
   const config = await loadDatabaseConfig(configFile);
   assert.equal(config.accessMode, 'maintainer');
   assert.equal(await readPgpassPassword(config, 'tb_agent'), 'secret:value');
+});
+
+test('maintainer config defaults reader identity to the single ingest identity', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-maintainer-config-'));
+  const pgpassFile = path.join(dir, 'pgpass');
+  const configFile = path.join(dir, 'database.json');
+  await fs.writeFile(pgpassFile, '192.168.0.20:5432:commerce_analytics:tb_ingest:secret\n', { mode: 0o600 });
+  await fs.chmod(pgpassFile, 0o600);
+  await fs.writeFile(configFile, JSON.stringify({
+    version: 2, accessMode: 'maintainer', host: '192.168.0.20', port: 5432,
+    database: 'commerce_analytics', ingestUser: 'tb_ingest', pgpassFile,
+  }));
+  const config = await loadDatabaseConfig(configFile);
+  assert.equal(config.ingestUser, 'tb_ingest');
+  assert.equal(config.readerUser, 'tb_ingest');
+});
+
+test('maintainer access check permits writes but requires select on every warehouse table', async () => {
+  const accessRow = {
+    database: 'commerce_analytics', user: 'tb_ingest',
+    database_create: true, raw_create: true, mart_create: true, meta_create: true,
+    tables_total: 4, tables_select: 4, tables_insert: 4, tables_update: 3, tables_delete: 3,
+  };
+  const result = await checkDatabaseMaintainerAccess({ query: async () => ({ rows: [accessRow] }) });
+  assert.equal(result.user, 'tb_ingest');
+  assert.equal(result.readOnly, false);
+  await assert.rejects(
+    checkDatabaseMaintainerAccess({ query: async () => ({ rows: [{ ...accessRow, tables_select: 3 }] }) }),
+    /部分数据表不可查询/,
+  );
 });
 
 test('uses a stable user config path for database credentials', () => {
@@ -477,4 +542,24 @@ test('groups and filters item traffic-source detail by search term', async () =>
   assert.match(calls[1].text, /search_source AS "搜索词类型"/);
   assert.match(calls[1].text, /search_term ILIKE \$2/);
   assert.equal(calls[1].values[1], '%烤肉%');
+});
+
+test('groups Wujie account metrics by conversion cycle and scene', async () => {
+  const calls = [];
+  const client = {
+    async query(text, values) {
+      calls.push({ text, values });
+      if (text.includes('FROM meta.dataset_fields')) return {
+        rows: [{ field_name: '花费', default_aggregation: 'sum' }],
+      };
+      return { rowCount: 1, rows: [{ 转化周期: '15天转化', 场景名字: '关键词推广', 花费: '50' }] };
+    },
+  };
+  const result = await queryBusinessData(client, {
+    dataset: '无界-账户', metrics: '花费', groupBy: 'scene', limit: 10,
+  });
+  assert.equal(result.datasetKey, 'wujie-account');
+  assert.match(calls[1].text, /conversion_cycle AS "转化周期"/);
+  assert.match(calls[1].text, /scene_name AS "场景名字"/);
+  assert.match(calls[1].text, /GROUP BY conversion_cycle,scene_name,scene_name_old_level2/);
 });

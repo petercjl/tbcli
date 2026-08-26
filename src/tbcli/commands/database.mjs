@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   connectDatabase,
   checkDatabaseReadOnlyAccess,
+  checkDatabaseMaintainerAccess,
   checkDatabaseWriteAccess,
   assertMaintainerAccess,
   DEFAULT_DATABASE_CONFIG,
@@ -50,7 +51,7 @@ async function writeDatabaseConfig(configPath, config, json) {
 
 export async function runDatabaseConfigure(args) {
   const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
-  for (const key of ['host', 'database', 'readerUser', 'ingestUser']) {
+  for (const key of ['host', 'database', 'ingestUser']) {
     if (!args[key]) throw new Error(`缺少 --${key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`);
   }
   const pgpassFile = await validateDatabaseCredentialFile(args.pgpassFile);
@@ -60,7 +61,8 @@ export async function runDatabaseConfigure(args) {
     host: args.host,
     port: Number(args.port || 5432),
     database: args.database,
-    readerUser: args.readerUser,
+    // Kept for backwards-compatible config shape; maintainer reads use ingestUser.
+    readerUser: args.readerUser || args.ingestUser,
     ingestUser: args.ingestUser,
     pgpassFile,
   };
@@ -274,7 +276,9 @@ export async function runDatabaseAccessCheck(args) {
   const config = await loadDatabaseConfig(args.config);
   const client = await connectDatabase(config, 'reader');
   try {
-    const result = await checkDatabaseReadOnlyAccess(client);
+    const result = config.accessMode === 'maintainer'
+      ? await checkDatabaseMaintainerAccess(client)
+      : await checkDatabaseReadOnlyAccess(client);
     printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port, ...result }, args.json);
   } finally { await client.end(); }
 }

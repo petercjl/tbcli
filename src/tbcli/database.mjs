@@ -51,10 +51,21 @@ const COMMON_DIMENSIONS = new Set([
   '二级类目名称', '叶子类目名称', '来源类型', '流量来源', '来源层级', '归属原则',
   '一级流量来源', '二级流量来源', '三级流量来源', '搜索词类型', '搜索词', '时间类型',
   '退款场景', '退款识别类型', '退款时间', '退款原因类型', '退款原因', '退款后状态',
-  '流失商家ID', '流失商品ID',
+  '流失商家ID', '流失商品ID', '转化周期', '场景名字', '原二级场景名字',
 ]);
 
 export const DATASET_DEFINITIONS = Object.freeze([
+  {
+    key: 'wujie-account',
+    name: '无界-账户',
+    platform: '无界',
+    dataType: '基础报表',
+    dataDimension: '账户',
+    grain: 'day',
+    pattern: /^无界-账户-分日-15天转化-.*\.xlsx$/i,
+    defaultMetrics: ['展现量', '点击量', '花费', '总成交金额'],
+    requiredHeaders: ['统计日期', '店铺名称', '转化周期', '场景名字', '展现量', '点击量', '花费'],
+  },
   {
     key: 'shop-overall',
     name: '店铺-整体',
@@ -234,14 +245,16 @@ export async function loadDatabaseConfig(configPath = '') {
     host: process.env.TBCLI_DB_HOST || raw.host,
     port: Number(process.env.TBCLI_DB_PORT || raw.port || 5432),
     database: process.env.TBCLI_DB_NAME || raw.database,
-    readerUser: process.env.TBCLI_DB_READER_USER || raw.readerUser,
     ingestUser: process.env.TBCLI_DB_INGEST_USER || raw.ingestUser,
+    readerUser: process.env.TBCLI_DB_READER_USER || raw.readerUser,
     pgpassFile: resolveDatabaseCredentialPath(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
     configPath: resolvedPath,
   };
   if (!['maintainer', 'read-only'].includes(config.accessMode)) {
     throw new Error(`数据库配置 accessMode 无效：${config.accessMode}`);
   }
+  if (config.accessMode === 'maintainer' && !config.readerUser) config.readerUser = config.ingestUser;
+  if (config.accessMode === 'read-only' && !config.ingestUser) config.ingestUser = config.readerUser;
   for (const key of ['host', 'database', 'readerUser', 'ingestUser', 'pgpassFile']) {
     if (!config[key]) throw new Error(`数据库配置缺少 ${key}`);
   }
@@ -305,7 +318,11 @@ export async function readPgpassPassword(config, user) {
 }
 
 export async function connectDatabase(config, role = 'reader') {
-  const user = role === 'ingest' ? config.ingestUser : config.readerUser;
+  // A maintainer owns one database identity: all reads and writes use ingestUser.
+  // readerUser remains a separate employee-only identity under read-only configs.
+  const user = role === 'ingest' || config.accessMode === 'maintainer'
+    ? config.ingestUser
+    : config.readerUser;
   const password = await readPgpassPassword(config, user);
   const client = new Client({
     host: config.host,
@@ -320,7 +337,7 @@ export async function connectDatabase(config, role = 'reader') {
   return client;
 }
 
-export async function checkDatabaseReadOnlyAccess(client) {
+export async function inspectDatabaseAccess(client) {
   const result = await client.query(`
     SELECT current_database() AS database,current_user AS user,
       has_database_privilege(current_user,current_database(),'CREATE') AS database_create,
@@ -344,8 +361,21 @@ export async function checkDatabaseReadOnlyAccess(client) {
   const readOnly = !privileges.databaseCreate
     && !Object.values(privileges.schemaCreate).some(Boolean)
     && !['insert', 'update', 'delete'].some((key) => Number(privileges.tables[key]) > 0);
-  if (!readOnly) throw new Error('数据库只读权限检查失败：当前查询账号拥有写入或建库/建表权限，请停止使用并联系管理员');
   return { database: row.database, user: row.user, readOnly, privileges };
+}
+
+export async function checkDatabaseReadOnlyAccess(client) {
+  const result = await inspectDatabaseAccess(client);
+  if (!result.readOnly) throw new Error('数据库只读权限检查失败：当前查询账号拥有写入或建库/建表权限，请停止使用并联系管理员');
+  return result;
+}
+
+export async function checkDatabaseMaintainerAccess(client) {
+  const result = await inspectDatabaseAccess(client);
+  if (Number(result.privileges.tables.select) < Number(result.privileges.tables.total)) {
+    throw new Error('数据库维护者读取权限检查失败：部分数据表不可查询');
+  }
+  return result;
 }
 
 const WRITE_CHECK_TABLE_REQUIREMENTS = Object.freeze({
@@ -548,7 +578,7 @@ function resolveTrafficSource(payload) {
 }
 
 export function defaultAggregation(fieldName) {
-  return /(率|占比|ROI|CVR|CTR|CPC|CPM|客单价|UV价值|平均|评分|费比|成本|单价|时长)/i.test(fieldName) ? 'avg' : 'sum';
+  return /(率|占比|ROI|投入产出比|CVR|CTR|CPC|CPM|千次展现花费|客单价|UV价值|平均|人均|评分|费比|成本|单价|时长)/i.test(fieldName) ? 'avg' : 'sum';
 }
 
 function quoteIdentifier(value) {
@@ -616,6 +646,9 @@ export async function ensureWarehouseSchema(client) {
       attribution_principle text,
       search_source text,
       search_term text,
+      conversion_cycle text,
+      scene_name text,
+      scene_name_old_level2 text,
       row_data jsonb NOT NULL,
       source_file text NOT NULL,
       source_sha256 text NOT NULL,
@@ -633,8 +666,12 @@ export async function ensureWarehouseSchema(client) {
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS attribution_principle text;
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS search_source text;
     ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS search_term text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS conversion_cycle text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS scene_name text;
+    ALTER TABLE raw.sycm_rows ADD COLUMN IF NOT EXISTS scene_name_old_level2 text;
     CREATE INDEX IF NOT EXISTS sycm_rows_dataset_traffic_source_date_idx ON raw.sycm_rows(dataset_key, traffic_source, stat_date);
     CREATE INDEX IF NOT EXISTS sycm_rows_dataset_search_term_date_idx ON raw.sycm_rows(dataset_key, search_term, stat_date);
+    CREATE INDEX IF NOT EXISTS sycm_rows_dataset_scene_date_idx ON raw.sycm_rows(dataset_key, scene_name, stat_date);
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS coverage_start date;
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS coverage_end date;
     ALTER TABLE meta.import_files ADD COLUMN IF NOT EXISTS import_mode text NOT NULL DEFAULT 'append';
@@ -648,7 +685,7 @@ function batchInsertSql(rows) {
     'dataset_key', 'grain', 'stat_date', 'shop_name', 'item_id', 'item_name', 'sku_id', 'sku_name',
     'keyword', 'keyword_type', 'related_item_id', 'related_item_name', 'traffic_source_type',
     'traffic_source', 'traffic_source_level', 'attribution_principle', 'row_data', 'source_file',
-    'search_source', 'search_term',
+    'search_source', 'search_term', 'conversion_cycle', 'scene_name', 'scene_name_old_level2',
     'source_sha256', 'source_row',
   ];
   const values = [];
@@ -795,6 +832,9 @@ export async function importWorkbook(client, file, dataset, {
         attribution_principle: payload['归属原则'],
         search_source: payload['搜索词类型'],
         search_term: payload['搜索词'],
+        conversion_cycle: payload['转化周期'],
+        scene_name: payload['场景名字'],
+        scene_name_old_level2: payload['原二级场景名字'],
         row_data: JSON.stringify(payload),
         source_file: path.basename(file),
         source_sha256: sourceSha256,
@@ -973,9 +1013,17 @@ export async function queryBusinessData(client, options) {
       select: ['search_source AS "搜索词类型"', 'search_term AS "搜索词"', 'attribution_principle AS "归属原则"'],
       group: ['search_source', 'search_term', 'attribution_principle'],
     },
+    scene: {
+      select: ['conversion_cycle AS "转化周期"', 'scene_name AS "场景名字"', 'scene_name_old_level2 AS "原二级场景名字"'],
+      group: ['conversion_cycle', 'scene_name', 'scene_name_old_level2'],
+    },
+    'conversion-cycle': {
+      select: ['conversion_cycle AS "转化周期"'],
+      group: ['conversion_cycle'],
+    },
   };
   const grouping = groupDefinitions[groupBy];
-  if (!grouping) throw new Error(`不支持的分组：${groupBy}；可用 total,day,shop,item,sku,keyword,related-item,traffic-source,search-term`);
+  if (!grouping) throw new Error(`不支持的分组：${groupBy}；可用 total,day,shop,item,sku,keyword,related-item,traffic-source,search-term,scene,conversion-cycle`);
 
   const metricExpressions = requestedMetrics.map((metric) => {
     const aggregation = fieldMap.get(metric) || 'sum';

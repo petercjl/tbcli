@@ -67,7 +67,7 @@ test('bundled Skill routes warehouse questions through discovery and semantic qu
 test('bundled Skill routes maintainer read-write verification through stable checks', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   assert.match(skill, /检查数据库读写权限/);
-  assert.match(skill, /db access-check --json` first and `db write-check --json` second/);
+  assert.match(skill, /single `ingestUser` identity for both reads and writes/);
   assert.match(skill, /probe\.rolledBack: true/);
   assert.match(skill, /probe\.residueCount: 0/);
   assert.match(skill, /Do not replace either check with raw SQL or an ad-hoc script/);
@@ -151,6 +151,11 @@ test('bundled Skill keeps recent report maintenance orchestration outside the CL
   assert.match(maintenance, /16 列.*11 列.*12 列/s);
   assert.match(maintenance, /不得跨 `时间类型`.*直接相加/);
   assert.match(maintenance, /平台对某个已请求枚举没有返回明细行.*不能擅自删除该枚举/);
+  assert.match(skill, /无界-账户.*15天转化/);
+  assert.match(maintenance, /无界-账户.*wujie-account.*15天转化/);
+  assert.match(maintenance, /转化周期=15天转化/);
+  assert.match(maintenance, /68 列.*378 行/);
+  assert.match(maintenance, /无界-账户-分日-15天转化/);
   assert.match(skill, /exactly 100,000 data rows/);
   assert.match(skill, /TRUNCATED_EXPORT/);
   assert.match(skill, /下载历史数据并上传数据库/);
