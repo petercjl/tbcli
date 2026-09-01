@@ -14,6 +14,9 @@ export function parseArgs(argv) {
     else if (arg === '--close-tab') out.closeTab = true;
     else if (arg === '--out') out.out = argv[++index];
     else if (arg === '--config') out.config = argv[++index];
+    else if (arg === '--state-dir') out.stateDir = argv[++index];
+    else if (arg === '--run-id') out.runId = argv[++index];
+    else if (arg === '--status') out.status = argv[++index];
     else if (arg === '--input') out.input = argv[++index];
     else if (arg === '--host') out.host = argv[++index];
     else if (arg === '--database') out.database = argv[++index];

@@ -326,6 +326,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     audience: 'internal',
     description: '查看 tbcli 的电商业务能力',
   },
+  ...['run-start', 'run-record', 'run-finish', 'run-status'].map((action) => ({
+    key: `maintenance ${action}`,
+    maturity: 'stable',
+    audience: 'internal',
+    description: '维护运行的本机互斥、持久记录与状态检查；不选择表格日期，不访问淘宝或数据库',
+  })),
   {
     key: 'doctor',
     maturity: 'stable',

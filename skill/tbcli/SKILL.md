@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
 ---
 
 # tbcli
@@ -193,7 +193,23 @@ If cleanup fails, preserve the downloaded file, report the exact temporary repor
 
 ## Report Maintenance Orchestration
 
+For 日常更新、每日补数、日常维护清单、检查缺失日期不入库、断点续跑 or a scheduled
+maintenance invocation, use the bundled **Daily Update** module. Read
+[knowledge schema](references/SCHEMA.md), [index](references/index.md), recent
+[log](references/log.md), then the [daily-update query route](references/queries/daily-update.md)
+and its required pages completely. The module is part of this same `tbcli` Skill,
+not a separately installed Skill and not a dependency on another Agent or private Wiki.
+The one maintained-table registry remains `references/report-maintenance.md`;
+only its `日常启用` rows participate in unqualified daily updates.
+
 When the user asks to 补全近期缺失数据, 补全某张取数表, maintain the warehouse from取数报表, 全量重拉并入库, 下载历史数据并上传数据库, or asks to continue processing known maintained tables as part of the warehouse-building workflow, read [references/report-maintenance.md](references/report-maintenance.md) completely before deciding any dates or commands. That reference is the Skill-owned report list and business methodology.
+
+All recent incremental maintenance (including an ordinary “增补商品-整体”) uses the
+Daily Update module's lock, journal, resume and no-refresh safety gates. Historical
+rebuilds retain the existing explicit-authorization flow; they must not run alongside
+a daily writer. During scheduled execution, stop with `AUTH_REQUIRED` instead of
+opening an interactive login wait. Never create or modify a schedule merely because
+this module was invoked; scheduling is a separately authorized host operation.
 
 Keep the boundary explicit: the Agent and this Skill decide **what** to maintain; `tbcli` executes atomic commands with explicit targets and dates. Never replace this composition with an all-in-one sync command, and never let a CLI default decide what “近期” means.
 

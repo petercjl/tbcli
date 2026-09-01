@@ -1,0 +1,16 @@
+{
+  "schema": "portable-skill-adapter",
+  "platform": "sealseek",
+  "mappings": [{
+    "capability_id": "maintenance.execute",
+    "status": "implemented",
+    "features": ["argv-execution", "exit-and-json-capture", "read-files", "create-new-files", "sha256"],
+    "implementation": {
+      "type": "host-terminal-and-files",
+      "discovery": "Resolve advertised execution/filesystem capabilities. On Windows load references/windows-sealseek.md completely and use managed-runtime tbcli.cmd. On other systems resolve installed tbcli. Missing capabilities return CAPABILITY_UNAVAILABLE; do not guess executable paths.",
+      "execution": "Run explicit quoted CLI arguments. Use host-authorized new-file creation and managed Node crypto for hashes. Preserve command JSON and exit status, not shell transcript assertions.",
+      "normalization": "Return ok from business JSON plus exit status, artifact paths, metadata and warnings. No raw SQL, copied credentials or personal paths.",
+      "limitations": "Spec-compatible adapter only: this new daily module has not run on SealSeek/Windows. Verify before enabling a schedule. No implicit restart, scheduler or messaging setup."
+    }
+  }]
+}

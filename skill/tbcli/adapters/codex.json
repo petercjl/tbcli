@@ -1,0 +1,20 @@
+{
+  "schema": "portable-skill-adapter",
+  "platform": "codex",
+  "mappings": [{
+    "capability_id": "maintenance.execute",
+    "status": "tested",
+    "features": ["argv-execution", "exit-and-json-capture", "read-files", "create-new-files", "sha256"],
+    "implementation": {
+      "type": "host-terminal-and-files",
+      "discovery": "Resolve advertised terminal and filesystem tools; resolve tbcli from current runtime PATH; inspect version, help and capabilities --all --json. Missing tools return CAPABILITY_UNAVAILABLE.",
+      "execution": "Use terminal argv/quoted arguments, preserve actual stdout and exit code. Create only preflighted new plan/event/receipt paths using host-authorized file editing. Compute SHA-256 with installed Node crypto.",
+      "normalization": "Return ok from business JSON plus exit status, artifact paths, metadata and warnings. check-only never invokes write primitives.",
+      "limitations": "The maintenance execution path is tested on Codex/macOS. Scheduling remains a separately authorized host capability; unattended network, VPN and login continuity are environment-dependent."
+    },
+    "tested_date": "2026-09-01",
+    "evidence": [
+      "A real maintainer main run loaded the bundled daily module, executed explicit CLI primitives for all 19 enabled targets, validated downloaded workbooks, imported only missing ranges, and closed every full-range coverage receipt."
+    ]
+  }]
+}

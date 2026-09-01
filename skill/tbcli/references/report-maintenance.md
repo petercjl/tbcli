@@ -4,29 +4,36 @@
 
 ## 维护清单
 
-| 业务表 | 数据集 | 平台 / 粒度 / 维度 | 时间粒度 | 维护默认设置 |
-| --- | --- | --- | --- | --- |
-| 店铺-整体 | `shop-overall` | 生意参谋 / 店铺 / 整体 | `day` | `--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 |
-| 店铺-关键词 | `shop-keyword` | 生意参谋 / 店铺 / 关键词 | `day` | `--fields all`；“分词类型”选择目录返回的全部实时可用值，当前基线为 `se_keyword,lgt_keyword,core_keyword,prop_keyword,brd_keyword` |
-| 商品-整体 | `item-overall` | 生意参谋 / 商品 / 整体 | `day` | 所有商品状态，`--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 |
-| 商品-SKU | `item-sku` | 生意参谋 / 商品 / SKU | `day` | 全部 SKU，`--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 |
-| 商品-经营投产比 | `item-roi` | 生意参谋 / 商品 / 经营投产比 | `day` | 所有商品状态，`--fields all`；此维度无终端分组，不传 `--device` |
-| 商品-连带 | `item-bundle` | 生意参谋 / 商品 / 连带 | `week` | `--fields all`；此维度无终端分组，无额外筛选 |
-| 商品-流量来源 | `item-traffic-source` | 生意参谋 / 商品 / 流量来源 | `day` | 精确使用旧版维度 `流量来源`，禁止选 `流量来源(新版)`；选择所有商品，`--fields all --filter '转化效果归属=nearest'`；支付金额筛选与访客数筛选均为全部（不设置上下限）；此维度无终端分组 |
-| 商品-流量来源详情 | `item-traffic-source-detail` | 生意参谋 / 商品 / 流量来源详情 | `day` | 精确使用旧版维度 `流量来源详情`，禁止选 `流量来源详情(新版)`；选择所有商品，`--fields all`；“搜索来源”展开目录返回的全部实时值；`--filter '转化效果归属=nearest'`；此维度无终端分组 |
-| 商品-整体退款分布 | `item-refund-overall` | 生意参谋 / 商品 / 整体退款分布 | `day` | 选择所有商品，`--fields all`；无额外筛选，不传 `--item-ids` 或 `--device` |
-| 商品-退款原因分布 | `item-refund-reason` | 生意参谋 / 商品 / 退款原因分布 | `day` | 所有商品；全部时间类型 `pay,rfd`；退款场景 `ALL`；退款时间选择目录全部 6 项；`--fields all`；不传 `--item-ids` 或 `--device` |
-| 商品-流失竞店分布 | `item-loss-competitor` | 生意参谋 / 商品 / 流失竞店分布 | `day` | 所有商品；全部时间类型 `pay,rfd`；退款场景 `ALL`；退款后状态选择目录全部实时值；`--fields all`；不传 `--item-ids` 或 `--device` |
-| 商品-退款SKU分布 | `item-refund-sku` | 生意参谋 / 商品 / 退款SKU分布 | `day` | 所有商品，`--fields all`；无额外筛选，不传 `--item-ids` 或 `--device` |
-| 无界-账户 | `wujie-account` | 无界 / 基础报表 / 账户 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device`；只维护 15 天转化口径，不与 1 天转化混合 |
-| 无界-计划 | `wujie-plan` | 无界 / 基础报表 / 计划 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` |
-| 无界-人群 | `wujie-audience` | 无界 / 基础报表 / 人群 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` |
-| 无界-商品主体 | `wujie-subject` | 无界 / 基础报表 / 商品主体 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` |
-| 无界-创意 | `wujie-creative` | 无界 / 基础报表 / 创意 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` |
-| 无界-单元 | `wujie-unit` | 无界 / 基础报表 / 单元 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` |
-| 无界-关键词 | `wujie-keyword` | 无界 / 基础报表 / 关键词 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device`；全历史固定按最长 30 天连续分片 |
+本表是插件唯一的维护清单，不在其他 Skill、JSON、定时任务提示词或 Agent 配置中复制另一份长期注册表；每次运行的计划快照不属于第二份注册表。
+`日常启用=是` 表示已纳入默认日常检查；`否` 保留能力但不参加无人值守运行。
+本次沿用已经确认的 19 张维护表，全部启用；用户点名只处理点名表，停用表需用户明确同意才临时执行。
+新增表先完成单表验证与用户确认，再加入清单；平台出现新维度不自动加入。
+清单及本文件中的口径随 `tbcli update` 同步。运行不得自行修改清单。
+日常维护完整流程见 [日常更新](daily-update.md)，历史重建仍使用本文件后半部分。
 
-只有用户明确要求“维护全部取数报表”或“补全取数报表近期缺失数据”时才遍历整张清单。用户点名单表时只处理点名目标。新增表格时，先完成一次经用户确认的全量取数与入库，再把稳定口径加入本表。
+| 业务表 | 数据集 | 平台 / 粒度 / 维度 | 时间粒度 | 维护默认设置 | 日常启用 |
+| --- | --- | --- | --- | --- | --- |
+| 店铺-整体 | `shop-overall` | 生意参谋 / 店铺 / 整体 | `day` | `--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 | 是 |
+| 店铺-关键词 | `shop-keyword` | 生意参谋 / 店铺 / 关键词 | `day` | `--fields all`；“分词类型”选择目录返回的全部实时可用值，当前基线为 `se_keyword,lgt_keyword,core_keyword,prop_keyword,brd_keyword` | 是 |
+| 商品-整体 | `item-overall` | 生意参谋 / 商品 / 整体 | `day` | 所有商品状态，`--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 | 是 |
+| 商品-SKU | `item-sku` | 生意参谋 / 商品 / SKU | `day` | 全部 SKU，`--fields all --device overall`；只保留所有终端汇总，不取无线端和 PC 端拆分 | 是 |
+| 商品-经营投产比 | `item-roi` | 生意参谋 / 商品 / 经营投产比 | `day` | 所有商品状态，`--fields all`；此维度无终端分组，不传 `--device` | 是 |
+| 商品-连带 | `item-bundle` | 生意参谋 / 商品 / 连带 | `week` | `--fields all`；此维度无终端分组，无额外筛选 | 是 |
+| 商品-流量来源 | `item-traffic-source` | 生意参谋 / 商品 / 流量来源 | `day` | 精确使用旧版维度 `流量来源`，禁止选 `流量来源(新版)`；选择所有商品，`--fields all --filter '转化效果归属=nearest'`；支付金额筛选与访客数筛选均为全部（不设置上下限）；此维度无终端分组 | 是 |
+| 商品-流量来源详情 | `item-traffic-source-detail` | 生意参谋 / 商品 / 流量来源详情 | `day` | 精确使用旧版维度 `流量来源详情`，禁止选 `流量来源详情(新版)`；选择所有商品，`--fields all`；“搜索来源”展开目录返回的全部实时值；`--filter '转化效果归属=nearest'`；此维度无终端分组 | 是 |
+| 商品-整体退款分布 | `item-refund-overall` | 生意参谋 / 商品 / 整体退款分布 | `day` | 选择所有商品，`--fields all`；无额外筛选，不传 `--item-ids` 或 `--device` | 是 |
+| 商品-退款原因分布 | `item-refund-reason` | 生意参谋 / 商品 / 退款原因分布 | `day` | 所有商品；全部时间类型 `pay,rfd`；退款场景 `ALL`；退款时间选择目录全部 6 项；`--fields all`；不传 `--item-ids` 或 `--device` | 是 |
+| 商品-流失竞店分布 | `item-loss-competitor` | 生意参谋 / 商品 / 流失竞店分布 | `day` | 所有商品；全部时间类型 `pay,rfd`；退款场景 `ALL`；退款后状态选择目录全部实时值；`--fields all`；不传 `--item-ids` 或 `--device` | 是 |
+| 商品-退款SKU分布 | `item-refund-sku` | 生意参谋 / 商品 / 退款SKU分布 | `day` | 所有商品，`--fields all`；无额外筛选，不传 `--item-ids` 或 `--device` | 是 |
+| 无界-账户 | `wujie-account` | 无界 / 基础报表 / 账户 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device`；只维护 15 天转化口径，不与 1 天转化混合 | 是 |
+| 无界-计划 | `wujie-plan` | 无界 / 基础报表 / 计划 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
+| 无界-人群 | `wujie-audience` | 无界 / 基础报表 / 人群 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
+| 无界-商品主体 | `wujie-subject` | 无界 / 基础报表 / 商品主体 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
+| 无界-创意 | `wujie-creative` | 无界 / 基础报表 / 创意 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
+| 无界-单元 | `wujie-unit` | 无界 / 基础报表 / 单元 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
+| 无界-关键词 | `wujie-keyword` | 无界 / 基础报表 / 关键词 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device`；全历史固定按最长 30 天连续分片 | 是 |
+
+只有用户明确要求“维护全部取数报表”“日常更新”或“补全取数报表近期缺失数据”时才遍历日常启用的清单。用户点名单表时只处理点名目标。新增表格时，先完成一次经用户确认的全量取数与入库，再把稳定口径加入本表。
 
 维护默认设置优先于 `SKILL.md` 中普通临时取数的通用自然语言映射。特别是店铺-整体、商品-整体和商品-SKU：这里的“所有终端”固定指平台的汇总端 `--device overall`，不是技术参数 `--device all`。`--device all` 会同时加入汇总、无线端和 PC 端字段，会破坏现有仓库字段契约，维护流程禁止使用。
 
@@ -75,6 +82,10 @@
 
 ## 近期增量流程
 
+以下是单表业务算法；执行前必须先进入 [日常更新](daily-update.md) 完成预检、互斥与运行记录。
+只检查模式不执行写检查、下载、入库、run-start 或登录等待。定时与手动实际更新共用同一运行目录。
+完成旧日期回刷、跨年补漏或历史重建均不是本流程的默认权限。
+
 “近期”是业务策略，不是 CLI 默认值。当前规则为：只维护当前自然年，不追补往年历史缺口。开始边界取本地日期所在年份的 1 月 1 日；结束边界由每张表实时 `sycm catalog` 的完整可取上界决定。分日表不使用尚未完整的当天；分周表只使用目录允许的完整周。若平台可取下界晚于年度开始边界，使用两者交集并披露。
 
 对每张目标表依次执行：
@@ -88,10 +99,10 @@
    ```
 
 3. `complete: true` 时跳过该表。否则只取 `missingPeriods`，不得把往年差异带入本轮。
-4. 为每个连续缺失区间选择新路径，例如 `./data/sycm-incremental/<运行日期>/<业务表>-<开始>-<结束>.xlsx`。先检查路径不存在。
+4. 为每个连续缺失区间在日常模块 run-start 返回的 artifactDir 内选择新路径，包含业务表、开始、结束和尝试编号。先检查路径不存在；需要项目数据子目录时，按运行记录协议统一设置 state-dir，不同时使用两套路径规则。
 5. 运行一条明确的 `tbcli sycm fetch`：固定平台、粒度、维度、时间粒度、全部字段、该表维护默认设置、缺失区间和新输出路径。不要使用 `--all-history`。商品-整体必须使用 `--device overall --filter '商品状态=Y,N'`（若实时全集变化则替换为实时全集）；商品-SKU同理使用 `--device overall` 和全部实时 SKU筛选值；商品-流量来源必须精确使用 `--data-dimension '流量来源' --filter '转化效果归属=nearest'`，不传 `--item-ids`、`--device`、支付金额筛选和访客数筛选；商品-流量来源详情必须精确使用 `--data-dimension '流量来源详情' --filter '搜索来源=<实时全集>' --filter '转化效果归属=nearest'`，不传 `--item-ids` 或 `--device`；商品-整体退款分布和商品-退款SKU分布使用各自精确维度与 `--fields all`，不传 `--item-ids`、`--filter` 或 `--device`；商品-退款原因分布和商品-流失竞店分布使用上文各自的全部枚举筛选，不传 `--item-ids` 或 `--device`；所有已登记无界基础报表固定使用 `--filter '转化周期=15天转化' --fields all`，不传 `--device`。
 6. 验证 Excel、目标身份、请求区间、实际数据区间和临时报表清理结果。
-7. 用同一个声明区间原子替换入库：
+7. 入库前再次查询同一缺失分片的覆盖；若已完整则跳过写入；若部分被其他写入覆盖，停止该分片并重新规划剩余缺口。只有仍完全缺失才用同一个声明区间原子替换入库：
 
    ```bash
    tbcli db import --input '<新Excel>' --dataset '<业务表>' \

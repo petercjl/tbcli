@@ -1,0 +1,19 @@
+{
+  "schema": "portable-skill-capabilities",
+  "schema_version": "1.0.0",
+  "skill": "tbcli",
+  "scope": "daily-update module; other existing flows retain their own contracts",
+  "target_platforms": ["codex", "sealseek"],
+  "capabilities": [
+    {
+      "id": "maintenance.execute",
+      "purpose": "Run explicit tbcli primitives and preserve verified local artifacts",
+      "required": true,
+      "required_features": ["argv-execution", "exit-and-json-capture", "read-files", "create-new-files", "sha256"],
+      "input_fields": ["argv", "working_directory", "new_artifact_path"],
+      "output_fields": ["ok", "artifacts", "metadata", "warnings"],
+      "side_effects": {"external_mutation": true, "may_cost_money": false, "authorization": "Check-only is read-only; fill-missing requires explicit maintenance authorization and verified maintainer privileges. No automatic upgrade or schedule creation."},
+      "errors": ["CAPABILITY_UNAVAILABLE", "CONTRACT_UNSUPPORTED", "AUTH_REQUIRED", "DATABASE_UNAVAILABLE", "OUTPUT_CONTRACT_FAILED"]
+    }
+  ]
+}

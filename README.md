@@ -5,6 +5,25 @@ Local CLI for Taobao/Qianniu seller backend workflows. It shares the same
 
 ## Install
 
+### 日常取数维护（插件内置 Skill 模块）
+
+Agent 可接收“帮我补全取数报表近期缺失数据”“只增补商品-整体”或
+“只检查缺失日期，暂不下载入库”。安装/更新同一个 tbcli 伴生 Skill 即可使用，
+不是某个 Agent 私有安装的另一份 Skill。
+
+唯一清单为 `skill/tbcli/references/report-maintenance.md`，其中“日常启用”列控制
+默认范围；19 张已确认报表沿用原口径，商品-连带仍按完整周维护。
+执行手册在 `skill/tbcli/references/daily-update.md`，只补缺，不自动回刷、全量重建或升级。
+
+`maintenance run-start/run-record/run-finish/run-status` 是本地运行记录和互斥元命令，
+不下载、不入库、不决定表或日期。计划/事件格式见伴生 Skill 的
+`references/maintenance-run-contract.md`。状态默认位于用户稳定状态目录，
+与 npm、Skill、Git 分离，实际路径由 `tbcli maintenance run-status --json` 返回。
+手动/定时任务必须共用同一目录，只支持单维护机器；首次上线需要真实数据验收。
+每日调度和通知需用户另外授权配置，插件安装本身不创建定时任务。
+
+### CLI installation
+
 Supports macOS and Windows. Requires Node.js 20 or newer and Google Chrome:
 
 ```bash

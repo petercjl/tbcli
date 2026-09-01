@@ -13,6 +13,7 @@ import { runShopProducts } from './commands/shop-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
 import { runUnifiedUpdate } from './commands/update.mjs';
 import { runSealseekSetup } from './commands/setup.mjs';
+import { runMaintenanceStart, runMaintenanceRecord, runMaintenanceFinish, runMaintenanceStatus } from './commands/maintenance.mjs';
 import { runDevCapture, runDevInspect, runDevPages } from './commands/dev.mjs';
 import { runDocumentGet } from './commands/document.mjs';
 import { runDocumentTree } from './commands/document-tree.mjs';
@@ -44,6 +45,10 @@ const COMMAND_HANDLERS = Object.freeze({
   version: runVersion,
   update: runUnifiedUpdate,
   'setup sealseek': runSealseekSetup,
+  'maintenance run-start': runMaintenanceStart,
+  'maintenance run-record': runMaintenanceRecord,
+  'maintenance run-finish': runMaintenanceFinish,
+  'maintenance run-status': runMaintenanceStatus,
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
@@ -90,6 +95,10 @@ export function usage() {
   tbcli version
   tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--json]
   tbcli setup sealseek [--json]
+  tbcli maintenance run-start --input PLAN.json [--state-dir DIR] [--json]
+  tbcli maintenance run-record --run-id ID --input EVENT.json [--state-dir DIR] [--json]
+  tbcli maintenance run-finish --run-id ID --status success|partial|blocked|cancelled [--state-dir DIR] [--json]
+  tbcli maintenance run-status [--run-id ID] [--state-dir DIR] [--json]
   tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
