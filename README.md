@@ -118,6 +118,12 @@ tbcli sycm fetch \
   --date-type day --fields all --device all \
   --item-ids '631249289145,635607974988,650978994929' --all-history \
   --out ./商品-整体-指定商品-全部历史.xlsx --json
+
+# Fetch four natural weeks of raw product rankings for all six concrete price bands.
+tbcli sycm market-rank \
+  --category-url 'https://sycm.taobao.com/mc/free/market_rank?...' \
+  --last-week 2026-08-30 \
+  --out-dir ./sycm-market-rank-4weeks --json
 ```
 
 `sycm reports` locates saved reports and returns their IDs, dimensions, date
@@ -146,6 +152,13 @@ scene, or conversion-cycle fields) so repeated rows remain interpretable.
 The full-dimension `sycm catalog --json` result also includes the selected time
 granularity and live `validPeriod`, allowing multi-report tasks to validate every
 requested period before any workbook is created.
+
+`sycm market-rank` resolves the natural week containing `--last-week` plus the
+three preceding weeks. It creates four independent workbooks, each containing
+only the six concrete price-band sheets and no unlimited-price sheet. The
+command preserves the page's active account context, paginates to each returned
+record count, and stops immediately on login, slider, CAPTCHA, validation, or
+busy-page signals.
 
 ## Company ecommerce warehouse
 

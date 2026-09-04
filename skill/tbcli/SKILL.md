@@ -71,7 +71,7 @@ tbcli workflow with raw HTTP, browser scripting, or an ad-hoc script.
 1. Discover the live CLI, then run `tbcli --help` and `tbcli capabilities --json`. On POSIX use `command -v tbcli`; on Windows SealSeek use its adapter and invoke `tbcli.cmd`. Use live syntax rather than recalled syntax.
 2. Parse the user's intent into one or more targets. Identify required URLs/IDs, platform, data type, dimension, date granularity, period, fields, filters, and delivery directory.
 3. Resolve relative dates using the user's local date. For completed daily data fetched from the platform, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. Warehouse questions instead use the selected dataset's latest available date as defined in **Company Warehouse Flow**. State the resolved dates.
-4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
+4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For市场-商品排行的连续四周价格带数据, follow **SYCM Market Ranking Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
 5. Choose a new output path. Read-only check every explicit path first. Never overwrite an existing file; use a clear new filename or ask when naming materially matters.
 6. Execute targets sequentially so request pacing and partial failures remain understandable. Use `--json` when structured verification is useful.
 7. Verify each output: existence, nonzero size, expected file type, requested date coverage, key headers, and target identity. For Excel, inspect the workbook rather than trusting only the exit code.
@@ -190,6 +190,28 @@ Require all of the following:
 - Multi-target delivery includes one verified result per target.
 
 If cleanup fails, preserve the downloaded file, report the exact temporary report ID/name, and do not claim full success. After an interrupted run, inspect `tbcli sycm reports --keyword 'tbcli-temp-' --json`; delete nothing manually without verifying tbcli ownership.
+
+## SYCM Market Ranking Flow
+
+Use this flow only for 生意参谋“市场 > 市场排行 > 商品”中按价格带获取连续四周排行数据。It is separate from 自主分析取数报表.
+
+Require exactly two business inputs: the complete category ranking URL and one calendar date in the final requested week. Run:
+
+```bash
+tbcli sycm market-rank \
+  --category-url '<生意参谋商品排行类目链接>' \
+  --last-week '<YYYY-MM-DD>' \
+  [--out-dir '<new-or-existing-directory-with-new-target-names>'] \
+  --json
+```
+
+The CLI resolves the containing Monday–Sunday week and the three immediately preceding natural weeks. It creates four independent Excel files from oldest to newest. Each workbook contains exactly these six sheets: `0-50`, `50-135`, `135-255`, `255-455`, `455-660`, and `660以上`. Never add an `不限` sheet or analysis-only comparison columns.
+
+Keep the page's actual account/shop request context and let tbcli vary only dates, page, page size, price band, and cache-busting values. A category page's `cateFlag` may differ from the ranking request's actual `cateFlag`; the request observed from the page is authoritative. The service may return only 20 rows even when a larger page size is requested, so pagination continues to `recordCount`. Rankings come from each row's returned rank value and must be strictly increasing. Preserve any stable gap returned by the platform; never fill gaps or derive rank from requested page size.
+
+Every ranking request and request-triggering page action uses the shared random 1,000–2,000 ms guarded delay. If the page or response shows 挤爆了, a slider, CAPTCHA, login, security validation, access restriction, or platform validation signal, stop immediately without refresh, retry, or bypass. Ask the user to complete visible verification before a new run.
+
+QA requires four new readable `.xlsx` files, exact natural-week periods, exactly six sheets per file, the 13 raw columns documented in the command reference, returned row counts, text-preserved item IDs, and strictly increasing platform values preserved identically in both ranking columns. If a later week fails, preserve and report earlier completed files; do not rerun those successful weeks unless requested.
 
 ## Report Maintenance Orchestration
 

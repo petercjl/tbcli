@@ -45,11 +45,14 @@ tbcli sycm reports [--keyword '<名称>'] [--page N] [--page-size 100] [--json]
 tbcli sycm export (--report-id ID | --report-name '<名称>') --out '<new.xlsx>' [--json]
 tbcli sycm fetch (--report-id ID | --report-name '<名称>') --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out '<new.xlsx>' [--json]
 tbcli sycm fetch --data-platform '<平台>' --data-type '<粒度>' --data-dimension '<维度>' [--date-type day|week|month|customDaySum] [--fields 'all|字段,...'] [--device all|overall|wireless|pc] [--item-ids 'ID,...'] [--filter '名称=值,...'] (--all-history | --start-date YYYY-MM-DD --end-date YYYY-MM-DD) --out '<new.xlsx>' --json
+tbcli sycm market-rank --category-url '<商品排行类目链接>' --last-week YYYY-MM-DD [--out-dir '<directory>'] [--json]
 ```
 
 Direct mode is the default for recurring extraction. Saved-report mode preserves a report's stored fields and filters. Every dimension owns its own field catalog and valid date range.
 
 `--item-ids` accepts up to 100 numeric IDs in direct 商品 mode. `--all-history` uses the dimension's current complete `validPeriod` and is mutually exclusive with explicit dates. `--device all` retains overall, wireless, and PC field groups; the other accepted values select one group while preserving identity fields.
+
+`sycm market-rank` is the four-natural-week product-ranking command. `--last-week` may be any date in the final week. It writes one workbook per week and exactly six price-band sheets per workbook: `0-50`, `50-135`, `135-255`, `255-455`, `455-660`, and `660以上`; there is no `不限` sheet. Every sheet has these 13 columns in order: `榜单排名`, `商品ID`, `商品标题`, `店铺`, `店铺类型`, `核心关键词`, `支付买家数`, `访客数`, `所属价格带`, `价格带排名`, `商品链接`, `店铺链接`, `图片链接`. Ranking values preserve the platform's strictly increasing values, including a stable gap if the platform omits a rank. Default request pacing is a guarded random 1,000–2,000 ms, and verification or 挤爆了 stops the run immediately while preserving completed week files.
 
 ## Shop products
 

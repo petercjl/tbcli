@@ -6,6 +6,7 @@ test('detects login, captcha, and MTOP validation signals', () => {
   assert.equal(isVerificationSignal('https://login.taobao.com/'), true);
   assert.equal(isVerificationSignal('请完成滑块验证'), true);
   assert.equal(isVerificationSignal('FAIL_SYS_USER_VALIDATE'), true);
+  assert.equal(isVerificationSignal('服务器挤爆了，请稍后再试'), true);
   assert.equal(isVerificationSignal('https://kemi.tmall.com/category.htm'), false);
 });
 

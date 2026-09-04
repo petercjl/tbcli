@@ -37,6 +37,9 @@ export function parseArgs(argv) {
     else if (arg === '--session-mode') out.sessionMode = argv[++index];
     else if (arg === '--port') out.port = argv[++index];
     else if (arg === '--url') out.url = argv[++index];
+    else if (arg === '--category-url') out.categoryUrl = argv[++index];
+    else if (arg === '--last-week') out.lastWeek = argv[++index];
+    else if (arg === '--out-dir') out.outDir = argv[++index];
     else if (arg === '--trade-id') out.tradeId = argv[++index];
     else if (arg === '--campaign-id') out.campaignId = argv[++index];
     else if (arg === '--report-id') out.reportId = argv[++index];

@@ -195,6 +195,21 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     },
   },
   {
+    key: 'sycm market-rank',
+    maturity: 'stable',
+    audience: 'business',
+    capability: {
+      id: 'sycm-market-rank-four-weeks',
+      name: '获取生意参谋连续四周商品排行',
+      description: '按指定类目和最后一周，自动向前计算三周，逐周整理六个具体价格带的完整商品排行。',
+      examplePrompt: '获取这个生意参谋类目截止 2026-08-30 的连续四周商品排行',
+      requiredInputs: ['商品排行类目链接', '最后一周日期'],
+      optionalInputs: ['输出目录', '请求间隔'],
+      delivery: '4 个 Excel 文件，每个文件仅含 6 个具体价格带工作表',
+      commandTemplate: 'tbcli sycm market-rank --category-url <生意参谋类目链接> --last-week <YYYY-MM-DD> [--out-dir <目录>] [--json]',
+    },
+  },
+  {
     key: 'browser open',
     maturity: 'stable',
     audience: 'internal',

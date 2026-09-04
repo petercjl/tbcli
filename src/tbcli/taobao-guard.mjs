@@ -7,7 +7,7 @@ export function verificationMessage(detail = '') {
 
 export function isVerificationSignal(value) {
   const text = String(value || '');
-  return /login\.taobao\.com|login\.tmall\.com|sec\.taobao\.com|captcha|punish|_____tmd_____|滑块|验证码|安全验证|请完成验证|访问受限|账号登录|重新登录|FAIL_SYS_USER_VALIDATE|RGV587|SESSION_EXPIRED|ILLEGAL_ACCESS/i.test(text);
+  return /login\.taobao\.com|login\.tmall\.com|sec\.taobao\.com|captcha|punish|_____tmd_____|滑块|验证码|安全验证|请完成验证|访问受限|访问过于频繁|操作频繁|请稍后再试|挤爆了|账号登录|重新登录|FAIL_SYS_USER_VALIDATE|RGV587|SESSION_EXPIRED|ILLEGAL_ACCESS/i.test(text);
 }
 
 export function createVerificationError(detail = '') {

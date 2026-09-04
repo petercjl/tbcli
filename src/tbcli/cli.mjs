@@ -38,6 +38,7 @@ import {
   runDatabaseStatus,
 } from './commands/database.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
+import { runSycmMarketRank } from './commands/sycm-market-rank.mjs';
 import { runVersion } from './version.mjs';
 import { maybePrintUpdateNotice } from './update.mjs';
 
@@ -80,6 +81,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'db datasets': runDatabaseDatasets,
   'db fields': runDatabaseFields,
   'db query': runDatabaseQuery,
+  'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
   doctor: runDoctor,
   'dev pages': runDevPages,
@@ -128,6 +130,7 @@ export function usage() {
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli sycm market-rank --category-url URL --last-week YYYY-MM-DD [--out-dir DIR] [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
