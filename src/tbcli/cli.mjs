@@ -26,6 +26,7 @@ import {
   runDatabaseCredentialPath,
   runDatabaseCredentialSet,
   runDatabaseCredentialBundleCreate,
+  runDatabaseNetwork,
   runDatabaseSetupReader,
   runDatabaseAccessCheck,
   runDatabaseWriteCheck,
@@ -39,6 +40,15 @@ import {
 } from './commands/database.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
 import { runSycmMarketRank } from './commands/sycm-market-rank.mjs';
+import {
+  runProfitOrdersCoverage,
+  runProfitOrdersImport,
+  runProfitOrdersIdentity,
+  runProfitOrdersInit,
+  runProfitOrdersValidate,
+} from './commands/profit-orders.mjs';
+import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,runProfitRefundsValidate } from './commands/profit-refunds.mjs';
+import { runProfitEstimateExport,runProfitEstimateInit,runProfitEstimateQuery,runProfitEstimateRun } from './commands/profit-estimate.mjs';
 import { runVersion } from './version.mjs';
 import { maybePrintUpdateNotice } from './update.mjs';
 
@@ -72,6 +82,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'db credential-set': runDatabaseCredentialSet,
   'db credential-bundle-create': runDatabaseCredentialBundleCreate,
   'db setup-reader': runDatabaseSetupReader,
+  'db network': runDatabaseNetwork,
   'db access-check': runDatabaseAccessCheck,
   'db write-check': runDatabaseWriteCheck,
   'db status': runDatabaseStatus,
@@ -81,6 +92,19 @@ const COMMAND_HANDLERS = Object.freeze({
   'db datasets': runDatabaseDatasets,
   'db fields': runDatabaseFields,
   'db query': runDatabaseQuery,
+  'profit orders init': runProfitOrdersInit,
+  'profit orders validate': runProfitOrdersValidate,
+  'profit orders import': runProfitOrdersImport,
+  'profit orders identity': runProfitOrdersIdentity,
+  'profit orders coverage': runProfitOrdersCoverage,
+  'profit refunds init': runProfitRefundsInit,
+  'profit refunds validate': runProfitRefundsValidate,
+  'profit refunds import': runProfitRefundsImport,
+  'profit refunds coverage': runProfitRefundsCoverage,
+  'profit estimate init': runProfitEstimateInit,
+  'profit estimate run': runProfitEstimateRun,
+  'profit estimate query': runProfitEstimateQuery,
+  'profit estimate export': runProfitEstimateExport,
   'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
   doctor: runDoctor,
@@ -121,6 +145,7 @@ export function usage() {
   tbcli db credential-set --pgpass-file FILE [--config FILE] [--json]
   tbcli db credential-bundle-create --host HOST --database NAME --reader-user USER (--pgpass-file FILE | --password-stdin) --out FILE [--port 5432] [--json]
   tbcli db setup-reader --credential-file FILE [--config FILE] [--json]
+  tbcli db network [--provider none|zxvpn] [--ensure] [--config FILE] [--json]
   tbcli db access-check [--config FILE] [--json]
   tbcli db write-check [--config FILE] [--json]
   tbcli db status [--config FILE] [--json]
@@ -130,6 +155,19 @@ export function usage() {
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli profit orders init [--config FILE] [--json]
+  tbcli profit orders validate --input FILE --shop-key KEY --shop-name NAME [--json]
+  tbcli profit orders import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]
+  tbcli profit orders identity [--config FILE] [--json]
+  tbcli profit orders coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit refunds init [--config FILE] [--json]
+  tbcli profit refunds validate --input FILE --shop-key KEY --shop-name NAME [--json]
+  tbcli profit refunds import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]
+  tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit estimate init [--config FILE] [--json]
+  tbcli profit estimate run --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--platform-fee-rate 0.06] [--tax-rate 0.02] [--missing-cost-rate 0.50] [--fallback-freight 2] [--json]
+  tbcli profit estimate query --run-id ID [--owner NAME | --owners NAME,...] [--group-by shop|owner|product|day] [--json]
+  tbcli profit estimate export --run-id ID [--owner NAME | --owners NAME,...] --out FILE [--json]
   tbcli sycm market-rank --category-url URL --last-week YYYY-MM-DD [--out-dir DIR] [--json]
   tbcli skill source [--json]
   tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
@@ -148,6 +186,8 @@ Environment:
   TBCLI_REMOTE_DEBUGGING_PORT   Chrome remote debugging port, default ${DEFAULT_DEBUGGING_PORT}
   TBCLI_CHROME_PATH   Chrome binary path, default ${DEFAULT_CHROME_PATH}
   TBCLI_DB_CONFIG   Ecommerce warehouse connection config; passwords stay in its pgpass file
+  TBCLI_DB_NETWORK_PROVIDER   Optional database network adapter override: none or zxvpn
+  TBCLI_ZXVPN_BIN   Optional zxvpn executable override; default resolves zxvpn from PATH
   TBCLI_UPDATE_CHECK   Set to 0 to disable the cached npm update reminder
 
 Notes:
@@ -172,8 +212,11 @@ export async function main(argv = process.argv.slice(2)) {
     return;
   }
 
-  const [group, command] = args._;
-  const definition = findCommandDefinition(group, command);
+  const candidateKeys = [3, 2, 1]
+    .filter((length) => args._.length >= length)
+    .map((length) => args._.slice(0, length).join(' '));
+  const commandKey = candidateKeys.find((key) => COMMAND_HANDLERS[key]);
+  const definition = commandKey && findCommandDefinition(...commandKey.split(' '));
   const handler = definition && COMMAND_HANDLERS[definition.key];
   if (handler) {
     await handler(args);

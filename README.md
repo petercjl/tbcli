@@ -167,6 +167,25 @@ answer parameterized business questions without exposing SQL to employees. The
 warehouse connection is configured by an administrator; day-to-day Agents use a
 read-only role.
 
+When the database is reachable only through an approved local network helper,
+configure that helper once in the protected database configuration. `zxvpn` is
+an optional adapter: after it is configured, every `tbcli db` connection runs
+`zxvpn ensure --json` before PostgreSQL is contacted. The helper decides whether
+the machine is already on the company LAN or needs its WireGuard tunnel. No VPN
+address, key, or credential is stored in the npm package.
+
+```bash
+# One-time setup on a machine where zxvpn is already installed and authorized.
+tbcli db network --provider zxvpn --ensure --json
+
+# Inspect the configured adapter without changing tunnel state.
+tbcli db network --json
+```
+
+Use `--provider none` to disable the adapter. Configuration changes create a
+timestamped protected backup. Other machines remain unchanged unless their own
+database configuration explicitly enables the adapter.
+
 ```bash
 # Discover available tables and exact fields.
 tbcli db status --json
@@ -216,6 +235,27 @@ tbcli db write-check --json
 tbcli db import --input '<tbcli workbook.xlsx>' --dataset '商品-整体' \
   --mode replace-range --start-date 2026-08-20 --end-date 2026-08-24 --json
 ```
+
+Wangdian order facts use privacy-trimmed JSON exported by the stable
+`wdtcli web orders export` command. The caller chooses the shop and exact pay
+date range; tbcli validates the source contract and imports headers, lines and
+shipments idempotently without mixing them into `raw.sycm_rows`.
+
+```bash
+tbcli profit orders init --json
+tbcli profit orders validate --input '<wdt-orders.json>' \
+  --shop-key '<stable shop key>' --shop-name '<exact WDT shop name>' --json
+tbcli profit orders import --input '<wdt-orders.json>' \
+  --shop-key '<stable shop key>' --shop-name '<exact WDT shop name>' --json
+tbcli profit orders identity --json
+tbcli profit orders coverage --shop-key '<stable shop key>' \
+  --start-date 2026-07-01 --end-date 2026-09-03 --json
+```
+
+The companion Skill, not either CLI, decides which missing periods to collect.
+Daily maintenance uses the same lock and journal as report updates. Existing
+pay dates are not refreshed until a separately approved mutable-window policy
+is added for later order, shipment, and refund changes.
 
 For an employee who only queries the warehouse, the administrator creates one
 encrypted reader credential bundle and distributes that file through the
@@ -469,6 +509,33 @@ intentionally left open after success or a guarded stop for user inspection.
 Use `--page N` when only one specified page should be delivered; tbcli first
 loads page 1 normally, then reaches the requested page through the real
 pagination control.
+
+## Warehouse profit facts and estimates
+
+Maintainers can validate and import privacy-trimmed Wangdian refunds alongside
+the existing order facts, then create immutable daily profit-estimate snapshots:
+
+```bash
+tbcli profit refunds init --json
+tbcli profit refunds validate --input refunds.json --shop-key KEY --shop-name NAME --json
+tbcli profit refunds import --input refunds.json --shop-key KEY --shop-name NAME --json
+tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --json
+
+tbcli profit estimate init --json
+tbcli profit estimate run --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --json
+tbcli profit estimate query --run-id ID --group-by owner --json
+tbcli profit estimate export --run-id ID --owner NAME --out profit.xlsx --json
+tbcli profit estimate export --run-id ID --owners NAME1,NAME2,NAME3 --out operators-profit.xlsx --json
+```
+
+The estimate runs only for dates whose Wujie product-subject ad spend is already
+available. It attributes settled refunds to their settlement day, preserves
+unassigned products, and records all fee, cost, and freight fallback policy in
+the immutable run. The bundled Skill owns natural-language period interpretation
+(for example, 最近7天、最近30天 or 7月份) and the daily 45-day refresh method; the
+CLI executes only explicit dates and targets. Profit Excel files use Chinese
+business headers, include estimated margin, and may select one or several exact
+owner names.
 
 ## Development tools
 

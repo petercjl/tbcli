@@ -118,16 +118,18 @@ test('real CLI entry routes run commands and returns machine-readable evidence',
   assert.equal(cli('run-finish', '--run-id', started.runId, '--status', 'blocked').status, 'blocked');
 });
 
-test('one 19-table registry retains names and per-table daily switches', async () => {
+test('one 21-source registry retains names and per-source daily switches', async () => {
   const text = await fs.readFile(path.join(skill, 'references/report-maintenance.md'), 'utf8');
   const table = text.slice(text.indexOf('| 业务表 |'), text.indexOf('\n\n', text.indexOf('| 业务表 |')));
   const rows = table.split('\n').slice(2).map((row) => row.split('|').slice(1, -1).map((cell) => cell.trim()));
-  assert.equal(rows.length, 19);
-  assert.equal(new Set(rows.map((r) => r[1])).size, 19);
+  assert.equal(rows.length, 21);
+  assert.equal(new Set(rows.map((r) => r[1])).size, 21);
   assert.ok(rows.every((r) => r.length === 6 && ['是', '否'].includes(r[5])));
   assert.equal(rows.find((r) => r[0] === '商品-连带')[3], '`week`');
   assert.ok(rows.filter((r) => r[0].startsWith('无界-')).every((r) => r[4].includes('15天转化')));
   assert.ok(rows.find((r) => r[0] === '商品-整体')[4].includes('--device overall'));
+  assert.ok(rows.find((r) => r[0] === '旺店通-订单及明细')[4].includes('wdtcli web orders export'));
+  assert.ok(rows.find((r) => r[0] === '旺店通-退款及明细')[4].includes('wdtcli web refunds export'));
 });
 
 test('managed install and stale-copy update distribute the whole daily module together', async (t) => {

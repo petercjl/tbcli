@@ -6,7 +6,7 @@
 
 本表是插件唯一的维护清单，不在其他 Skill、JSON、定时任务提示词或 Agent 配置中复制另一份长期注册表；每次运行的计划快照不属于第二份注册表。
 `日常启用=是` 表示已纳入默认日常检查；`否` 保留能力但不参加无人值守运行。
-本次沿用已经确认的 19 张维护表，全部启用；用户点名只处理点名表，停用表需用户明确同意才临时执行。
+当前清单包含已确认的 19 张取数报表、1 张旺店通订单事实和 1 张旺店通退款事实，共 21 张且全部启用；用户点名只处理点名表，停用表需用户明确同意才临时执行。调度器提示词中曾记录的固定数量只是创建时基线，运行范围始终以本表实时“日常启用”行为准。
 新增表先完成单表验证与用户确认，再加入清单；平台出现新维度不自动加入。
 清单及本文件中的口径随 `tbcli update` 同步。运行不得自行修改清单。
 日常维护完整流程见 [日常更新](daily-update.md)，历史重建仍使用本文件后半部分。
@@ -32,8 +32,29 @@
 | 无界-创意 | `wujie-creative` | 无界 / 基础报表 / 创意 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
 | 无界-单元 | `wujie-unit` | 无界 / 基础报表 / 单元 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device` | 是 |
 | 无界-关键词 | `wujie-keyword` | 无界 / 基础报表 / 关键词 | `day` | `--fields all --filter '转化周期=15天转化'`；不传 `--device`；全历史固定按最长 30 天连续分片 | 是 |
+| 旺店通-订单及明细 | `wdt-orders` | 旺店通 / 订单头、订单明细、运单 | `day` | 按支付时间；精确单店；隐私白名单；`wdtcli web orders export` 完整分页并输出新 JSON，随后由 `tbcli profit orders validate/import/coverage` 校验和幂等入库 | 是 |
+| 旺店通-退款及明细 | `wdt-refunds` | 旺店通 / 退款头、退款明细 | `day` | 按退款申请时间采集；保留结算时间和实际退款金额；精确单店；隐私白名单；`wdtcli web refunds export` 完整分页并输出新 JSON，随后由 `tbcli profit refunds validate/import/coverage` 校验和幂等刷新 | 是 |
 
-只有用户明确要求“维护全部取数报表”“日常更新”或“补全取数报表近期缺失数据”时才遍历日常启用的清单。用户点名单表时只处理点名目标。新增表格时，先完成一次经用户确认的全量取数与入库，再把稳定口径加入本表。
+只有用户明确要求“维护全部取数报表”“日常更新”或“补全取数报表近期缺失数据”时才遍历日常启用的清单；无修饰的正式日常更新包括本表启用的全部来源。用户点名单表时只处理点名目标。新增表格时，先完成一次经用户确认的全量取数与入库，再把稳定口径加入本表。
+
+### 旺店通订单事实口径
+
+此行是同一维护清单中的异源分支，不把旺店通网页订单伪装成生意参谋 Excel，也不复制到第二份清单。
+
+- 采集依赖：运行时发现 `wdtcli`，确认帮助中存在 `web orders export`，并以 `wdtcli auth status --json` 验证当前旺店通登录态。缺命令返回 `CONTRACT_UNSUPPORTED`；登录失效返回 `WDT_AUTH_REQUIRED`。无人值守不得打开交互登录或绕过验证码。
+- 店铺身份：先运行 `tbcli profit orders identity --json`。只有结果恰好一个身份时才使用其中的 `shop_key`、`wdt_shop_id`、`shop_name`；零个身份返回 `INITIAL_IMPORT_REQUIRED`，多个身份返回 `SHOP_SCOPE_REQUIRED`，不得猜测。用户明确点名且与唯一身份一致时继续；相反证据立即停止。
+- 日常范围：本数据集经用户确认的维护起点是 `2026-07-01`。检查下界取“维护起点”和“当前自然年 1 月 1 日”中较晚者，上界为昨天的完整支付日；2026 年因此从 `2026-07-01` 检查，2027 年及以后从当年 `01-01` 检查。用 `tbcli profit orders coverage --shop-key '<key>' --start-date '<检查下界>' --end-date '<昨天>' --json` 取得 `missingPeriods`；不能把维护起点以前的日期解释为缺失，不能靠订单表最大日期推断，也不补往年。
+- 下载：每个连续缺口执行一条 `wdtcli web orders export --from '<开始> 00:00:00' --to '<结束> 23:59:59' --shop-id '<id>' --shop-name '<name>' --page-size 200 --out '<新JSON>' --json`。文件、checkpoint 和 SHA sidecar 均在本次 artifactDir；已有文件只允许按导出器的 checkpoint 契约显式 `--resume`，不能覆盖。
+- 入库：先运行 `tbcli profit orders validate --input '<JSON>' --shop-key '<key>' --shop-name '<name>' --json`，要求店铺、日期、API 前后总数、订单/明细数、摘要、稳定键和隐私白名单全部通过；入库前重查 coverage，仍完整缺失才执行 `tbcli profit orders import ...`。导入按稳定订单、明细和运单键幂等更新，并保存来源批次；入库后对完整检查区间再次 coverage，只有 `complete:true` 才完成。
+- 日常同时执行“缺口补齐”和“近期滚动刷新”。缺口仍从维护起点检查；滚动刷新窗口固定为昨天向前 45 个完整自然日（含昨天），早于维护起点则截断。该窗口内即使 coverage 已完整，也重新导出订单并用稳定键幂等更新状态、发货和运单；窗口外不回刷。滚动刷新文件仍须完整校验和保存新批次，不用 coverage 的“已完整”条件阻止经清单授权的刷新。
+
+### 旺店通退款事实口径
+
+- 与订单共用唯一店铺身份、维护起点 `2026-07-01`、维护锁和 artifactDir。按退款申请时间检查缺口，按结算时间参与每日利润。
+- 缺口用 `tbcli profit refunds coverage --shop-key '<key>' --start-date '<下界>' --end-date '<昨天>' --json`。每个缺口执行 `wdtcli web refunds export --from '<开始> 00:00:00' --to '<结束> 23:59:59' --shop-id '<id>' --page-size 200 --out '<新JSON>' --json`。
+- 每日另对昨天向前 45 个完整自然日执行一次滚动刷新，即使 coverage 已完整也执行；这是退款状态和结算金额会变化所必需的更新，不是全历史重建。
+- 每个文件先 `tbcli profit refunds validate --input '<JSON>' --shop-key '<key>' --shop-name '<name>' --json`，再执行 `profit refunds import`。入库按退款稳定键替换同一退款的最新头和明细；源文件相同 SHA 时安全跳过。
+- 日常完成后对完整检查区间再次运行 coverage；同时保存滚动刷新批次的范围、行数和 SHA。退款结算日可能晚于申请日，不能用申请日 coverage 代替结算金额的最新性证明。
 
 维护默认设置优先于 `SKILL.md` 中普通临时取数的通用自然语言映射。特别是店铺-整体、商品-整体和商品-SKU：这里的“所有终端”固定指平台的汇总端 `--device overall`，不是技术参数 `--device all`。`--device all` 会同时加入汇总、无线端和 PC 端字段，会破坏现有仓库字段契约，维护流程禁止使用。
 

@@ -64,6 +64,21 @@ test('bundled Skill routes warehouse questions through discovery and semantic qu
   assert.match(skill, /descriptive average/);
 });
 
+test('bundled Skill resolves flexible profit periods and exports Chinese multi-owner workbooks', async () => {
+  const profit = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'profit-estimate.md'), 'utf8');
+  const route = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'profit-estimate.md'), 'utf8');
+  assert.match(profit, /最近 N 天/);
+  assert.match(profit, /YYYY 年 M 月/);
+  assert.match(profit, /只说“M 月份”/);
+  assert.match(profit, /“本月”/);
+  assert.match(profit, /“上月”/);
+  assert.match(profit, /--owners/);
+  assert.match(profit, /所有可见业务字段均为中文/);
+  assert.match(profit, /未分配负责人.*不混入运营合计/);
+  assert.match(route, /显式区间/);
+  assert.match(route, /金额和百分比格式/);
+});
+
 test('bundled Skill routes maintainer read-write verification through stable checks', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   assert.match(skill, /检查数据库读写权限/);
@@ -173,6 +188,14 @@ test('bundled Skill keeps recent report maintenance orchestration outside the CL
   assert.match(maintenance, /维护流程禁止使用/);
   assert.match(maintenance, /不会.*自行决定维护范围|不自行决定维护范围/);
   assert.doesNotMatch(maintenance, /tbcli sycm sync/);
+  assert.match(maintenance, /旺店通-退款及明细.*wdt-refunds/);
+  assert.match(maintenance, /45 个完整自然日/);
+  const profit = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'profit-estimate.md'), 'utf8');
+  const profitRoute = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'profit-estimate.md'), 'utf8');
+  assert.match(skill, /queries\/profit-estimate\.md/);
+  assert.match(profit, /当日已结算退款/);
+  assert.match(profit, /product_owner_versions/);
+  assert.match(profitRoute, /过去 N 天.*推广费最新完整日/);
 });
 
 test('npm package includes the canonical companion Skill source', async () => {

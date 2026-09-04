@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 旺店通订单与退款事实, ecommerce profit estimates, and the company ecommerce warehouse. Use when the user says tbcli, 电商浏览器, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 旺店通订单/订单明细/运单/退款, 预估利润, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL.
 ---
 
 # tbcli
@@ -221,8 +221,12 @@ maintenance invocation, use the bundled **Daily Update** module. Read
 [log](references/log.md), then the [daily-update query route](references/queries/daily-update.md)
 and its required pages completely. The module is part of this same `tbcli` Skill,
 not a separately installed Skill and not a dependency on another Agent or private Wiki.
-The one maintained-table registry remains `references/report-maintenance.md`;
+The one maintained-source registry remains `references/report-maintenance.md`;
 only its `日常启用` rows participate in unqualified daily updates.
+That registry may route one row through another stable collector such as `wdtcli`,
+but validation, warehouse mutation, lock and coverage evidence remain governed here.
+Counts copied into an old scheduler prompt are historical setup notes; never use them
+to narrow the live enabled rows in the canonical registry.
 
 When the user asks to 补全近期缺失数据, 补全某张取数表, maintain the warehouse from取数报表, 全量重拉并入库, 下载历史数据并上传数据库, or asks to continue processing known maintained tables as part of the warehouse-building workflow, read [references/report-maintenance.md](references/report-maintenance.md) completely before deciding any dates or commands. That reference is the Skill-owned report list and business methodology.
 
@@ -238,6 +242,8 @@ Keep the boundary explicit: the Agent and this Skill decide **what** to maintain
 ## Company Warehouse Flow
 
 Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers fields and calls semantic commands. Never ask the employee to write SQL, never expose a raw-SQL escape hatch, and never bypass `tbcli` with `psql` or an ad-hoc database script.
+
+For “预估利润”、按负责人查看利润或利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its deterministic snapshot/query/export flow, then return here for delivery QA.
 
 ### 1. Check the warehouse and discover its live scope
 
@@ -285,9 +291,29 @@ warehouse discovery main line below.
 Run:
 
 ```bash
+tbcli db network --json
 tbcli db status --json
 tbcli db datasets --json
 ```
+
+If the protected database configuration declares the optional `zxvpn` network
+adapter, every database command first calls `zxvpn ensure --json`. On the company
+LAN this keeps the tunnel down; outside the company it establishes the approved
+WireGuard route before PostgreSQL is contacted. The Agent should not manually
+retry PostgreSQL while the adapter reports `DATABASE_NETWORK_UNAVAILABLE`.
+
+An authorized administrator configures or disables the adapter once with:
+
+```bash
+tbcli db network --provider zxvpn --ensure --json
+tbcli db network --provider none --json
+```
+
+The command backs up the existing protected database configuration before
+changing only its network-adapter field. `zxvpn` must already be installed and
+authorized on that machine. Do not copy VPN endpoints, keys, company addresses,
+or credentials into the npm package or Skill. Machines without this requirement
+keep provider `none` and connect exactly as before.
 
 Treat `db datasets` as authoritative for dataset names, grain, available dates, row counts, and field counts. A warehouse query uses imported data and therefore does not require Taobao browser authentication. If connection configuration is absent or invalid, stop with `DATABASE_UNAVAILABLE`; do not invent a host, user, password, or database name.
 
@@ -388,6 +414,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 - **Partial multi-target result:** preserve completed new files, identify failed targets, and do not rerun successful targets unless requested.
 - **Unsupported capability:** report `CONTRACT_UNSUPPORTED` and the closest discoverable stable command; do not fall back to raw private APIs.
 - **Warehouse unavailable:** report `DATABASE_UNAVAILABLE`, preserve the business question, and ask an administrator to configure or restore the approved warehouse connection. Do not request credentials from an employee or substitute a public/Tailscale endpoint.
+- **Database network adapter unavailable:** when a configured `zxvpn` command is missing, cannot ensure the route, or returns invalid JSON, stop with `DATABASE_NETWORK_UNAVAILABLE`. Do not repeatedly retry PostgreSQL, silently bypass the adapter, expose the database directly, or invent another VPN route. After the administrator restores `zxvpn`, return to Company Warehouse Flow discovery.
 - **Reader access check fails:** stop before any warehouse query. Report only the failed privilege category; ask the administrator to correct the reader role or local configuration. Never compensate by using a maintenance credential.
 
 ## Evolution Rule

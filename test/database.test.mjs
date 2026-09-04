@@ -24,12 +24,18 @@ import {
   validateDatabaseCredentialFile,
 } from '../src/tbcli/database.mjs';
 import {
+  ensureDatabaseNetworkAccess,
+  inspectDatabaseNetworkAccess,
+  normalizeDatabaseNetworkAccess,
+} from '../src/tbcli/database-network.mjs';
+import {
   createReaderCredentialBundle,
   decryptReaderCredentialBundle,
   serializeReaderPgpass,
 } from '../src/tbcli/credential-bundle.mjs';
 import {
   runDatabaseCredentialSet,
+  runDatabaseNetwork,
   runDatabaseSetupReader,
 } from '../src/tbcli/commands/database.mjs';
 
@@ -297,7 +303,71 @@ test('loads config and reads a matching protected pgpass entry', async () => {
   }));
   const config = await loadDatabaseConfig(configFile);
   assert.equal(config.accessMode, 'maintainer');
+  assert.deepEqual(config.networkAccess, { provider: 'none' });
   assert.equal(await readPgpassPassword(config, 'tb_agent'), 'secret:value');
+});
+
+test('normalizes and invokes the optional zxvpn database network adapter', async () => {
+  assert.deepEqual(normalizeDatabaseNetworkAccess(), { provider: 'none' });
+  assert.throws(() => normalizeDatabaseNetworkAccess('unknown'), /不支持的数据库网络适配器/);
+  const calls = [];
+  const execFileImpl = async (command, args) => {
+    calls.push({ command, args });
+    return { stdout: JSON.stringify({ ok: true, state: args[0] === 'ensure' ? 'connected' : 'disconnected', changed: false }) };
+  };
+  const config = { networkAccess: { provider: 'zxvpn' } };
+  const ensured = await ensureDatabaseNetworkAccess(config, { execFileImpl, command: 'test-zxvpn' });
+  const inspected = await inspectDatabaseNetworkAccess(config, { execFileImpl, command: 'test-zxvpn' });
+  assert.equal(ensured.provider, 'zxvpn');
+  assert.equal(ensured.state, 'connected');
+  assert.equal(inspected.state, 'disconnected');
+  assert.deepEqual(calls, [
+    { command: 'test-zxvpn', args: ['ensure', '--json'] },
+    { command: 'test-zxvpn', args: ['status', '--json'] },
+  ]);
+});
+
+test('reports a structured database network failure when zxvpn is unavailable', async () => {
+  await assert.rejects(
+    ensureDatabaseNetworkAccess({ networkAccess: { provider: 'zxvpn' } }, {
+      execFileImpl: async () => { const error = new Error('missing'); error.code = 'ENOENT'; throw error; },
+    }),
+    /DATABASE_NETWORK_UNAVAILABLE.*找不到 zxvpn/,
+  );
+});
+
+test('database network configuration preserves the database config and creates a backup', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-db-network-'));
+  const configFile = path.join(dir, 'database.json');
+  const pgpassFile = path.join(dir, 'pgpass');
+  const original = {
+    version: 2, accessMode: 'maintainer', host: '192.168.0.20', port: 5432,
+    database: 'commerce_analytics', ingestUser: 'tb_ingest', pgpassFile,
+    networkAccess: { provider: 'zxvpn' },
+  };
+  await fs.writeFile(configFile, `${JSON.stringify(original, null, 2)}\n`, { mode: 0o600 });
+  await fs.writeFile(pgpassFile, 'placeholder\n', { mode: 0o600 });
+  const output = [];
+  const previousLog = console.log;
+  const previousBin = process.env.TBCLI_ZXVPN_BIN;
+  process.env.TBCLI_ZXVPN_BIN = process.execPath;
+  console.log = (value) => output.push(value);
+  try {
+    await runDatabaseNetwork({ config: configFile, provider: 'none', json: true });
+  } finally {
+    console.log = previousLog;
+    if (previousBin === undefined) delete process.env.TBCLI_ZXVPN_BIN;
+    else process.env.TBCLI_ZXVPN_BIN = previousBin;
+  }
+  const next = JSON.parse(await fs.readFile(configFile, 'utf8'));
+  const expected = { ...original };
+  delete expected.networkAccess;
+  assert.deepEqual(next, expected);
+  const result = JSON.parse(output[0]);
+  assert.equal(result.updated, true);
+  assert.equal(result.networkAccess.provider, 'none');
+  assert.equal(result.network.state, 'not-configured');
+  assert.deepEqual(JSON.parse(await fs.readFile(result.backupPath, 'utf8')), original);
 });
 
 test('maintainer config defaults reader identity to the single ingest identity', async () => {

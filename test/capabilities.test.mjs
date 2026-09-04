@@ -19,6 +19,13 @@ test('authentication commands are stable internal capabilities', () => {
   }
 });
 
+test('database network adapter is a stable internal capability', () => {
+  const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'db network');
+  assert.equal(command?.maturity, 'stable');
+  assert.equal(command?.audience, 'internal');
+  assert.match(command.description, /zxvpn/);
+});
+
 test('version command is a stable internal capability', () => {
   const command = COMMAND_DEFINITIONS.find((entry) => entry.key === 'version');
   assert.equal(command?.maturity, 'stable');

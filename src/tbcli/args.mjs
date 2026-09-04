@@ -10,6 +10,7 @@ export function parseArgs(argv) {
     else if (arg === '--all-history') out.allHistory = true;
     else if (arg === '--reimport') out.reimport = true;
     else if (arg === '--password-stdin') out.passwordStdin = true;
+    else if (arg === '--ensure') out.ensure = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
     else if (arg === '--out') out.out = argv[++index];
@@ -19,6 +20,7 @@ export function parseArgs(argv) {
     else if (arg === '--status') out.status = argv[++index];
     else if (arg === '--input') out.input = argv[++index];
     else if (arg === '--host') out.host = argv[++index];
+    else if (arg === '--provider') out.provider = argv[++index];
     else if (arg === '--database') out.database = argv[++index];
     else if (arg === '--reader-user') out.readerUser = argv[++index];
     else if (arg === '--ingest-user') out.ingestUser = argv[++index];
@@ -62,6 +64,14 @@ export function parseArgs(argv) {
     else if (arg === '--tid') out.tid = argv[++index];
     else if (arg === '--seller-id') out.sellerId = argv[++index];
     else if (arg === '--shop-id') out.shopId = argv[++index];
+    else if (arg === '--shop-key') out.shopKey = argv[++index];
+    else if (arg === '--shop-name') out.shopName = argv[++index];
+    else if (arg === '--owner') out.owner = argv[++index];
+    else if (arg === '--owners') out.owners = argv[++index];
+    else if (arg === '--platform-fee-rate') out.platformFeeRate = argv[++index];
+    else if (arg === '--tax-rate') out.taxRate = argv[++index];
+    else if (arg === '--missing-cost-rate') out.missingCostRate = argv[++index];
+    else if (arg === '--fallback-freight') out.fallbackFreight = argv[++index];
     else if (arg === '--max-pages') out.maxPages = argv[++index];
     else if (arg === '--max-depth') out.maxDepth = argv[++index];
     else if (arg === '--page') out.page = argv[++index];

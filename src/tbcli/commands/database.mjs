@@ -25,6 +25,11 @@ import {
   readReaderCredentialBundle,
   serializeReaderPgpass,
 } from '../credential-bundle.mjs';
+import {
+  ensureDatabaseNetworkAccess,
+  inspectDatabaseNetworkAccess,
+  normalizeDatabaseNetworkAccess,
+} from '../database-network.mjs';
 
 function printResult(value, json) {
   console.log(json ? JSON.stringify(value, null, 2) : JSON.stringify(value, null, 2));
@@ -126,6 +131,53 @@ export async function runDatabaseCredentialSet(args) {
 
 function backupSuffix() {
   return new Date().toISOString().replace(/\D/g, '').slice(0, 17);
+}
+
+export async function runDatabaseNetwork(args) {
+  const configPath = path.resolve(args.config || process.env.TBCLI_DB_CONFIG || DEFAULT_DATABASE_CONFIG);
+  if (args.provider) {
+    const networkAccess = normalizeDatabaseNetworkAccess(args.provider);
+    const stat = await fsp.stat(configPath);
+    if (!stat.isFile()) throw new Error(`数据库配置路径不是普通文件：${configPath}`);
+    const raw = JSON.parse(await fsp.readFile(configPath, 'utf8'));
+    const current = normalizeDatabaseNetworkAccess(raw.networkAccess);
+    if (current.provider === networkAccess.provider) {
+      const config = await loadDatabaseConfig(configPath);
+      const network = args.ensure
+        ? await ensureDatabaseNetworkAccess(config)
+        : await inspectDatabaseNetworkAccess(config);
+      printResult({ configured: networkAccess.provider !== 'none', updated: false,
+        configPath, backupPath: null, networkAccess, network }, args.json);
+      return;
+    }
+    const backupPath = `${configPath}.backup-${backupSuffix()}`;
+    await fsp.copyFile(configPath, backupPath, fsConstants.COPYFILE_EXCL);
+    if (process.platform !== 'win32') await fsp.chmod(backupPath, 0o600);
+    const next = { ...raw };
+    if (networkAccess.provider === 'none') delete next.networkAccess;
+    else next.networkAccess = networkAccess;
+    const temporaryPath = `${configPath}.tmp-${process.pid}-${backupSuffix()}`;
+    try {
+      await fsp.writeFile(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      if (process.platform !== 'win32') await fsp.chmod(temporaryPath, 0o600);
+      await fsp.rename(temporaryPath, configPath);
+    } catch (error) {
+      await fsp.rm(temporaryPath, { force: true });
+      throw error;
+    }
+    const config = await loadDatabaseConfig(configPath);
+    const network = args.ensure
+      ? await ensureDatabaseNetworkAccess(config)
+      : await inspectDatabaseNetworkAccess(config);
+    printResult({ configured: networkAccess.provider !== 'none', updated: true,
+      configPath, backupPath, networkAccess, network }, args.json);
+    return;
+  }
+  const config = await loadDatabaseConfig(configPath);
+  const network = args.ensure
+    ? await ensureDatabaseNetworkAccess(config)
+    : await inspectDatabaseNetworkAccess(config);
+  printResult({ configured: config.networkAccess.provider !== 'none', configPath, networkAccess: config.networkAccess, network }, args.json);
 }
 
 async function pathExists(file) {
@@ -235,7 +287,8 @@ export async function runDatabaseStatus(args) {
   try {
     const server = await client.query(`SELECT current_database() AS database,current_user AS user,current_setting('server_version') AS version`);
     const datasets = await listDatasets(client).catch(() => []);
-    printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port, ...server.rows[0], datasets: datasets.length }, args.json);
+    printResult({ connected: true, accessMode: config.accessMode, host: config.host, port: config.port,
+      networkAccess: client.tbcliNetworkAccess, ...server.rows[0], datasets: datasets.length }, args.json);
   } finally { await client.end(); }
 }
 

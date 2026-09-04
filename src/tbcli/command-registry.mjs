@@ -90,6 +90,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '员工使用公司加密密码文件配置数据库；已有可用只读凭证时自动跳过，否则安全导入并验证权限',
   },
   {
+    key: 'db network',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '查看、配置或确保数据库所需的可选网络适配器；zxvpn 会在数据库连接前自动判断公司内外网络',
+  },
+  {
     key: 'db access-check',
     maturity: 'stable',
     audience: 'internal',
@@ -179,6 +185,44 @@ export const COMMAND_DEFINITIONS = Object.freeze([
       commandTemplate: 'tbcli db query --dataset <业务表> [--metrics <指标,...>] [--start-date <日期>] [--end-date <日期>] [--group-by <day|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative|total>] [--item-ids <ID,...>] [--keyword <关键词>] [--order-by <指标>] [--limit <数量>] --json',
     },
   },
+  {
+    key: 'profit orders init',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '初始化旺店通订单、订单明细、运单和来源批次表结构',
+  },
+  {
+    key: 'profit orders validate',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '校验 wdtcli 订单导出的字段、店铺、日期、数量、摘要和隐私白名单',
+  },
+  {
+    key: 'profit orders import',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '将通过校验的旺店通订单导出按稳定业务键幂等写入利润事实表',
+  },
+  {
+    key: 'profit orders coverage',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '检查指定店铺旺店通订单事实在明确支付日期区间内的批次覆盖和缺口',
+  },
+  {
+    key: 'profit orders identity',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '读取已入库旺店通订单中可用于后续增量维护的店铺键、店铺 ID 与名称',
+  },
+  { key: 'profit refunds init', maturity: 'stable', audience: 'internal', description: '初始化旺店通退款事实表' },
+  { key: 'profit refunds validate', maturity: 'stable', audience: 'internal', description: '校验旺店通退款导出、店铺、日期、摘要和隐私白名单' },
+  { key: 'profit refunds import', maturity: 'stable', audience: 'internal', description: '按退款稳定键幂等刷新退款头与明细事实' },
+  { key: 'profit refunds coverage', maturity: 'stable', audience: 'internal', description: '检查退款申请日覆盖与缺口' },
+  { key: 'profit estimate init', maturity: 'stable', audience: 'internal', description: '初始化预估利润快照表' },
+  { key: 'profit estimate run', maturity: 'stable', audience: 'business', capability: { id:'profit-estimate-run', name:'计算预估利润', description:'按已有订单、当日结算退款、成本、运费和商品广告费生成可复核快照；只计算推广费已出数日期。', examplePrompt:'帮我看看某旗舰店过去7天的预估利润', requiredInputs:['店铺或负责人','时间范围'], optionalInputs:['费率策略'], delivery:'店铺、负责人、商品和日期级预估利润快照', commandTemplate:'tbcli profit estimate run --shop-key <KEY> --start-date <日期> --end-date <日期> --json' } },
+  { key: 'profit estimate query', maturity: 'stable', audience: 'internal', description: '按店铺、负责人、商品或日期汇总已生成的预估利润快照' },
+  { key: 'profit estimate export', maturity: 'stable', audience: 'business', capability: { id:'profit-estimate-excel', name:'导出预估利润 Excel', description:'将指定预估利润快照按一个或多个负责人筛选，生成全中文字段的摘要、负责人、商品、每日明细和规则 Excel。', examplePrompt:'帮我看看三位运营最近30天的预估利润，帮我生成excel表格', requiredInputs:['计算快照','输出路径'], optionalInputs:['负责人或负责人列表'], delivery:'全中文 Excel 文件', commandTemplate:'tbcli profit estimate export --run-id <ID> [--owner <姓名> | --owners <姓名1,姓名2>] --out <FILE> --json' } },
   {
     key: 'sycm catalog',
     maturity: 'stable',
@@ -373,8 +417,8 @@ export const COMMAND_DEFINITIONS = Object.freeze([
   },
 ]);
 
-export function findCommandDefinition(group, command = '') {
-  const key = [group, command].filter(Boolean).join(' ');
+export function findCommandDefinition(...parts) {
+  const key = parts.filter(Boolean).join(' ');
   return COMMAND_DEFINITIONS.find((entry) => entry.key === key) || null;
 }
 

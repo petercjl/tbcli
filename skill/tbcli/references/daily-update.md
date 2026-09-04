@@ -14,12 +14,12 @@
 
 问题：用户要哪些表、只检查还是执行、当前环境是否支持？
 
-1. 从当前宿主目录定位 `tbcli`，读实时版本、`--help`、`capabilities --all --json`。检查四个 `maintenance run-*` 元命令是否存在；旧版本缺失则 `CONTRACT_UNSUPPORTED`，请求显式升级而非绕过。
+1. 从当前宿主目录定位 `tbcli`，读实时版本、`--help`、`capabilities --all --json`。检查四个 `maintenance run-*` 元命令是否存在；清单含旺店通行时还要发现 `wdtcli` 并确认其帮助包含 `web orders export` 与 `web refunds export`。旧版本或缺失稳定命令则 `CONTRACT_UNSUPPORTED`，请求显式升级而非绕过。
 2. 从 [capabilities](../capabilities.json) 与当前宿主 adapter 解析命令/文件能力。Codex 使用其公开终端与文件工具；Windows SealSeek 完整读取 [运行适配](windows-sealseek.md)，使用托管 Node 与 `tbcli.cmd`。不猜程序路径，不临时安装替代执行器。
 3. 读取唯一清单的“日常启用”列。点名表只处理点名表；默认处理启用表。不认识的表、未登记表、停用表在 scheduled 模式下返回 `SCOPE_REQUIRED`；手动模式先澄清。用户明确临时更新停用表才允许这一轮覆盖启用标记，不能顺便改永久清单。
-4. `db status`、`db datasets`、目标 `db fields`；核对当前配置和预先确认的店铺范围。不输出密码。尚未入库的数据集返回 `INITIAL_IMPORT_REQUIRED`，不趁日常更新初始化历史。
+4. `db status`；取数报表目标再查 `db datasets`、目标 `db fields`，旺店通订单目标改查 `profit orders identity` 和明确区间的 `profit orders coverage`。核对当前配置和预先确认的店铺范围，不输出密码。尚未入库的数据集或订单身份返回 `INITIAL_IMPORT_REQUIRED`，不趁日常更新初始化历史。
 5. `check-only` 不跑 `db write-check`、`auth login`、run-start、下载和入库。可用已有登录执行只读 catalog；若不可用，报告 `AUTH_REQUIRED` 与未能核实的上界，不假装最新日期。
-6. 实际执行先 `db access-check`、`db write-check`，要求维护者权限及测试回滚、零残留。登录失效/验证立即停止：手动可请求用户登录后重新预检，scheduled 不等待人、不自动发起登录、不继续其他淘宝请求。
+6. 实际执行先 `db access-check`、`db write-check`，要求维护者权限及测试回滚、零残留。分别检查本轮所需的淘宝和旺店通登录态；任一失效/验证立即停止其依赖的采集。手动可请求用户登录后重新预检，scheduled 不等待人、不自动发起登录、不继续对应平台请求。
 
 完成条件：全部目标的权限、范围与执行依赖明确；否则以具名失败返回，不降级权限或修改环境。
 
@@ -44,6 +44,7 @@
 - 首次跨入新年运行，检查历史 run-status 中非成功运行的上一年目标；已有遗留项报告 `YEAR_BOUNDARY_REVIEW`，不静默删除、不擅自补跨年；当前年独立目标仍可处理。人工确认的跨年补数另走明确日期维护任务。
 - 按维护清单口径逐表预检。商品-整体/SKU/店铺整体使用 overall；旧版来源不换新版；无界仅15天转化。字段结构/归属规则变化停止该表。无人值守遇枚举全集变化也先报告 `CONTRACT_CHANGED`，待确认后再继续，不能悄悄扩大口径。
 - 分片上限沿用已验证值：来源两表14天、退款四表90天、无界关键词30天。其他表先按连续缺口；达到100,000行时二分。单个周期仍截断则 `TRUNCATED_EXPORT` 停止，不无限拆分。
+- 旺店通订单与退款不调用 SYCM catalog。上界固定为昨天，下界取维护起点与当前自然年 1 月 1 日中较晚者；分别调用 orders/refunds coverage 取得缺口。除此之外，维护清单明确授权两者刷新最近 45 个完整自然日；刷新窗口不是 missingPeriod，必须作为独立目标写入计划，避免“coverage 完整”导致状态永不更新。
 
 完成条件：逐表有检查区间、missingPeriods、明确分片与不处理区间。check-only 到此直接返回计划，不持久启动写任务。
 
@@ -60,6 +61,8 @@ manifest 固定 timezone、warehouseKey、规则摘要、目标表和检查区�
 
 问题：下载文件是否可靠，入库区间是否仍属于缺失？
 
+以下 1–7 是生意参谋/无界 Excel 分支。旺店通行直接执行后面的“旺店通订单与退款分支”，然后返回 N5；两类来源仍共用 N3 的锁和运行记录。
+
 1. 每片执行前 `db coverage` 再查。已完整则直接留覆盖回执，跳过；部分重叠则重新规划剩余缺口，不能用大区间覆盖已完整日期。
 2. `sycm fetch` 使用清单精确维度、默认筛选、全部字段、明确起止日期，不使用 all-history。文件位于 run-start 返回的 artifactDir，命名含表/日期/尝试编号；先检查不存在。记录 downloaded。
 3. 按主 Skill 的 Report QA 验证真实 Excel、字段、范围、筛选回执、截断与临时报表清理。稀疏边界无行不能直接判截断，须结合请求回执和行上限；所有表头、必需身份字段必须匹配。成功记录 verified（同文件 SHA-256）。
@@ -68,6 +71,23 @@ manifest 固定 timezone、warehouseKey、规则摘要、目标表和检查区�
 5. 入库前再查该片 coverage，重新检查文件 SHA-256。确认仍完全缺失且口径未变后，以完全相同日期调用 `db import --mode replace-range`。一次只传一份文件，不目录批量导入、不自动 reimport/replace-all。
 6. 核对导入回执的数据集、模式、行数、声明区间、字段，再记录 imported；记录本身不是数据库成功证据。命令回执不确定时先查 coverage/来源信息，不立即重写。
 7. 保存原始 `db coverage --json` 回执，记录 coverage；一张表全部分片完成后，对该表整个检查区间再查并保存完整回执。只有这一步才能标记表完成。
+
+### 旺店通订单分支
+
+1. 用 `profit orders identity` 取得唯一店铺键、旺店通店铺 ID 和店铺名称；用明确年度区间调用 `profit orders coverage`。保存原始身份和覆盖回执，但不把它们写成另一份维护清单。
+2. 每片执行前再查 coverage。只对仍完整缺失的连续支付日期执行 `wdtcli web orders export`；按清单的精确单店、支付时间、200 页大小和新文件要求运行。命令结果、checkpoint、SHA sidecar 和 JSON 均记录为 downloaded。
+3. 执行 `profit orders validate`。要求来源 schema/channel、payTime 范围、唯一店铺、API 总数前后相等、订单/明细总数、订单数组 SHA-256、稳定键和隐私白名单通过；失败返回具名 QA 错误，文件不入库。通过后记录 verified（同一文件 SHA-256）。
+4. 入库前再次查相同片段 coverage。若已经完整则跳过写；部分重叠则重新规划，不导入旧大文件。仍完全缺失时执行 `profit orders import`，核对批次 ID、订单数、明细数、运单数、日期和 SHA-256，再记录 imported。
+5. 对分片和整张旺店通订单表的检查区间分别再跑 `profit orders coverage`；只有 `complete:true` 才记录 coverage 和完成。相同 SHA 已入库属于安全幂等回执，不重复生成批次。
+6. 此分支不写 `raw.sycm_rows`，只写 `meta.profit_source_batches`、`raw.wdt_order_headers`、`raw.wdt_order_lines` 和 `raw.shipments`。不要用原始 SQL或临时脚本替代正式命令。
+
+### 旺店通退款分支
+
+1. 复用订单 identity 的唯一店铺键、店铺 ID 和名称；先查 `profit refunds coverage`。处理缺口后，再按清单处理最近 45 日滚动刷新；两者重叠时合并为一个连续导出，避免同轮重复请求。
+2. `wdtcli web refunds export` 必须完整翻页并复核前后总数，输出新 JSON、退款数组 SHA 和文件 SHA；随后执行 `profit refunds validate`。申请时间、店铺、头/明细数量、稳定键或隐私校验任一失败即停止该文件。
+3. 缺口文件入库前重查 coverage；刷新文件不以 coverage 完整为跳过理由，但仍复核本轮没有并发写。执行 `profit refunds import` 后保存 batchId、头数、明细数、覆盖范围和 SHA。
+4. 全检查区间 coverage 必须完整。滚动刷新成功另外以来源批次范围和真实导入回执证明；不要把 refund coverage 的申请日定义误写成结算日完整性。
+5. 此分支只写 `meta.profit_source_batches`、`raw.wdt_refund_headers` 和 `raw.wdt_refund_lines`。利润快照不属于日常采集，不在本流程自动计算；用户询问利润时走利润查询路由。
 
 临时报表未清理：保留文件，记录 `CLEANUP_REQUIRED`，不假报完整成功、不盲删报表；已验证 tbcli 所有权的清理修复属于另一次明确操作。
 网络瞬时失败最多额外尝试2次，每次重新检查登录和数据库覆盖，仍经 CLI 请求策略限速。登录/验证码/权限/字段错误不重试。
@@ -84,10 +104,10 @@ manifest 固定 timezone、warehouseKey、规则摘要、目标表和检查区�
 - 最终每表保存全检查区间 coverage，按实际结果 run-finish success/partial/blocked。还有待出数、不可取缺口、跨年待确认、清理失败或未处理目标时，整体报告用 partial/blocked，不能因为可取子集成功就全成功。
 - 正常结束关闭自己 runId 的锁；硬中断保留锁与记录，等人工核查。无自动抢占。
 - 调度器只提供业务请求、已授权清单范围、执行模式及稳定环境。每天固定时间由用户另外配置；不会将计划写进系统 cron、自动创建另一个 Agent 会话或改变任务通知设置。
-- 必备环境：内网可达、维护者凭证、固定浏览器 Profile、主机及 Agent 调度运行时在线。登录依然可能过期，不能承诺完全免人工。
+- 必备环境：内网可达、维护者凭证、固定浏览器 Profile、主机及 Agent 调度运行时在线；清单含旺店通订单时还需要已安装的稳定 `wdtcli` 和有效旺店通登录态。任一登录都可能过期，不能承诺完全免人工。
 - 通知返回当前宿主任务结果：表数、日期、入库行数、无变化表、待出数、失败原因、剩余缺口、runId 和文件目录。飞书/邮件等外发渠道须另行授权适配。
 
 ## 演进规则
 
 本轮失败只报告证据，不在无人值守任务中修改自己的清单、代码或 Skill。用户授权后再在插件源修改，连同测试和伴生 Skill 一起分发。
-核实平台数据回溯变化后，另行设计每表 refreshWindow；当前补缺不读取或执行任何隐含回刷设置。
+取数报表仍不隐含回刷；旺店通订单与退款的 45 日 refreshWindow 已由用户明确确认并写入唯一清单。改变窗口必须重新获得用户授权并更新本文件。

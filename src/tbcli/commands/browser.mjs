@@ -15,9 +15,21 @@ export async function runBrowserOpen(opts = {}) {
   const chromePath = opts.chromePath || DEFAULT_CHROME_PATH;
   const startUrl = opts.url || DEFAULT_START_URL;
 
-  await ensureBrowserOpen({ cdpUrl, port, profileDir, chromePath, startUrl });
+  const started = await ensureBrowserOpen({ cdpUrl, port, profileDir, chromePath, startUrl });
+  if (!started && opts.url) {
+    await openCdpPage(cdpUrl, startUrl);
+  }
   console.log(`电商浏览器已就绪: ${cdpUrl}`);
   console.log(`profile: ${profileDir}`);
+}
+
+export async function openCdpPage(cdpUrl, url) {
+  const endpoint = `${cdpUrl.replace(/\/$/, '')}/json/new?${encodeURIComponent(url)}`;
+  const response = await fetch(endpoint, { method: 'PUT' });
+  if (!response.ok) {
+    throw new Error(`电商浏览器已连接，但打开页面失败：HTTP ${response.status}`);
+  }
+  return response.json();
 }
 
 export async function ensureBrowserOpen(opts = {}) {

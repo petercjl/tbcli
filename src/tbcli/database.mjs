@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from '@excel.js/exceljs';
 import pg from 'pg';
+import { ensureDatabaseNetworkAccess, normalizeDatabaseNetworkAccess } from './database-network.mjs';
 
 const { Client } = pg;
 
@@ -298,6 +299,7 @@ export async function loadDatabaseConfig(configPath = '') {
     ingestUser: process.env.TBCLI_DB_INGEST_USER || raw.ingestUser,
     readerUser: process.env.TBCLI_DB_READER_USER || raw.readerUser,
     pgpassFile: resolveDatabaseCredentialPath(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
+    networkAccess: normalizeDatabaseNetworkAccess(process.env.TBCLI_DB_NETWORK_PROVIDER || raw.networkAccess),
     configPath: resolvedPath,
   };
   if (!['maintainer', 'read-only'].includes(config.accessMode)) {
@@ -368,6 +370,7 @@ export async function readPgpassPassword(config, user) {
 }
 
 export async function connectDatabase(config, role = 'reader') {
+  const networkAccess = await ensureDatabaseNetworkAccess(config);
   // A maintainer owns one database identity: all reads and writes use ingestUser.
   // readerUser remains a separate employee-only identity under read-only configs.
   const user = role === 'ingest' || config.accessMode === 'maintainer'
@@ -384,6 +387,7 @@ export async function connectDatabase(config, role = 'reader') {
     connectionTimeoutMillis: 10000,
   });
   await client.connect();
+  Object.defineProperty(client, 'tbcliNetworkAccess', { value: networkAccess, enumerable: false });
   return client;
 }
 

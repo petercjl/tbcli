@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import http from 'node:http';
 import test from 'node:test';
 
 import {
@@ -8,6 +9,7 @@ import {
   resolveSessionMode,
 } from '../src/tbcli/browser-session.mjs';
 import { sanitizeCapturedUrl } from '../src/tbcli/commands/dev.mjs';
+import { openCdpPage } from '../src/tbcli/commands/browser.mjs';
 import { randomDelayMs, waitBeforeTaobaoApiRequest } from '../src/tbcli/api-policy.mjs';
 
 test('requires both a session and an identity cookie', () => {
@@ -19,6 +21,27 @@ test('requires both a session and an identity cookie', () => {
 test('auto session mode reuses a running legacy browser or launches managed Chrome', async () => {
   assert.equal(await resolveSessionMode({}, { cdpReachable: async () => true }), 'cdp');
   assert.equal(await resolveSessionMode({}, { cdpReachable: async () => false }), 'managed');
+});
+
+test('browser open creates a page when reusing a running CDP browser', async (t) => {
+  let request;
+  const server = http.createServer((req, res) => {
+    request = { method: req.method, url: req.url };
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ id: 'new-tab' }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+
+  const address = server.address();
+  const result = await openCdpPage(
+    `http://127.0.0.1:${address.port}`,
+    'https://192.168.100.1:8443/',
+  );
+
+  assert.deepEqual(result, { id: 'new-tab' });
+  assert.equal(request.method, 'PUT');
+  assert.equal(request.url, '/json/new?https%3A%2F%2F192.168.100.1%3A8443%2F');
 });
 
 test('explicit managed mode never requires the CDP probe', async () => {
