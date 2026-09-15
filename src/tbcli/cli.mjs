@@ -37,6 +37,11 @@ import {
   runDatabaseInit,
   runDatabaseQuery,
   runDatabaseStatus,
+  runDatabaseEmployeeProvision,
+  runDatabaseEmployeeGrant,
+  runDatabaseEmployeeRevoke,
+  runDatabaseEmployeeList,
+  runDatabaseEmployeeAudit,
 } from './commands/database.mjs';
 import { findCommandDefinition } from './command-registry.mjs';
 import { runSycmMarketRank } from './commands/sycm-market-rank.mjs';
@@ -92,6 +97,11 @@ const COMMAND_HANDLERS = Object.freeze({
   'db datasets': runDatabaseDatasets,
   'db fields': runDatabaseFields,
   'db query': runDatabaseQuery,
+  'db employee-provision': runDatabaseEmployeeProvision,
+  'db employee-grant': runDatabaseEmployeeGrant,
+  'db employee-revoke': runDatabaseEmployeeRevoke,
+  'db employee-list': runDatabaseEmployeeList,
+  'db employee-audit': runDatabaseEmployeeAudit,
   'profit orders init': runProfitOrdersInit,
   'profit orders validate': runProfitOrdersValidate,
   'profit orders import': runProfitOrdersImport,
@@ -155,6 +165,11 @@ export function usage() {
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli db employee-provision --input ADMIN.xlsx --credential-dir DIR [--global-reader-role tb_agent] [--config FILE] [--json]
+  tbcli db employee-grant (--account NAME | --department NAME) (--dataset NAME | --table schema.table) [--config FILE] [--json]
+  tbcli db employee-revoke (--account NAME | --department NAME) (--dataset NAME | --table schema.table) [--config FILE] [--json]
+  tbcli db employee-list [--config FILE] [--json]
+  tbcli db employee-audit [--account NAME] [--days 90] [--config FILE] [--json]
   tbcli profit orders init [--config FILE] [--json]
   tbcli profit orders validate --input FILE --shop-key KEY --shop-name NAME [--json]
   tbcli profit orders import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]

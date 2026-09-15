@@ -131,6 +131,34 @@ role>'` with an independently protected maintenance credential. That single
 role serves both query and import commands under `accessMode: maintainer`; it
 must never be placed in an employee bundle.
 
+### Individual employee accounts and audit
+
+Use only with an administrator database configuration whose login can manage
+roles and owns the warehouse access-control objects.
+
+```bash
+tbcli db employee-provision --input '<管理员专用员工信息.xlsx>' --credential-dir '<private-directory>' --json
+tbcli db employee-list --json
+tbcli db employee-grant --account '<NAS账号>' --dataset '<数据集>' --json
+tbcli db employee-grant --department '<部门>' --table '<schema.table>' --json
+tbcli db employee-revoke --account '<NAS账号>' --dataset '<数据集>' --json
+tbcli db employee-audit [--account '<NAS账号>'] [--days 90] --json
+```
+
+`employee-provision` reads employee name, department, account name, and the
+database-access flag. It ignores NAS passwords, creates a different random
+database password, and writes one protected `.tbcred` bearer credential per new
+employee. It never overwrites an existing credential file. A new account can
+connect but sees no business dataset until an administrator grants one.
+
+Current SYCM/Wujie datasets share `raw.sycm_rows`, so dataset grants are enforced
+with row-level security keyed by `dataset_key`. Future standalone relations use
+explicit `schema.table` SELECT grants. Employee queries issued through `tbcli db
+query` write an audit event with the employee role, dataset, query scope, result
+row count, client address, and application name. Do not log passwords or return
+credential contents. A `.tbcred` file is a bearer secret rather than a
+device-bound credential; revoke or rotate the employee account if it leaks.
+
 ## Development-only commands
 
 `tbcli dev pages`, `dev inspect`, and `dev capture` are for capability discovery and debugging. Do not use them for an ordinary supported business task. When a recurring need is understood, extend a stable command and this Skill rather than leaving the workflow in development commands.

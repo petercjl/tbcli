@@ -43,10 +43,12 @@ if ($LASTEXITCODE -ne 0) { throw 'tbcli SealSeek setup failed' }
 ```
 
 Require a successful JSON result with `ok: true`, a nonempty `cli.version`, and
-`skill.current: true`. If `restartRequired` is true, tell the user to completely
-exit and restart SealSeek. Do not keep probing the pre-restart process.
+`skill.current: true`. Skill updates are hot-loaded; do not request a SealSeek
+restart for a Skill refresh, a PATH configuration change, or removal of npm's
+PowerShell shim. Older CLI versions may incorrectly return `restartRequired:
+true` for these changes; verify execution instead of treating that flag as proof.
 
-## Verification after restart
+## Immediate verification (no restart)
 
 Run:
 
@@ -60,8 +62,20 @@ Require doctor `ok: true`, `checks.pathConfigured: true`,
 `checks.canonicalPackage: true`, `checks.canonicalCmd: true`, and
 `checks.powershellShimDisabled: true`; require Skill state `current`. If the
 doctor reports a repairable environment mismatch, run
-`tbcli.cmd doctor --agent sealseek --fix --json`, restart SealSeek when requested,
-then repeat verification.
+`tbcli.cmd doctor --agent sealseek --fix --json`, then repeat verification.
+If the current process has a stale PATH, use the discovered managed Node and
+canonical CLI entry directly (the bootstrap block defines `$node` and `$entry`):
+
+```powershell
+& $node $entry --version
+& $node $entry doctor --agent sealseek --json
+& $node $entry skill status --agent sealseek
+```
+
+Re-read the updated Skill before returning to the business flow. A saved PATH
+configuration is not evidence that the running host has reloaded it. A failed
+probe is not evidence that restarting is necessary: report its exact error and
+do not continue business work until verification succeeds.
 
 ## Updates
 
@@ -74,7 +88,8 @@ tbcli.cmd update --agent sealseek --json
 The updater installs into the canonical npm global directory from runtime-info,
 launches the newly installed canonical entry directly, refreshes the managed
 Skill, repairs the SealSeek execution path, and verifies the actual new version.
-If `restartRequired` is true, restart SealSeek before business work. Never split
+Verify immediately using the full-path branch above if needed; no restart is
+required for CLI or Skill updates. Never split
 routine updating into unrelated npm, PATH, Skill, and PowerShell-policy edits.
 
 ## Failure terminals

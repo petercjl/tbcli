@@ -41,10 +41,14 @@ function validatePayload(payload) {
   }
   const port = Number(payload.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('只读凭证文件端口无效');
-  return { ...payload, port };
+  if (payload.employeeAccount !== undefined
+    && !/^[a-z][a-z0-9]{1,24}$/.test(String(payload.employeeAccount))) {
+    throw new Error('只读凭证文件 employeeAccount 无效');
+  }
+  return { ...payload, port, ...(payload.employeeAudit === true ? { employeeAudit: true } : {}) };
 }
 
-export async function createReaderCredentialBundle({ pgpassFile, password, host, port = 5432, database, readerUser }) {
+export async function createReaderCredentialBundle({ pgpassFile, password, host, port = 5432, database, readerUser, employeeAccount }) {
   for (const [key, value] of Object.entries({ host, database, readerUser })) {
     if (!value) throw new Error(`创建只读凭证文件缺少 ${key}`);
   }
@@ -77,6 +81,7 @@ export async function createReaderCredentialBundle({ pgpassFile, password, host,
     database: String(database),
     readerUser: String(readerUser),
     password: selectedPassword,
+    ...(employeeAccount ? { employeeAccount: String(employeeAccount), employeeAudit: true } : {}),
   });
   const salt = crypto.randomBytes(16);
   const iv = crypto.randomBytes(12);

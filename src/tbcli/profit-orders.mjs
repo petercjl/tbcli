@@ -503,7 +503,6 @@ export async function getProfitOrderCoverage(client, { shopKey, startDate, endDa
   assertDate(startDate, '--start-date');
   assertDate(endDate, '--end-date');
   if (startDate > endDate) throw new Error('--start-date 不能晚于 --end-date');
-  await ensureProfitOrderSchema(client);
   const result = await client.query(`
     SELECT batch_id,coverage_start::text,coverage_end::text,order_count,line_count,shipment_count,imported_at
       FROM meta.profit_source_batches
@@ -545,7 +544,6 @@ export async function getProfitOrderCoverage(client, { shopKey, startDate, endDa
 }
 
 export async function listProfitOrderIdentities(client) {
-  await ensureProfitOrderSchema(client);
   const result = await client.query(`
     SELECT shop_key,wdt_shop_id,shop_name,platform_name,
       count(*)::bigint AS order_count,

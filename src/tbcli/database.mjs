@@ -300,6 +300,8 @@ export async function loadDatabaseConfig(configPath = '') {
     readerUser: process.env.TBCLI_DB_READER_USER || raw.readerUser,
     pgpassFile: resolveDatabaseCredentialPath(process.env.TBCLI_DB_PGPASS || raw.pgpassFile || ''),
     networkAccess: normalizeDatabaseNetworkAccess(process.env.TBCLI_DB_NETWORK_PROVIDER || raw.networkAccess),
+    employeeAudit: raw.employeeAudit === true,
+    employeeAccount: raw.employeeAccount || null,
     configPath: resolvedPath,
   };
   if (!['maintainer', 'read-only'].includes(config.accessMode)) {
@@ -388,6 +390,7 @@ export async function connectDatabase(config, role = 'reader') {
   });
   await client.connect();
   Object.defineProperty(client, 'tbcliNetworkAccess', { value: networkAccess, enumerable: false });
+  Object.defineProperty(client, 'tbcliEmployeeAudit', { value: config.employeeAudit === true, enumerable: false });
   return client;
 }
 
@@ -1163,7 +1166,29 @@ export async function queryBusinessData(client, options) {
   const sql = `SELECT ${selected.join(',')} FROM raw.sycm_rows WHERE ${where.join(' AND ')}
     ${grouping.group.length ? `GROUP BY ${grouping.group.join(',')}` : ''}
     ORDER BY ${quoteIdentifier(orderBy)} ${options.orderDesc === false ? 'ASC' : 'DESC'} NULLS LAST LIMIT $${values.length}`;
-  const result = await client.query(sql, values);
+  const employee = client.tbcliEmployeeAudit === true;
+  if (employee) await client.query('BEGIN');
+  let result;
+  try {
+    result = await client.query(sql, values);
+    if (employee) {
+      const context = {
+        startDate: options.startDate || null,
+        endDate: options.endDate || null,
+        groupBy,
+        metrics: requestedMetrics,
+        itemIds: options.itemIds || null,
+        keyword: options.keyword || null,
+        orderBy,
+        limit,
+      };
+      await client.query('SELECT access_control.record_query($1,$2::jsonb,$3)', [dataset.key, JSON.stringify(context), result.rowCount]);
+      await client.query('COMMIT');
+    }
+  } catch (error) {
+    if (employee) await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  }
   return {
     dataset: dataset.name,
     datasetKey: dataset.key,

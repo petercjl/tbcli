@@ -42,7 +42,8 @@ Windows SealSeek already includes a managed Node.js. It does not need a separate
 Node installation, manual PATH editing, or a PowerShell ExecutionPolicy change.
 After the initial npm bootstrap, run `tbcli setup sealseek --json`; this reads
 SealSeek's own runtime metadata, backs up and merges its execution-path config,
-installs the companion Skill, and provides a restart instruction. The complete
+installs the companion Skill, and verifies without requiring a host restart.
+If PATH is stale, use the discovered managed Node and canonical CLI full path. The complete
 PATH-independent bootstrap is documented in the bundled Skill reference
 `references/windows-sealseek.md`.
 

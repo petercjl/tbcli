@@ -26,6 +26,11 @@ export function parseArgs(argv) {
     else if (arg === '--ingest-user') out.ingestUser = argv[++index];
     else if (arg === '--pgpass-file') out.pgpassFile = argv[++index];
     else if (arg === '--credential-file') out.credentialFile = argv[++index];
+    else if (arg === '--credential-dir') out.credentialDir = argv[++index];
+    else if (arg === '--account') out.account = argv[++index];
+    else if (arg === '--department') out.department = argv[++index];
+    else if (arg === '--table') out.table = argv[++index];
+    else if (arg === '--global-reader-role') out.globalReaderRole = argv[++index];
     else if (arg === '--dataset') out.dataset = argv[++index];
     else if (arg === '--metrics') out.metrics = argv[++index];
     else if (arg === '--group-by') out.groupBy = argv[++index];

@@ -30,6 +30,13 @@ import {
   inspectDatabaseNetworkAccess,
   normalizeDatabaseNetworkAccess,
 } from '../database-network.mjs';
+import {
+  changeEmployeeAccess,
+  listEmployeeAccess,
+  listEmployeeAudit,
+  provisionEmployees,
+  readEnabledEmployeesFromWorkbook,
+} from '../employee-database-access.mjs';
 
 function printResult(value, json) {
   console.log(json ? JSON.stringify(value, null, 2) : JSON.stringify(value, null, 2));
@@ -250,6 +257,7 @@ export async function runDatabaseSetupReader(args) {
     readerUser: payload.readerUser,
     ingestUser: payload.readerUser,
     pgpassFile,
+    ...(payload.employeeAudit ? { employeeAudit: true, employeeAccount: payload.employeeAccount } : {}),
   };
   await fsp.mkdir(path.dirname(configPath), { recursive: true });
   const suffix = backupSuffix();
@@ -374,5 +382,61 @@ export async function runDatabaseQuery(args) {
   const config = await loadDatabaseConfig(args.config);
   const client = await connectDatabase(config, 'reader');
   try { printResult(await queryBusinessData(client, args), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseEmployeeProvision(args) {
+  if (!args.input) throw new Error('缺少 --input；请指定管理员专用员工信息 Excel');
+  if (!args.credentialDir) throw new Error('缺少 --credential-dir；请指定管理员专用凭据目录');
+  const workbookInfo = await readEnabledEmployeesFromWorkbook(args.input);
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try {
+    const result = await provisionEmployees(client, workbookInfo, {
+      credentialDir: args.credentialDir,
+      host: config.host,
+      port: config.port,
+      database: config.database,
+      globalReaderRole: args.globalReaderRole || 'tb_agent',
+    });
+    printResult({
+      provisioned: true,
+      input: workbookInfo.input,
+      sheet: workbookInfo.sheet,
+      ...result,
+    }, args.json);
+  } finally { await client.end(); }
+}
+
+export async function runDatabaseEmployeeGrant(args) {
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try { printResult(await changeEmployeeAccess(client, args), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseEmployeeRevoke(args) {
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try { printResult(await changeEmployeeAccess(client, { ...args, revoke: true }), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseEmployeeList(args) {
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try { printResult({ employees: await listEmployeeAccess(client) }, args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseEmployeeAudit(args) {
+  const config = await loadDatabaseConfig(args.config);
+  assertMaintainerAccess(config);
+  const client = await connectDatabase(config, 'ingest');
+  try { printResult({ days: Number(args.days || 90), events: await listEmployeeAudit(client, args) }, args.json); }
   finally { await client.end(); }
 }

@@ -185,6 +185,11 @@ export const COMMAND_DEFINITIONS = Object.freeze([
       commandTemplate: 'tbcli db query --dataset <业务表> [--metrics <指标,...>] [--start-date <日期>] [--end-date <日期>] [--group-by <day|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative|total>] [--item-ids <ID,...>] [--keyword <关键词>] [--order-by <指标>] [--limit <数量>] --json',
     },
   },
+  { key: 'db employee-provision', maturity: 'stable', audience: 'internal', description: '按管理员专用员工表批量创建独立只读数据库账号和私密凭据；只处理数据库开通列为是的员工' },
+  { key: 'db employee-grant', maturity: 'stable', audience: 'internal', description: '按员工或部门授予一个业务数据集或物理表的只读权限' },
+  { key: 'db employee-revoke', maturity: 'stable', audience: 'internal', description: '按员工或部门撤销一个业务数据集或物理表的只读权限' },
+  { key: 'db employee-list', maturity: 'stable', audience: 'internal', description: '查看员工独立数据库账号及其数据集和物理表权限' },
+  { key: 'db employee-audit', maturity: 'stable', audience: 'internal', description: '按员工查看 tbcli 业务查询审计记录，默认最近90天' },
   {
     key: 'profit orders init',
     maturity: 'stable',

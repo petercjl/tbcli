@@ -82,7 +82,7 @@ test('clean setup installs to the runtime-info prefix and finalizes through the 
   const calls = [];
   const run = async (command, args) => {
     calls.push({ command, args });
-    if (args.includes('--finalize')) return { stdout: JSON.stringify({ ok: true, restartRequired: true, nextStep: 'restart', skill: { current: true } }) };
+    if (args.includes('--finalize')) return { stdout: JSON.stringify({ ok: true, restartRequired: false, nextStep: 'verify', skill: { current: true } }) };
     if (args.includes('--version')) return { stdout: '0.7.0\n' };
     return { stdout: '' };
   };
@@ -116,6 +116,25 @@ test('setup finalization composes config, Skill, shim and diagnosis results', as
     inspect: async () => ({ ok: true, checks: {} }),
   });
   assert.equal(result.ok, true);
-  assert.equal(result.restartRequired, true);
+  assert.equal(result.restartRequired, false);
+  assert.equal(result.diagnosis.restartRequired, false);
   assert.equal(result.skill.current, true);
+});
+
+test('Skill refresh and recreated npm shims never imply a host restart', async () => {
+  for (const changed of [false, true]) {
+    for (const healthy of [false, true]) {
+      const environment = { nodePath: 'managed-node', canonicalEntry: 'canonical-entry', canonicalCmd: 'canonical-cmd' };
+      const result = await finalizeSealseekSetup({}, {
+        environment,
+        configure: async () => ({ changed }),
+        ensureSkill: async () => ({ action: 'updated', state: 'current', current: true }),
+        disableShims: async () => [{ target: 'recreated-tbcli.ps1' }],
+        inspect: async () => ({ ok: healthy }),
+      });
+      assert.equal(result.restartRequired, false);
+      assert.equal(result.ok, healthy);
+      assert.deepEqual(result.execution, { node: 'managed-node', entry: 'canonical-entry', command: 'canonical-cmd' });
+    }
+  }
 });

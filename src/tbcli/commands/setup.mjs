@@ -43,12 +43,16 @@ export async function finalizeSealseekSetup(opts = {}, dependencies = {}) {
   const skill = await ensure({ agent: 'sealseek', mode: 'copy' });
   const disabledShims = await disableShims(environment);
   const diagnosis = await inspect({ environment });
-  const restartRequired = config.changed || disabledShims.length > 0;
+  // Config writes do not prove that a running host needs restarting. npm can
+  // recreate the PowerShell shim on every update; disabling it is a disk change,
+  // not a process reload. Launch through the discovered runtime if PATH is stale.
+  const restartRequired = false;
   return {
     setup: 'windows-sealseek',
     ok: diagnosis.ok && skill.current,
     restartRequired,
-    nextStep: restartRequired ? '请完全退出并重新启动 SealSeek，然后运行 tbcli.cmd doctor --agent sealseek --json' : '运行 tbcli.cmd doctor --agent sealseek --json',
+    nextStep: '无需重启 SealSeek；立即验证 doctor 与 Skill 状态。若 PATH 尚未生效，使用 runtime-info 中的 Node 和 canonicalEntry 完整路径执行；验证失败则报告具体错误。',
+    execution: { node: environment.nodePath, entry: environment.canonicalEntry, command: environment.canonicalCmd },
     config,
     skill: { action: skill.action, state: skill.state, current: skill.current, destination: skill.destination },
     disabledPowerShellShims: disabledShims,
