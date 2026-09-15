@@ -53,7 +53,7 @@ import {
   runProfitOrdersValidate,
 } from './commands/profit-orders.mjs';
 import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,runProfitRefundsValidate } from './commands/profit-refunds.mjs';
-import { runProfitEstimateExport,runProfitEstimateInit,runProfitEstimateQuery,runProfitEstimateRun } from './commands/profit-estimate.mjs';
+import { runProfitEstimateExport,runProfitEstimateInit,runProfitEstimateQuery,runProfitEstimateRun,runProfitEstimateList } from './commands/profit-estimate.mjs';
 import { runVersion } from './version.mjs';
 import { maybePrintUpdateNotice } from './update.mjs';
 
@@ -114,6 +114,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'profit estimate init': runProfitEstimateInit,
   'profit estimate run': runProfitEstimateRun,
   'profit estimate query': runProfitEstimateQuery,
+  'profit estimate list': runProfitEstimateList,
   'profit estimate export': runProfitEstimateExport,
   'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
@@ -181,7 +182,8 @@ export function usage() {
   tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--config FILE] [--json]
   tbcli profit estimate init [--config FILE] [--json]
   tbcli profit estimate run --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--platform-fee-rate 0.06] [--tax-rate 0.02] [--missing-cost-rate 0.50] [--fallback-freight 2] [--json]
-  tbcli profit estimate query --run-id ID [--owner NAME | --owners NAME,...] [--group-by shop|owner|product|day] [--json]
+  tbcli profit estimate list [--shop-key KEY] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--limit 20] [--config FILE] [--json]
+  tbcli profit estimate query --run-id ID [--owner NAME | --owners NAME,...] [--group-by shop|owner|product|day|month|owner-month] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--json]
   tbcli profit estimate export --run-id ID [--owner NAME | --owners NAME,...] --out FILE [--json]
   tbcli sycm market-rank --category-url URL --last-week YYYY-MM-DD [--out-dir DIR] [--json]
   tbcli skill source [--json]

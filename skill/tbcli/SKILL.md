@@ -268,9 +268,9 @@ the local pgpass in the stable current-user config directory, writes only an
 `accessMode: read-only` connection, backs up broken reader files, and verifies
 actual privileges. It must never replace a maintainer configuration. Require
 `connected: true` and `readOnly: true` before continuing. A read-only
-configuration is only for
-`db status`, `db datasets`, `db fields`, `db coverage`, and `db query`; `db
-init` and `db import` are explicitly rejected.
+configuration supports warehouse discovery/query and authorized profit
+`orders identity`, order/refund `coverage`, `estimate list/query/export`.
+`db init/import` and `profit estimate init/run` remain maintainer-only.
 
 The downloaded `.tbcred` is an encrypted transport file, not the runtime pgpass.
 Its encryption avoids casual plaintext display; company-LAN reachability and the

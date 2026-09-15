@@ -30,9 +30,12 @@
 
 ## 稳定命令
 
+员工通过 `list` 发现可读快照，再执行 `query/export`；管理员获授权后执行 `run` 计算写入。`list` 的日期条件要求快照声明范围包含请求范围，实际完整性仍以 `available_dates` 和 `coverage` 为准。月度对比使用 `owner-month`（负责人×月份）或 `month`（全店月份）；查询的日期筛选需提供完整起止日期，缺失日期不能补成零。快照不存在或没有覆盖时交给管理员处理。
+
 ```bash
+tbcli profit estimate list [--shop-key '<店铺键>'] [--start-date '<开始>' --end-date '<结束>'] [--limit 20] --json
 tbcli profit estimate run --shop-key '<店铺键>' --start-date '<开始>' --end-date '<结束>' --json
-tbcli profit estimate query --run-id '<runId>' --group-by '<shop|owner|product|day>' [--owner '<姓名>' | --owners '<姓名1,姓名2>'] --json
+tbcli profit estimate query --run-id '<runId>' --group-by '<shop|owner|product|day|month|owner-month>' [--start-date '<开始>' --end-date '<结束>'] [--owner '<姓名>' | --owners '<姓名1,姓名2>'] --json
 tbcli profit estimate export --run-id '<runId>' [--owner '<姓名>' | --owners '<姓名1,姓名2>'] --out '<新文件.xlsx>' --json
 ```
 
