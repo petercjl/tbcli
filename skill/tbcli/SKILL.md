@@ -247,7 +247,7 @@ Keep the boundary explicit: the Agent and this Skill decide **what** to maintain
 
 Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers fields and calls semantic commands. Never ask the employee to write SQL, never expose a raw-SQL escape hatch, and never bypass `tbcli` with `psql` or an ad-hoc database script.
 
-For “预估利润”、按负责人查看利润或利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its deterministic snapshot/query/export flow, then return here for delivery QA.
+For “预估利润”、按负责人查看利润或利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its live read-only query/export flow, then return here for delivery QA.
 
 ### 1. Check the warehouse and discover its live scope
 
@@ -269,8 +269,8 @@ the local pgpass in the stable current-user config directory, writes only an
 actual privileges. It must never replace a maintainer configuration. Require
 `connected: true` and `readOnly: true` before continuing. A read-only
 configuration supports warehouse discovery/query and authorized profit
-`orders identity`, order/refund `coverage`, `estimate list/query/export`.
-`db init/import` and `profit estimate init/run` remain maintainer-only.
+`orders identity`, order/refund `coverage`, `estimate query/export`.
+Source-data `db init/import` remains maintainer-only. Profit queries and exports use current facts without database writes.
 
 The downloaded `.tbcred` is an encrypted transport file, not the runtime pgpass.
 Its encryption avoids casual plaintext display; company-LAN reachability and the

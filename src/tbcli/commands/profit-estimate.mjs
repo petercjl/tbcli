@@ -1,8 +1,20 @@
-import { assertMaintainerAccess,connectDatabase,loadDatabaseConfig } from '../database.mjs';
-import { ensureProfitEstimateSchema,exportProfitEstimate,getProfitEstimate,runProfitEstimate,listProfitEstimates } from '../profit-estimate.mjs';
-const print=v=>console.log(JSON.stringify(v,null,2));
-export async function runProfitEstimateList(args){const c=await connectDatabase(await loadDatabaseConfig(args.config),'reader');try{print(await listProfitEstimates(c,args));}finally{await c.end();}}
-export async function runProfitEstimateInit(args){const cfg=await loadDatabaseConfig(args.config);assertMaintainerAccess(cfg);const c=await connectDatabase(cfg,'ingest');try{await ensureProfitEstimateSchema(c);print({initialized:true,objects:['mart.profit_estimate_runs','mart.product_profit_daily']});}finally{await c.end();}}
-export async function runProfitEstimateRun(args){const cfg=await loadDatabaseConfig(args.config);assertMaintainerAccess(cfg);const c=await connectDatabase(cfg,'ingest');try{await ensureProfitEstimateSchema(c);print(await runProfitEstimate(c,args));}finally{await c.end();}}
-export async function runProfitEstimateQuery(args){const c=await connectDatabase(await loadDatabaseConfig(args.config),'reader');try{print(await getProfitEstimate(c,args));}finally{await c.end();}}
-export async function runProfitEstimateExport(args){const c=await connectDatabase(await loadDatabaseConfig(args.config),'reader');try{print(await exportProfitEstimate(c,args));}finally{await c.end();}}
+import {connectDatabase,loadDatabaseConfig} from '../database.mjs';
+import {exportProfitEstimate,getProfitEstimate,validateProfitRequest} from '../profit-estimate.mjs';
+
+export async function withProfitReadTransaction(c,operation) {
+  await c.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+  try {
+    await c.query("SET LOCAL statement_timeout = '120s'");
+    const result=await operation();
+    await c.query('COMMIT');
+    return result;
+  } catch(error) {await c.query('ROLLBACK').catch(()=>{});throw error;}
+}
+async function execute(args,operation) {
+  validateProfitRequest(args);
+  const c=await connectDatabase(await loadDatabaseConfig(args.config),'reader');
+  try {console.log(JSON.stringify(await withProfitReadTransaction(c,()=>operation(c,args)),null,2));}
+  finally {await c.end();}
+}
+export async function runProfitEstimateQuery(args){return execute(args,getProfitEstimate);}
+export async function runProfitEstimateExport(args){return execute(args,exportProfitEstimate);}

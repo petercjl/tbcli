@@ -87,7 +87,7 @@ manifest 固定 timezone、warehouseKey、规则摘要、目标表和检查区�
 2. `wdtcli web refunds export` 必须完整翻页并复核前后总数，输出新 JSON、退款数组 SHA 和文件 SHA；随后执行 `profit refunds validate`。申请时间、店铺、头/明细数量、稳定键或隐私校验任一失败即停止该文件。
 3. 缺口文件入库前重查 coverage；刷新文件不以 coverage 完整为跳过理由，但仍复核本轮没有并发写。执行 `profit refunds import` 后保存 batchId、头数、明细数、覆盖范围和 SHA。
 4. 全检查区间 coverage 必须完整。滚动刷新成功另外以来源批次范围和真实导入回执证明；不要把 refund coverage 的申请日定义误写成结算日完整性。
-5. 此分支只写 `meta.profit_source_batches`、`raw.wdt_refund_headers` 和 `raw.wdt_refund_lines`。利润快照不属于日常采集，不在本流程自动计算；用户询问利润时走利润查询路由。
+5. 此分支只写 `meta.profit_source_batches`、`raw.wdt_refund_headers` 和 `raw.wdt_refund_lines`。用户询问利润时走利润查询路由，基于当前事实只读计算。
 
 临时报表未清理：保留文件，记录 `CLEANUP_REQUIRED`，不假报完整成功、不盲删报表；已验证 tbcli 所有权的清理修复属于另一次明确操作。
 网络瞬时失败最多额外尝试2次，每次重新检查登录和数据库覆盖，仍经 CLI 请求策略限速。登录/验证码/权限/字段错误不重试。

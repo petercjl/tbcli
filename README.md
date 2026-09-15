@@ -514,7 +514,7 @@ pagination control.
 ## Warehouse profit facts and estimates
 
 Maintainers can validate and import privacy-trimmed Wangdian refunds alongside
-the existing order facts, then create immutable daily profit-estimate snapshots:
+the existing order facts, then query current facts using read-only profit calculations:
 
 ```bash
 tbcli profit refunds init --json
@@ -522,11 +522,9 @@ tbcli profit refunds validate --input refunds.json --shop-key KEY --shop-name NA
 tbcli profit refunds import --input refunds.json --shop-key KEY --shop-name NAME --json
 tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --json
 
-tbcli profit estimate init --json
-tbcli profit estimate run --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --json
-tbcli profit estimate query --run-id ID --group-by owner --json
-tbcli profit estimate export --run-id ID --owner NAME --out profit.xlsx --json
-tbcli profit estimate export --run-id ID --owners NAME1,NAME2,NAME3 --out operators-profit.xlsx --json
+tbcli profit estimate query --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --group-by owner --json
+tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --owner NAME --out profit.xlsx --json
+tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --owners NAME1,NAME2,NAME3 --out operators-profit.xlsx --json
 ```
 
 The estimate runs only for dates whose Wujie product-subject ad spend is already
