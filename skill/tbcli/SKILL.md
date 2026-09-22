@@ -405,6 +405,11 @@ Require all of the following:
 
 ## Other Stable Tasks
 
+For 快递账单入库、运单实际运费 or courier bill validation, read
+[references/courier-bills.md](references/courier-bills.md). Use the dedicated
+freight commands rather than the SYCM workbook importer. Return here after
+verifying the import and its read-only summary.
+
 Read [references/command-reference.md](references/command-reference.md) when the request concerns shop products, logistics, AI点睛, DingTalk documents, browser startup, or the full command catalog. Do not load it for an ordinary SYCM report request.
 
 ## Failure Branches

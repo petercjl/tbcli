@@ -1,6 +1,6 @@
 {
   "name": "@petercjl/tbcli",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "CLI for Taobao and Qianniu seller backend workflows",
   "type": "module",
   "bin": {
@@ -30,9 +30,11 @@
   },
   "dependencies": {
     "@excel.js/exceljs": "^0.9.0",
+    "fflate": "^0.8.3",
     "fontkit": "^2.0.4",
     "pg": "^8.23.0",
-    "playwright-core": "^1.61.1"
+    "playwright-core": "^1.61.1",
+    "saxes": "^6.0.0"
   },
   "scripts": {
     "test": "node --test"

@@ -1,4 +1,5 @@
 export const COMMAND_DEFINITIONS = Object.freeze([
+  ...['validate','import','query'].map(action=>({key:`profit freight ${action}`,maturity:'stable',audience:'business',capability:{id:`courier-bill-${action}`,name:({validate:'校验快递账单',import:'导入快递账单',query:'查询实际运费'})[action],description:action==='query'?'按运单汇总实际收费，或查看各快递账期的入库情况。':'统一解析快递逐笔收费，保留附加费用和来源，导入仅限维护者。',examplePrompt:action==='query'?'查询这个运单的实际运费':'请处理这个月的快递账单',requiredInputs:action==='query'?['数据库读取权限']:['账单文件','快递公司','账单月份'],optionalInputs:action==='query'?['运单号']:[],delivery:'逐笔收费校验、导入结果或运单收费汇总',commandTemplate:action==='query'?'tbcli profit freight query [--tracking-no <NUMBER>] --json':`tbcli profit freight ${action} --input <FILE> --carrier <sto|yunda|jt|sf> --bill-month <YYYY-MM> --json`}})),
   {
     key: 'version',
     maturity: 'stable',

@@ -1,4 +1,5 @@
 import { parseArgs } from './args.mjs';
+import { runCourierValidate,runCourierImport,runCourierQuery } from './commands/courier-bills.mjs';
 import {
   DEFAULT_CDP,
   DEFAULT_CHROME_PATH,
@@ -59,6 +60,9 @@ import { maybePrintUpdateNotice } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
   version: runVersion,
+  'profit freight validate': runCourierValidate,
+  'profit freight import': runCourierImport,
+  'profit freight query': runCourierQuery,
   update: runUnifiedUpdate,
   'setup sealseek': runSealseekSetup,
   'maintenance run-start': runMaintenanceStart,
@@ -169,6 +173,9 @@ export function usage() {
   tbcli db employee-list [--config FILE] [--json]
   tbcli db employee-audit [--account NAME] [--days 90] [--config FILE] [--json]
   tbcli profit orders init [--config FILE] [--json]
+  tbcli profit freight validate --input FILE --carrier sto|yunda|jt|sf --bill-month YYYY-MM [--json]
+  tbcli profit freight import --input FILE --carrier sto|yunda|jt|sf --bill-month YYYY-MM [--config FILE] [--json]
+  tbcli profit freight query [--tracking-no NUMBER] [--config FILE] [--json]
   tbcli profit orders validate --input FILE --shop-key KEY --shop-name NAME [--json]
   tbcli profit orders import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]
   tbcli profit orders identity [--config FILE] [--json]

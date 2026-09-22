@@ -19,6 +19,9 @@ export function parseArgs(argv) {
     else if (arg === '--run-id') out.runId = argv[++index];
     else if (arg === '--status') out.status = argv[++index];
     else if (arg === '--input') out.input = argv[++index];
+    else if (arg === '--carrier') out.carrier = argv[++index];
+    else if (arg === '--bill-month') out.billMonth = argv[++index];
+    else if (arg === '--tracking-no') out.trackingNo = argv[++index];
     else if (arg === '--host') out.host = argv[++index];
     else if (arg === '--provider') out.provider = argv[++index];
     else if (arg === '--database') out.database = argv[++index];
