@@ -525,6 +525,10 @@ tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date 
 tbcli profit estimate query --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --group-by owner --json
 tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --owner NAME --out profit.xlsx --json
 tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD --owners NAME1,NAME2,NAME3 --out operators-profit.xlsx --json
+
+tbcli profit actual coverage --shop-key KEY --month YYYY-MM [--policy-version VERSION] --json
+tbcli profit actual query --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--group-by shop|owner|product|day|report] [--owner NAME | --owners NAME,...] --json
+tbcli skill install --skill ecommerce-monthly-profit-report --agent codex
 ```
 
 The estimate runs only for dates whose Wujie product-subject ad spend is already
@@ -535,6 +539,16 @@ the immutable run. The bundled Skill owns natural-language period interpretation
 CLI executes only explicit dates and targets. Profit Excel files use Chinese
 business headers, include estimated margin, and may select one or several exact
 owner names.
+
+The actual-profit coverage command performs no profit calculation. It checks a
+complete paid month against the next-month day-15 refund cutoff, matched courier
+charges, line costs, Wujie ad dates, product owners, and the confirmed policy.
+Unmatched waybills are reported as an explicit two-yuan estimate, while missing
+costs and unmapped refunds include actionable object details.
+
+The actual-profit query calculates live read-only results without persisting a
+profit snapshot. Use `--group-by report` to return reconciled shop, owner, and
+product sections in one response for HTML or other application-layer reports.
 
 ## Development tools
 

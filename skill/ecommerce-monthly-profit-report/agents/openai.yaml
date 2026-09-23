@@ -1,0 +1,4 @@
+interface:
+  display_name: "月度实际利润分析报告"
+  short_description: "组合tbcli与共享UI模板生成月度利润报告"
+  default_prompt: "使用tbcli实际利润数据和compact-commerce-ui为指定店铺月份生成HTML分析报告"

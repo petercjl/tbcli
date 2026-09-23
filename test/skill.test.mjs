@@ -5,9 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { getSkillStatus, resolveTargetRoot } from '../src/tbcli/commands/skill.mjs';
+import { getSkillStatus, resolveSkillName, resolveTargetRoot } from '../src/tbcli/commands/skill.mjs';
 
 const SKILL_SOURCE = fileURLToPath(new URL('../skill/tbcli', import.meta.url));
+const REPORT_SKILL_SOURCE = fileURLToPath(new URL('../skill/ecommerce-monthly-profit-report', import.meta.url));
 
 test('companion Skill target requires exactly one explicit root selector', () => {
   const target = resolveTargetRoot({ targetDir: './test-target' });
@@ -30,6 +31,19 @@ test('companion Skill status recognizes absent and canonical linked installs', a
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test('plugin manages the application report Skill from the same npm source tree', async () => {
+  assert.equal(resolveSkillName({}),'tbcli');
+  assert.equal(resolveSkillName({skill:'ecommerce-monthly-profit-report'}),'ecommerce-monthly-profit-report');
+  assert.throws(()=>resolveSkillName({skill:'unknown'}),/--skill 必须是/);
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-report-skill-test-'));
+  try {
+    await fs.symlink(REPORT_SKILL_SOURCE,path.join(root,'ecommerce-monthly-profit-report'),'dir');
+    const current=await getSkillStatus(root,'ecommerce-monthly-profit-report');
+    assert.equal(current.state,'current');
+    assert.equal(current.managed,true);
+  } finally { await fs.rm(root,{recursive:true,force:true}); }
 });
 
 test('bundled Skill routes the multi-report recent-30-day request through direct preflight and fetch', async () => {
@@ -77,6 +91,32 @@ test('bundled Skill resolves flexible profit periods and exports Chinese multi-o
   assert.match(profit, /未分配负责人.*不混入运营合计/);
   assert.match(route, /显式区间/);
   assert.match(route, /金额和百分比格式/);
+});
+
+test('bundled Skill separates reconciled monthly profit from coverage inspection and estimates', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  const actual = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'profit-actual.md'), 'utf8');
+  const route = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'profit-actual.md'), 'utf8');
+  assert.match(skill, /queries\/profit-actual\.md/);
+  assert.match(skill, /Actual-profit capability unavailable/);
+  assert.match(actual, /支付时间归属利润月/);
+  assert.match(actual, /次月15日23:59:59/);
+  assert.match(actual, /actual\/reconciled/);
+  assert.match(actual, /standard\/reference/);
+  assert.match(actual, /explicit_zero/);
+  assert.match(actual, /profit actual coverage/);
+  assert.match(actual, /profit actual query/);
+  assert.match(actual, /profit actual export/);
+  assert.match(actual, /operating-profit-v1/);
+  assert.match(actual, /平台费率6%.*税率2%/);
+  assert.match(actual, /未匹配账单的运单按每单2元估算/);
+  assert.match(actual, /不在数据库保存利润快照/);
+  assert.match(route, /缺失成本返回逐项清单/);
+  assert.match(route, /旺店通订单号和平台订单号/);
+  assert.match(route, /计算、导出与数据缺口检查相互独立/);
+  assert.match(route, /不自动运行 coverage/);
+  assert.match(route, /不得使用估算利润.*原始 SQL.*临时脚本替代/s);
+  assert.match(route, /CAPABILITY_UNAVAILABLE/);
 });
 
 test('bundled Skill routes maintainer read-write verification through stable checks', async () => {
@@ -202,4 +242,17 @@ test('npm package includes the canonical companion Skill source', async () => {
   const packageJson = JSON.parse(await fs.readFile(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'));
   assert.ok(packageJson.files.includes('skill'));
   assert.equal(await fs.readFile(path.join(SKILL_SOURCE, 'agents', 'openai.yaml'), 'utf8').then((value) => value.includes('$tbcli')), true);
+  const reportSkill = await fs.readFile(path.join(REPORT_SKILL_SOURCE,'SKILL.md'),'utf8');
+  const adapter = await fs.readFile(path.join(REPORT_SKILL_SOURCE,'scripts','build-viewmodel.mjs'),'utf8');
+  assert.match(reportSkill,/profit-actual-query/);
+  assert.match(reportSkill,/exact name `compact-commerce-ui`/);
+  assert.match(reportSkill,/commerce-ui render/);
+  assert.match(reportSkill,/tbcli does not depend on `compact-commerce-ui`/);
+  assert.match(adapter,/--group-by', 'report'/);
+  assert.match(adapter,/monthly-profit-review@1\.0/);
+  assert.match(reportSkill,/50 products per page/);
+  assert.match(reportSkill,/linked thumbnails/);
+  assert.match(reportSkill,/退款后付费占比 = 推广费 ÷ 净销售额/);
+  assert.match(adapter,/post_refund_paid_ratio/);
+  assert.doesNotMatch(adapter,/<html|<style|<script/i);
 });

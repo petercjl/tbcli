@@ -55,6 +55,8 @@ import {
 } from './commands/profit-orders.mjs';
 import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,runProfitRefundsValidate } from './commands/profit-refunds.mjs';
 import { runProfitEstimateExport,runProfitEstimateQuery } from './commands/profit-estimate.mjs';
+import { runProfitActualAuditCost,runProfitActualCoverage,runProfitActualQuery } from './commands/profit-actual.mjs';
+import { runProductImagesImport, runProductImagesValidate } from './commands/product-images.mjs';
 import { runVersion } from './version.mjs';
 import { maybePrintUpdateNotice } from './update.mjs';
 
@@ -117,6 +119,11 @@ const COMMAND_HANDLERS = Object.freeze({
   'profit refunds coverage': runProfitRefundsCoverage,
   'profit estimate query': runProfitEstimateQuery,
   'profit estimate export': runProfitEstimateExport,
+  'profit actual coverage': runProfitActualCoverage,
+  'profit actual query': runProfitActualQuery,
+  'profit actual audit-cost': runProfitActualAuditCost,
+  'product images validate': runProductImagesValidate,
+  'product images import': runProductImagesImport,
   'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
   doctor: runDoctor,
@@ -186,11 +193,16 @@ export function usage() {
   tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--config FILE] [--json]
   tbcli profit estimate query --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--owner NAME | --owners NAME,...] [--group-by shop|owner|product|day|month|owner-month] [--json]
   tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--owner NAME | --owners NAME,...] --out FILE [--json]
+  tbcli profit actual coverage --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--config FILE] [--json]
+  tbcli profit actual query --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--group-by shop|owner|product|day|report] [--owner NAME | --owners NAME,...] [--config FILE] [--json]
+  tbcli profit actual audit-cost --shop-key KEY --month YYYY-MM --product-id ID [--config FILE] [--json]
+  tbcli product images validate --input FILE --shop-key KEY --shop-name NAME [--json]
+  tbcli product images import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]
   tbcli sycm market-rank --category-url URL --last-week YYYY-MM-DD [--out-dir DIR] [--json]
-  tbcli skill source [--json]
-  tbcli skill status (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
-  tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
-  tbcli skill update (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
+  tbcli skill source [--skill tbcli|ecommerce-monthly-profit-report] [--json]
+  tbcli skill status [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
+  tbcli skill install [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
+  tbcli skill update [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli capabilities [--json] [--all]
   tbcli doctor [--agent sealseek] [--fix] [--json]
   tbcli dev pages [--json]

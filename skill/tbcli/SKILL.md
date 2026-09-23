@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 旺店通订单与退款事实, ecommerce profit estimates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 旺店通订单/订单明细/运单/退款, 预估利润, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
 ---
 
 # tbcli
@@ -247,7 +247,9 @@ Keep the boundary explicit: the Agent and this Skill decide **what** to maintain
 
 Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers fields and calls semantic commands. Never ask the employee to write SQL, never expose a raw-SQL escape hatch, and never bypass `tbcli` with `psql` or an ad-hoc database script.
 
-For “预估利润”、按负责人查看利润或利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its live read-only query/export flow, then return here for delivery QA.
+For “预估利润”、按负责人查看近期利润或预估利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its live read-only query/export flow, then return here for delivery QA.
+
+For “实际利润”、“月度正式经营利润”、“快递账单到齐后的利润”、“次月15日退款截止利润” or a request to inspect the data gaps for that calculation, read [references/queries/profit-actual.md](references/queries/profit-actual.md) and every page it requires. Keep calculation and data-gap inspection as separate branches. Never substitute the estimate command, generic warehouse query, raw SQL, or an ad-hoc script when the required actual-profit CLI capability is absent.
 
 ### 1. Check the warehouse and discover its live scope
 
@@ -405,6 +407,12 @@ Require all of the following:
 
 ## Other Stable Tasks
 
+For 商品ID与商品主图映射表校验、入库或定期刷新, read
+[references/product-images.md](references/product-images.md). Use the dedicated
+`product images validate|import` commands; the mapping table is authoritative for
+report thumbnails and is keyed uniquely by product ID. Return here after validating
+the import summary.
+
 For 快递账单入库、运单实际运费 or courier bill validation, read
 [references/courier-bills.md](references/courier-bills.md). Use the dedicated
 freight commands rather than the SYCM workbook importer. Return here after
@@ -427,6 +435,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 - **Warehouse unavailable:** report `DATABASE_UNAVAILABLE`, preserve the business question, and ask an administrator to configure or restore the approved warehouse connection. Do not request credentials from an employee or substitute a public/Tailscale endpoint.
 - **Database network adapter unavailable:** when a configured `zxvpn` command is missing, cannot ensure the route, or returns invalid JSON, stop with `DATABASE_NETWORK_UNAVAILABLE`. Do not repeatedly retry PostgreSQL, silently bypass the adapter, expose the database directly, or invent another VPN route. After the administrator restores `zxvpn`, return to Company Warehouse Flow discovery.
 - **Reader access check fails:** stop before any warehouse query. Report only the failed privilege category; ask the administrator to correct the reader role or local configuration. Never compensate by using a maintenance credential.
+- **Actual-profit capability unavailable:** return `CAPABILITY_UNAVAILABLE` with the missing `profit actual coverage|query|export|audit-cost` command and required input/output contract. The method remains defined, but do not claim a reconciled result or recreate it with raw SQL, generic `db query`, the estimate command, or a temporary script.
 
 ## Evolution Rule
 
