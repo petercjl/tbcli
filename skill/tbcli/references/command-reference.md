@@ -99,7 +99,7 @@ tbcli skill install (--agent codex|agents|openclaw|sealseek | --target-dir '<roo
 tbcli skill update (--agent codex|agents|openclaw|sealseek | --target-dir '<root>')
 ```
 
-The bundled source is canonical. Installations refuse to replace existing unmanaged Skill directories. Link mode is preferred where supported; managed copies carry a digest and are updated recoverably. Normal CLI use performs a cached npm version check at most once every six hours. When stderr prints an update notice, preserve the current business command and offer the unified update command; do not silently mutate global packages during an unrelated task.
+The bundled source is canonical. Installations refuse to replace existing unmanaged Skill directories. Link mode is preferred where supported; managed copies carry a digest and are updated recoverably. Packaged npm installations perform a cached registry check at most once every six hours. When a newer version exists, tbcli upgrades the global package, refreshes every installed managed Skill copy, and relaunches the original command once. Linked Skills already follow the package. Network or update failures warn and continue the business command with the loaded version. Set `TBCLI_UPDATE_CHECK=0` to disable automatic checks. Source checkouts never self-update. The explicit unified command remains available for forced updates and repair.
 
 For Windows SealSeek, read `windows-sealseek.md` before installation or updates.
 Use the managed runtime discovered from runtime-info and invoke `.cmd` launchers;

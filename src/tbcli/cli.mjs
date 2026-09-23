@@ -61,7 +61,7 @@ import { runProfitEstimateExport,runProfitEstimateQuery } from './commands/profi
 import { runProfitActualAuditCost,runProfitActualCoverage,runProfitActualQuery } from './commands/profit-actual.mjs';
 import { runProductImagesImport, runProductImagesValidate } from './commands/product-images.mjs';
 import { runVersion } from './version.mjs';
-import { maybePrintUpdateNotice } from './update.mjs';
+import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
   version: runVersion,
@@ -227,7 +227,7 @@ Environment:
   TBCLI_DB_CONFIG   Ecommerce warehouse connection config; passwords stay in its pgpass file
   TBCLI_DB_NETWORK_PROVIDER   Optional database network adapter override: none or zxvpn
   TBCLI_ZXVPN_BIN   Optional zxvpn executable override; default resolves zxvpn from PATH
-  TBCLI_UPDATE_CHECK   Set to 0 to disable the cached npm update reminder
+  TBCLI_UPDATE_CHECK   Set to 0 to disable automatic npm update checks
 
 Notes:
   - 不知道 tbcli 能做什么？可直接问 Agent：“这个 tbcli 有哪些能力？”
@@ -241,7 +241,21 @@ Notes:
 
 export async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
-  await maybePrintUpdateNotice(args);
+  const automaticUpdate = await maybeAutoUpdate(args);
+  if (automaticUpdate.warning) console.error(`warning: tbcli 自动更新失败，继续使用当前版本：${automaticUpdate.warning}`);
+  if (automaticUpdate.updated) {
+    for (const skill of automaticUpdate.update.skills || []) {
+      if (skill.warning) console.error(`warning: ${skill.agent}/${skill.skill} Skill 自动刷新失败：${skill.warning}`);
+    }
+    console.error(`tbcli 已自动更新到 ${automaticUpdate.update.cli.afterVersion}，正在重新执行当前命令。`);
+    try {
+      const relaunched = await relaunchWithUpdatedCli(argv);
+      process.exitCode = relaunched.code;
+      return;
+    } catch (error) {
+      console.error(`warning: 无法用新版本重新执行，当前进程继续运行原命令：${error.message}`);
+    }
+  }
   if (args.version) {
     runVersion();
     return;

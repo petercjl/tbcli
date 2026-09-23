@@ -151,14 +151,17 @@ test('bundled Skill keeps database credentials outside managed install directori
   assert.match(skill, /Never distribute a\s+maintainer credential/);
 });
 
-test('bundled Skill uses one verified command for CLI and Skill updates', async () => {
+test('bundled Skill documents automatic and explicit unified updates', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   assert.match(skill, /tbcli update --agent/);
   assert.match(skill, /cli\.afterVersion/);
   assert.match(skill, /skill\.state: current/);
   assert.match(skill, /skill\.current: true/);
-  assert.match(skill, /throttled update notice/);
-  assert.match(skill, /do not mutate a global installation without an explicit update request/);
+  assert.match(skill, /automatically check for a newer release at most once/);
+  assert.match(skill, /refreshes\s+all installed managed copies/);
+  assert.match(skill, /relaunches the original\s+command once/);
+  assert.match(skill, /TBCLI_UPDATE_CHECK=0/);
+  assert.match(skill, /Source\s+checkouts never self-update/);
 });
 
 test('bundled Skill has a portable Windows SealSeek adapter', async () => {

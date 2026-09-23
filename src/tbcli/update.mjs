@@ -1,13 +1,15 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { TBCLI_VERSION } from './version.mjs';
 
 export const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
-export const UPDATE_NOTICE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_UPDATE_CACHE = path.join(os.homedir(), '.cache', 'tbcli', 'update-check.json');
 const LATEST_URL = 'https://registry.npmjs.org/@petercjl%2Ftbcli/latest';
+const PACKAGE_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
 export function compareVersions(left, right) {
   const parse = (value) => String(value || '').split('-')[0].split('.').map((part) => Number(part) || 0);
@@ -62,22 +64,38 @@ export async function checkForUpdate({
   };
 }
 
-export async function maybePrintUpdateNotice(args = {}, options = {}) {
-  if (process.env.TBCLI_UPDATE_CHECK === '0' || args._?.[0] === 'update') return;
+export function isPackagedNpmInstall(packageRoot = PACKAGE_ROOT) {
+  const normalized = path.resolve(packageRoot).split(path.sep).map((part) => part.toLowerCase());
+  const nodeModules = normalized.lastIndexOf('node_modules');
+  return nodeModules >= 0 && normalized[nodeModules + 1] === '@petercjl' && normalized[nodeModules + 2] === 'tbcli';
+}
+
+export async function maybeAutoUpdate(args = {}, options = {}) {
+  const environment = options.environment || process.env;
+  if (environment.TBCLI_UPDATE_CHECK === '0' || environment.TBCLI_AUTO_UPDATE_REEXEC === '1'
+    || args._?.[0] === 'update') return { checked: false, updated: false, reason: 'disabled-or-update-command' };
+  const packaged = options.isPackagedInstall ? options.isPackagedInstall() : isPackagedNpmInstall(options.packageRoot);
+  if (!packaged) return { checked: false, updated: false, reason: 'source-checkout' };
   try {
     const result = await checkForUpdate(options);
-    if (!result.updateAvailable) return;
-    const now = options.now || Date.now();
-    const alreadyNotified = result.cache.notifiedVersion === result.latestVersion
-      && Number(result.cache.notifiedAt || 0) + UPDATE_NOTICE_INTERVAL_MS > now;
-    if (alreadyNotified) return;
-    console.error(`notice: tbcli ${result.latestVersion} 已发布（当前 ${result.currentVersion}）。更新时请同时同步 CLI 与 Skill：tbcli update --agent <当前Agent>`);
-    await writeCache(result.cacheFile, {
-      ...result.cache,
-      notifiedAt: now,
-      notifiedVersion: result.latestVersion,
-    });
-  } catch {
-    // Update reminders must never block business commands when npm or the network is unavailable.
+    if (!result.updateAvailable) return { checked: true, updated: false, ...result };
+    const updater = options.performUpdate || (await import('./commands/update.mjs')).performAutomaticUpdate;
+    const update = await updater(options.updateDependencies || {});
+    return { checked: true, updated: true, latestVersion: result.latestVersion, update };
+  } catch (error) {
+    return { checked: true, updated: false, warning: String(error.message || error) };
   }
+}
+
+export async function relaunchWithUpdatedCli(argv, options = {}) {
+  const node = options.node || process.execPath;
+  const entry = options.entry || process.argv[1];
+  const spawnImpl = options.spawnImpl || spawn;
+  return new Promise((resolve, reject) => {
+    const child = spawnImpl(node, [entry, ...argv], {
+      stdio: 'inherit', env: { ...process.env, TBCLI_AUTO_UPDATE_REEXEC: '1' },
+    });
+    child.once('error', reject);
+    child.once('exit', (code, signal) => resolve({ code: code ?? 1, signal: signal || null }));
+  });
 }

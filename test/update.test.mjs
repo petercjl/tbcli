@@ -3,9 +3,13 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { EventEmitter } from 'node:events';
 
-import { performUnifiedUpdate, resolveNpmInvocation } from '../src/tbcli/commands/update.mjs';
-import { checkForUpdate, compareVersions, maybePrintUpdateNotice } from '../src/tbcli/update.mjs';
+import { performAutomaticUpdate, performUnifiedUpdate, resolveNpmInvocation } from '../src/tbcli/commands/update.mjs';
+import {
+  checkForUpdate, compareVersions, isPackagedNpmInstall, maybeAutoUpdate,
+  relaunchWithUpdatedCli,
+} from '../src/tbcli/update.mjs';
 
 test('compares ordinary release versions', () => {
   assert.equal(compareVersions('0.6.4', '0.6.3'), 1);
@@ -29,24 +33,51 @@ test('checks npm at most once per cache interval', async () => {
   assert.equal(fetches, 1);
 });
 
-test('prints one throttled reminder for each newer version', async () => {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-update-notice-'));
-  const cacheFile = path.join(dir, 'update.json');
-  const messages = [];
-  const previousError = console.error;
-  console.error = (message) => messages.push(message);
-  const options = {
-    currentVersion: '0.6.4', cacheFile, now: 1000,
-    fetchImpl: async () => ({ ok: true, async json() { return { version: '0.6.5' }; } }),
-  };
-  try {
-    await maybePrintUpdateNotice({ _: ['doctor'] }, options);
-    await maybePrintUpdateNotice({ _: ['doctor'] }, { ...options, now: 2000 });
-  } finally {
-    console.error = previousError;
-  }
-  assert.equal(messages.length, 1);
-  assert.match(messages[0], /tbcli update --agent <当前Agent>/);
+test('automatic update runs only for packaged installs and fetches a newer release', async () => {
+  assert.equal(isPackagedNpmInstall('/usr/local/lib/node_modules/@petercjl/tbcli'), true);
+  assert.equal(isPackagedNpmInstall('/workspace/tbcli'), false);
+  const skipped = await maybeAutoUpdate({ _: ['doctor'] }, { isPackagedInstall: () => false });
+  assert.equal(skipped.reason, 'source-checkout');
+  let updates = 0;
+  const result = await maybeAutoUpdate({ _: ['doctor'] }, {
+    isPackagedInstall: () => true,
+    currentVersion: '0.9.0', cacheFile: path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-auto-update-')), 'update.json'),
+    now: 1000,
+    fetchImpl: async () => ({ ok: true, async json() { return { version: '0.10.0' }; } }),
+    performUpdate: async () => { updates += 1; return { updated: true, cli: { afterVersion: '0.10.0' } }; },
+  });
+  assert.equal(result.updated, true);
+  assert.equal(updates, 1);
+});
+
+test('automatic update failure is non-blocking and re-exec is guarded', async () => {
+  const failed = await maybeAutoUpdate({ _: ['doctor'] }, {
+    isPackagedInstall: () => true,
+    currentVersion: '0.9.0', cacheFile: path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-auto-fail-')), 'update.json'),
+    now: 1000,
+    fetchImpl: async () => ({ ok: true, async json() { return { version: '0.10.0' }; } }),
+    performUpdate: async () => { throw new Error('offline'); },
+  });
+  assert.equal(failed.updated, false);
+  assert.match(failed.warning, /offline/);
+  const guarded = await maybeAutoUpdate({ _: ['doctor'] }, { environment: { TBCLI_AUTO_UPDATE_REEXEC: '1' } });
+  assert.equal(guarded.checked, false);
+});
+
+test('successful automatic update relaunches the original command once', async () => {
+  let spawned;
+  const result = await relaunchWithUpdatedCli(['db', 'status', '--json'], {
+    node: '/node', entry: '/tbcli.mjs',
+    spawnImpl(command, args, options) {
+      spawned = { command, args, options };
+      const child = new EventEmitter();
+      queueMicrotask(() => child.emit('exit', 0, null));
+      return child;
+    },
+  });
+  assert.deepEqual(spawned.args, ['/tbcli.mjs', 'db', 'status', '--json']);
+  assert.equal(spawned.options.env.TBCLI_AUTO_UPDATE_REEXEC, '1');
+  assert.equal(result.code, 0);
 });
 
 test('uses the managed Node runtime to launch npm on Windows without relying on PATH', async () => {
@@ -104,6 +135,44 @@ test('unified update installs a missing managed Skill', async () => {
     { run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
   );
   assert.equal(result.skill.action, 'installed');
+});
+
+test('automatic package update refreshes every installed managed Skill copy', async () => {
+  const updated = [];
+  const result = await performAutomaticUpdate({
+    platform: 'darwin', npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs',
+    agents: ['codex'], skills: ['tbcli', 'ecommerce-monthly-profit-report'],
+    resolveRoot: () => '/skills',
+    getStatus: async (_root, skill) => skill === 'tbcli'
+      ? { skill, state: 'stale', managed: true, current: false }
+      : { skill, state: 'current', managed: true, current: true },
+    updateInstalledSkill: async (opts) => { updated.push(opts); return { skill: opts.skill, state: 'current', managed: true, current: true, action: 'updated' }; },
+    run: async (command, args) => {
+      if (command === '/npm') return { stdout: '', stderr: '' };
+      if (args.includes('--version')) return { stdout: '0.10.0\n', stderr: '' };
+      throw new Error('unexpected command');
+    },
+  });
+  assert.deepEqual(updated, [{ agent: 'codex', skill: 'tbcli' }]);
+  assert.equal(result.cli.afterVersion, '0.10.0');
+  assert.equal(result.skills.length, 2);
+});
+
+test('automatic package update keeps going when one managed Skill refresh fails', async () => {
+  const result = await performAutomaticUpdate({
+    platform: 'darwin', npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs',
+    agents: ['codex'], skills: ['tbcli'], resolveRoot: () => '/skills',
+    getStatus: async () => ({ skill: 'tbcli', state: 'stale', managed: true, current: false }),
+    updateInstalledSkill: async () => { throw new Error('read only destination'); },
+    run: async (command, args) => {
+      if (command === '/npm') return { stdout: '', stderr: '' };
+      if (args.includes('--version')) return { stdout: '0.10.0\n', stderr: '' };
+      throw new Error('unexpected command');
+    },
+  });
+  assert.equal(result.updated, true);
+  assert.equal(result.skills[0].action, 'warning');
+  assert.match(result.skills[0].warning, /read only destination/);
 });
 
 test('Windows SealSeek update uses the canonical prefix and newly installed entry', async () => {

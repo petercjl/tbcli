@@ -48,9 +48,15 @@ update` commands. Require `updated: true`, a nonempty `cli.afterVersion`, and
 unmanaged, a foreign link, or a broken link, stop at the CLI's protection error
 and ask the administrator to inspect it; never overwrite it.
 
-Normal tbcli commands may print a throttled update notice on stderr. During an
-unrelated business request, finish or safely stop that request and report the
-notice; do not mutate a global installation without an explicit update request.
+Packaged npm installations automatically check for a newer release at most once
+every six hours. When one exists, tbcli upgrades the global package, refreshes
+all installed managed copies of its bundled Skills, and relaunches the original
+command once with the new version. Linked installs already follow the package.
+Network or update failures only emit a warning and the loaded version continues
+the business command. `TBCLI_UPDATE_CHECK=0` disables automatic checks. Source
+checkouts never self-update and use their repository workflow.
+
+The explicit unified command remains the forced-update and repair path.
 If a legacy CLI does not recognize `tbcli update`, bootstrap it once with `npm
 install -g @petercjl/tbcli@latest`, then return to the unified command. On
 Windows SealSeek, use the adapter's runtime-info bootstrap instead of relying on

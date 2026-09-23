@@ -61,8 +61,16 @@ Use `--target-dir <agent-skill-root>` for another host. On platforms that
 support directory links, linked installations read the bundled source directly;
 managed copies can be refreshed with `tbcli skill update`.
 
-For later upgrades, use the unified updater instead of running npm and Skill
-updates separately:
+Installed npm copies automatically check the registry at most once every six
+hours. When a newer release exists, tbcli upgrades the global npm package,
+refreshes every installed managed Skill copy bundled with tbcli, and then
+relaunches the original command with the new version. Linked Skill installs
+already follow the upgraded package. An update or network failure prints a
+warning and lets the current business command continue on the loaded version.
+Set `TBCLI_UPDATE_CHECK=0` to disable automatic checks. Source checkouts never
+self-update and continue to use their repository workflow.
+
+To force an upgrade or repair one Agent installation, use the unified updater:
 
 ```bash
 tbcli update --agent sealseek --json
@@ -70,9 +78,7 @@ tbcli update --agent sealseek --json
 
 Replace `sealseek` with `codex`, `agents`, or `openclaw` for the current host.
 The command upgrades the global npm package, installs or refreshes the bundled
-Skill for that Agent, and verifies the final CLI version and Skill state. Normal
-tbcli commands check npm at most once every six hours and print a throttled
-notice when a newer version exists; the reminder never blocks business work.
+Skill for that Agent, and verifies the final CLI version and Skill state.
 On Windows SealSeek, use `tbcli.cmd update --agent sealseek --json`; it installs
 into the canonical directory reported by SealSeek and verifies that exact entry.
 

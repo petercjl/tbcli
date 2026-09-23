@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 
-import { resolveTargetRoot } from './skill.mjs';
+import { getSkillStatus, resolveTargetRoot, updateSkill } from './skill.mjs';
 import { discoverSealseekWindows } from '../sealseek-windows.mjs';
 import { TBCLI_VERSION } from '../version.mjs';
 
@@ -113,6 +113,41 @@ export async function performUnifiedUpdate(opts = {}, dependencies = {}) {
     cli: { beforeVersion: TBCLI_VERSION, afterVersion },
     skill: { agent: opts.agent || null, targetDir: verified.targetRoot, action: skillAction, state: verified.state, current: verified.current },
   };
+}
+
+export async function performAutomaticUpdate(dependencies = {}) {
+  const run = dependencies.run || runCaptured;
+  const platform = dependencies.platform || process.platform;
+  if (platform === 'win32') return performUnifiedUpdate({ agent: 'sealseek' }, dependencies);
+
+  const npm = dependencies.npm || await resolveNpmInvocation();
+  const cliEntry = dependencies.cliEntry || process.argv[1];
+  const node = dependencies.node || process.execPath;
+  await run(npm.command, [...npm.prefixArgs, 'install', '-g', '@petercjl/tbcli@latest'], { shell: npm.shell });
+  const versionResult = await run(node, [cliEntry, '--version']);
+  const afterVersion = versionResult.stdout.trim().split(/\r?\n/).at(-1);
+  if (!afterVersion) throw new Error('CLI 自动升级后无法读取版本');
+
+  const skills = [];
+  const getStatus = dependencies.getStatus || getSkillStatus;
+  const updateInstalledSkill = dependencies.updateInstalledSkill || updateSkill;
+  const resolveRoot = dependencies.resolveRoot || resolveTargetRoot;
+  for (const agent of dependencies.agents || ['codex', 'agents', 'openclaw', 'sealseek']) {
+    const root = resolveRoot({ agent });
+    for (const skill of dependencies.skills || ['tbcli', 'ecommerce-monthly-profit-report']) {
+      try {
+        const status = await getStatus(root, skill);
+        if (status.state === 'stale' && status.managed) {
+          skills.push({ agent, ...await updateInstalledSkill({ agent, skill }) });
+        } else if (status.state !== 'absent') {
+          skills.push({ agent, ...status, action: 'unchanged' });
+        }
+      } catch (error) {
+        skills.push({ agent, skill, action: 'warning', warning: String(error.message || error) });
+      }
+    }
+  }
+  return { updated: true, cli: { beforeVersion: TBCLI_VERSION, afterVersion }, skills };
 }
 
 export async function runUnifiedUpdate(opts = {}) {
