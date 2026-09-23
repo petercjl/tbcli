@@ -9,4 +9,5 @@
 - [月度实际利润](profit-actual.md)：支付月归属、退款观察截止、实际快递费、运行状态、输出与质量门。
 - [月度实际利润查询入口](queries/profit-actual.md)：将利润计算、Excel 导出和数据缺口检查分开的稳定路由。
 - [商品主图映射](product-images.md)：校验和导入以商品 ID 唯一的权威商品主图链接，供商品分析报告渲染。
+- [通用只读 SQL 查询入口](queries/warehouse-sql.md)：实时发现授权表结构，由 Agent 组织参数化只读跨表查询。
 - [来源与待验证边界](source-manifest.md)：开发维护时读取。

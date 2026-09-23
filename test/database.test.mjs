@@ -16,12 +16,16 @@ import {
   identifyDataset,
   importWorkbook,
   listDatasetFields,
+  listReadableRelations,
   loadDatabaseConfig,
   queryBusinessData,
+  describeReadableRelation,
+  executeReadOnlySql,
   readPgpassPassword,
   resolveDatabaseCredentialPath,
   resolveDataset,
   validateDatabaseCredentialFile,
+  validateReadOnlySql,
 } from '../src/tbcli/database.mjs';
 import {
   ensureDatabaseNetworkAccess,
@@ -113,6 +117,67 @@ test('lists a dataset field catalog in source order', async () => {
   assert.equal(result.datasetKey, 'item-overall');
   assert.equal(result.grain, 'day');
   assert.deepEqual(result.fields[1], { name: '支付金额', kind: 'metric', aggregation: 'sum' });
+});
+
+test('read-only SQL accepts one query and rejects writes or multiple statements', () => {
+  assert.equal(validateReadOnlySql('SELECT * FROM master.sku_cost_versions WHERE shop_key=$1'),
+    'SELECT * FROM master.sku_cost_versions WHERE shop_key=$1');
+  assert.match(validateReadOnlySql('WITH costs AS (SELECT 1 AS n) SELECT * FROM costs'), /^WITH/);
+  assert.throws(() => validateReadOnlySql('DELETE FROM master.sku_cost_versions'), /只允许/);
+  assert.throws(() => validateReadOnlySql('SELECT 1; SELECT 2'), /一条 SQL/);
+  assert.throws(() => validateReadOnlySql('WITH removed AS (DELETE FROM t RETURNING *) SELECT * FROM removed'), /不允许 delete/i);
+  assert.throws(() => validateReadOnlySql('SELECT * FROM pg_catalog.pg_roles'), /系统或权限关系/);
+  assert.throws(() => validateReadOnlySql('SELECT * FROM access_control.query_audit'), /系统或权限关系/);
+});
+
+test('relation discovery returns only privilege-filtered catalog rows', async () => {
+  const client = { async query(text, values) {
+    assert.match(text, /has_table_privilege/);
+    assert.deepEqual(values, ['master', '%cost%']);
+    return { rowCount: 1, rows: [{ schema_name: 'master', relation_name: 'sku_cost_versions', relation_type: 'table' }] };
+  } };
+  const result = await listReadableRelations(client, { schema: 'master', keyword: 'cost' });
+  assert.equal(result.count, 1);
+  assert.equal(result.relations[0].relation_name, 'sku_cost_versions');
+});
+
+test('relation description checks SELECT privilege before returning columns', async () => {
+  let call = 0;
+  const client = { async query(text, values) {
+    call += 1;
+    if (call === 1) return { rowCount: 1, rows: [{ oid: 42, schema_name: 'master', relation_name: 'sku_cost_versions', readable: true, description: null }] };
+    assert.deepEqual(values, [42]);
+    if (call === 2) return { rows: [{ column_name: 'erp_spec_no', data_type: 'text', not_null: true }] };
+    return { rows: [{ name: 'sku_cost_versions_pkey', type: 'primary-key', definition: 'PRIMARY KEY (id)' }] };
+  } };
+  const result = await describeReadableRelation(client, 'master.sku_cost_versions');
+  assert.equal(result.columns[0].column_name, 'erp_spec_no');
+  assert.equal(result.constraints[0].type, 'primary-key');
+  await assert.rejects(() => describeReadableRelation(client, 'pg_catalog.pg_roles'), /系统或权限关系/);
+});
+
+test('generic SQL runs inside a read-only limited transaction', async () => {
+  const calls = [];
+  const client = { async query(input, values) {
+    const call = typeof input === 'object' ? input : { text: input, values };
+    calls.push(call);
+    if (typeof input === 'object') return {
+      rows: [{ id: 1, effective_from: new Date(2026, 6, 1) }, { id: 2, effective_from: null }, { id: 3, effective_from: null }],
+      fields: [{ name: 'id', dataTypeID: 23 }, { name: 'effective_from', dataTypeID: 1082 }],
+    };
+    return { rows: [], rowCount: 0 };
+  } };
+  const result = await executeReadOnlySql(client, 'SELECT id FROM master.sku_cost_versions WHERE shop_key=$1', {
+    params: ['tmall:test'], limit: 2, timeoutMs: 5000,
+  });
+  assert.equal(calls[0].text, 'BEGIN READ ONLY');
+  assert.match(calls[3].text, /LIMIT \$2/);
+  assert.deepEqual(calls[3].values, ['tmall:test', 3]);
+  assert.equal(calls.at(-1).text, 'COMMIT');
+  assert.equal(result.rowCount, 2);
+  assert.equal(result.truncated, true);
+  assert.equal(result.columns[0].name, 'id');
+  assert.equal(result.rows[0].effective_from, '2026-07-01');
 });
 
 test('initializes warehouse schemas and the dataset catalog before fact tables', async () => {

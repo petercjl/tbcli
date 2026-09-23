@@ -131,6 +131,28 @@ role>'` with an independently protected maintenance credential. That single
 role serves both query and import commands under `accessMode: maintainer`; it
 must never be placed in an employee bundle.
 
+### Guarded physical-table queries
+
+Use these commands when a request targets versioned master data, another
+authorized physical relation, or a cross-table question that `db query` cannot
+express:
+
+```bash
+tbcli db tables [--schema '<schema>'] [--keyword '<text>'] --json
+tbcli db describe --relation '<schema.table>' --json
+tbcli db sql (--sql '<query>' | --sql-file '<file>') \
+  [--params-json '<JSON array>'] [--limit 200] [--timeout-ms 30000] --json
+```
+
+`db tables` returns only non-system relations for which the current identity has
+schema usage and table `SELECT`. `db describe` applies the same permission
+boundary. `db sql` accepts exactly one `SELECT`, `WITH`, `UNION`, or `VALUES`
+query, rejects write and system-catalog statements, starts a read-only
+transaction, and applies a 1,000-row hard maximum plus a 120-second hard timeout.
+PostgreSQL table permissions and row-level security remain authoritative. The
+result includes `readOnly`, a query hash, returned row count, truncation state,
+column metadata, duration, and rows.
+
 ### Individual employee accounts and audit
 
 Use only with an administrator database configuration whose login can manage

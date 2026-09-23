@@ -37,6 +37,9 @@ import {
   runDatabaseImport,
   runDatabaseInit,
   runDatabaseQuery,
+  runDatabaseTables,
+  runDatabaseDescribe,
+  runDatabaseSql,
   runDatabaseStatus,
   runDatabaseEmployeeProvision,
   runDatabaseEmployeeGrant,
@@ -103,6 +106,9 @@ const COMMAND_HANDLERS = Object.freeze({
   'db datasets': runDatabaseDatasets,
   'db fields': runDatabaseFields,
   'db query': runDatabaseQuery,
+  'db tables': runDatabaseTables,
+  'db describe': runDatabaseDescribe,
+  'db sql': runDatabaseSql,
   'db employee-provision': runDatabaseEmployeeProvision,
   'db employee-grant': runDatabaseEmployeeGrant,
   'db employee-revoke': runDatabaseEmployeeRevoke,
@@ -174,6 +180,9 @@ export function usage() {
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
+  tbcli db tables [--schema NAME] [--keyword TEXT] [--config FILE] [--json]
+  tbcli db describe --relation schema.table [--config FILE] [--json]
+  tbcli db sql (--sql QUERY | --sql-file FILE) [--params-json JSON_ARRAY] [--limit 200] [--timeout-ms 30000] [--config FILE] [--json]
   tbcli db employee-provision --input ADMIN.xlsx --credential-dir DIR [--global-reader-role tb_agent] [--config FILE] [--json]
   tbcli db employee-grant (--account NAME | --department NAME) (--dataset NAME | --table schema.table) [--config FILE] [--json]
   tbcli db employee-revoke (--account NAME | --department NAME) (--dataset NAME | --table schema.table) [--config FILE] [--json]

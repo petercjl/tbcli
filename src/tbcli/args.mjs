@@ -35,6 +35,11 @@ export function parseArgs(argv) {
     else if (arg === '--account') out.account = argv[++index];
     else if (arg === '--department') out.department = argv[++index];
     else if (arg === '--table') out.table = argv[++index];
+    else if (arg === '--relation') out.relation = argv[++index];
+    else if (arg === '--schema') out.schema = argv[++index];
+    else if (arg === '--sql') out.sql = argv[++index];
+    else if (arg === '--sql-file') out.sqlFile = argv[++index];
+    else if (arg === '--params-json') out.paramsJson = argv[++index];
     else if (arg === '--global-reader-role') out.globalReaderRole = argv[++index];
     else if (arg === '--dataset') out.dataset = argv[++index];
     else if (arg === '--metrics') out.metrics = argv[++index];

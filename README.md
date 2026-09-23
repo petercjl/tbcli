@@ -211,12 +211,21 @@ tbcli db query \
 tbcli db query \
   --dataset '无界-计划' --metrics '展现量,点击量,花费,总成交金额' \
   --group-by plan --order-by '花费' --limit 50 --json
+
+# Discover and query authorized physical tables or views.
+tbcli db tables --schema master --json
+tbcli db describe --relation master.sku_cost_versions --json
+tbcli db sql --sql-file query.sql \
+  --params-json '["tmall:sanju-flagship"]' --limit 200 --json
 ```
 
 Agents must resolve natural-language dates against `db datasets` coverage and
 must discover exact metric names with `db fields`. Query filters and grouping are
-limited to the stable semantic options shown by `tbcli --help`; there is no raw
-SQL command. Additive metrics use `sum`. Rate, ROI, CTR, CPC, average, unit-price,
+limited to the stable semantic options shown by `tbcli --help`. When a physical
+table or cross-table query is required, `db sql` accepts one guarded read-only
+`SELECT`/`WITH`/`UNION`/`VALUES` query, applies timeout and row limits, and never
+expands the current database account's `SELECT` permissions. Additive metrics use
+`sum`. Rate, ROI, CTR, CPC, average, unit-price,
 and cost-like fields currently use a descriptive `avg`, which must not be
 presented as an exact recomputed cross-period ratio.
 

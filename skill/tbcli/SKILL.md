@@ -245,7 +245,7 @@ Keep the boundary explicit: the Agent and this Skill decide **what** to maintain
 
 ## Company Warehouse Flow
 
-Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers fields and calls semantic commands. Never ask the employee to write SQL, never expose a raw-SQL escape hatch, and never bypass `tbcli` with `psql` or an ad-hoc database script.
+Use this flow when the user asks what data has been imported or asks a business question over the company ecommerce warehouse. The employee supplies business intent; the Agent discovers the live schema and calls stable tbcli commands. Never ask the employee to write SQL and never bypass `tbcli` with `psql` or an ad-hoc database script. Prefer the semantic dataset query below for a supported single-dataset question. When the request targets a physical table, needs joins, or cannot be expressed by that semantic contract, read [references/queries/warehouse-sql.md](references/queries/warehouse-sql.md) completely and use tbcli's guarded read-only SQL flow, then return here for Warehouse QA.
 
 For “预估利润”、按负责人查看近期利润或预估利润 Excel，do not assemble generic warehouse queries. Read [references/queries/profit-estimate.md](references/queries/profit-estimate.md) and every page it requires, execute its live read-only query/export flow, then return here for delivery QA.
 

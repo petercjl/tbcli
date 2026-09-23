@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ExcelJS from '@excel.js/exceljs';
 import pg from 'pg';
+import { parse as parsePostgresSql } from 'pgsql-ast-parser';
 import { ensureDatabaseNetworkAccess, normalizeDatabaseNetworkAccess } from './database-network.mjs';
 
 const { Client } = pg;
@@ -1199,4 +1200,144 @@ export async function queryBusinessData(client, options) {
     rowCount: result.rowCount,
     rows: result.rows,
   };
+}
+
+const RELATION_NAME = /^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/;
+const READ_QUERY_ROOTS = new Set(['select', 'with', 'union', 'union all', 'values']);
+const WRITE_STATEMENTS = new Set([
+  'insert', 'update', 'delete', 'merge', 'truncate', 'create table', 'create index',
+  'create schema', 'create sequence', 'create extension', 'alter table', 'alter sequence',
+  'drop table', 'drop index', 'drop schema', 'drop sequence', 'grant', 'revoke', 'copy',
+  'call', 'do', 'set', 'transaction', 'commit', 'rollback',
+]);
+
+function walkSqlAst(value) {
+  if (!value || typeof value !== 'object') return;
+  if (typeof value.type === 'string' && WRITE_STATEMENTS.has(value.type.toLowerCase())) {
+    throw new Error(`只读 SQL 不允许 ${value.type}`);
+  }
+  if (value.type === 'table' && value.name && typeof value.name === 'object') {
+    const schema = String(value.name.schema || '').toLowerCase();
+    const name = String(value.name.name || '').toLowerCase();
+    if (['pg_catalog', 'information_schema', 'access_control'].includes(schema)
+      || (!schema && name.startsWith('pg_'))) {
+      throw new Error(`只读 SQL 不允许查询系统或权限关系：${schema ? `${schema}.` : ''}${name}`);
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) walkSqlAst(entry);
+    return;
+  }
+  for (const entry of Object.values(value)) walkSqlAst(entry);
+}
+
+export function validateReadOnlySql(sql) {
+  const text = String(sql || '').trim().replace(/;+\s*$/, '');
+  if (!text) throw new Error('SQL 不能为空');
+  let statements;
+  try { statements = parsePostgresSql(text); }
+  catch (error) { throw new Error(`SQL 解析失败：${error.message.split('\n')[0]}`); }
+  if (statements.length !== 1) throw new Error('只允许执行一条 SQL');
+  const root = String(statements[0]?.type || '').toLowerCase();
+  if (!READ_QUERY_ROOTS.has(root)) throw new Error('只允许 SELECT、WITH、UNION 或 VALUES 查询');
+  walkSqlAst(statements[0]);
+  return text;
+}
+
+export async function listReadableRelations(client, { schema, keyword } = {}) {
+  const values = [];
+  const where = [
+    "c.relkind IN ('r','p','v','m','f')",
+    "n.nspname NOT IN ('pg_catalog','information_schema','access_control')",
+    "n.nspname NOT LIKE 'pg_toast%'",
+    "has_schema_privilege(current_user,n.oid,'USAGE')",
+    "has_table_privilege(current_user,c.oid,'SELECT')",
+  ];
+  if (schema) { values.push(schema); where.push(`n.nspname=$${values.length}`); }
+  if (keyword) {
+    values.push(`%${keyword}%`);
+    where.push(`(n.nspname || '.' || c.relname) ILIKE $${values.length}`);
+  }
+  const result = await client.query(`
+    SELECT n.nspname AS schema_name,c.relname AS relation_name,
+      CASE c.relkind WHEN 'r' THEN 'table' WHEN 'p' THEN 'partitioned-table'
+        WHEN 'v' THEN 'view' WHEN 'm' THEN 'materialized-view' ELSE 'foreign-table' END AS relation_type,
+      obj_description(c.oid,'pg_class') AS description
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE ${where.join(' AND ')}
+    ORDER BY n.nspname,c.relname
+  `, values);
+  return { schema: schema || null, keyword: keyword || null, count: result.rowCount, relations: result.rows };
+}
+
+export async function describeReadableRelation(client, relation) {
+  if (!RELATION_NAME.test(String(relation || ''))) throw new Error('关系名称必须使用安全的 schema.table 格式');
+  const schema = String(relation).split('.')[0];
+  if (['pg_catalog', 'information_schema', 'access_control'].includes(schema)) {
+    throw new Error(`不允许描述系统或权限关系：${relation}`);
+  }
+  const access = await client.query(`
+    SELECT c.oid,n.nspname AS schema_name,c.relname AS relation_name,
+      has_schema_privilege(current_user,n.oid,'USAGE') AND has_table_privilege(current_user,c.oid,'SELECT') AS readable,
+      obj_description(c.oid,'pg_class') AS description
+    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+    WHERE c.oid=to_regclass($1) AND c.relkind IN ('r','p','v','m','f')
+  `, [relation]);
+  if (!access.rowCount || !access.rows[0].readable) throw new Error(`关系不存在或当前账号无权读取：${relation}`);
+  const columns = await client.query(`
+    SELECT a.attname AS column_name,format_type(a.atttypid,a.atttypmod) AS data_type,
+      a.attnotnull AS not_null,pg_get_expr(d.adbin,d.adrelid) AS default_value,
+      col_description(a.attrelid,a.attnum) AS description
+    FROM pg_attribute a LEFT JOIN pg_attrdef d ON d.adrelid=a.attrelid AND d.adnum=a.attnum
+    WHERE a.attrelid=$1 AND a.attnum>0 AND NOT a.attisdropped ORDER BY a.attnum
+  `, [access.rows[0].oid]);
+  const constraints = await client.query(`
+    SELECT conname AS name,CASE contype WHEN 'p' THEN 'primary-key' WHEN 'f' THEN 'foreign-key'
+      WHEN 'u' THEN 'unique' WHEN 'c' THEN 'check' ELSE contype::text END AS type,
+      pg_get_constraintdef(oid,true) AS definition
+    FROM pg_constraint WHERE conrelid=$1 ORDER BY conname
+  `, [access.rows[0].oid]);
+  const { oid, readable, ...metadata } = access.rows[0];
+  return { relation, ...metadata, columns: columns.rows, constraints: constraints.rows };
+}
+
+export async function executeReadOnlySql(client, sql, { params = [], limit = 200, timeoutMs = 30000 } = {}) {
+  const query = validateReadOnlySql(sql);
+  if (!Array.isArray(params)) throw new Error('--params-json 必须是 JSON 数组');
+  const rowLimit = Math.min(1000, Math.max(1, Number(limit || 200)));
+  const statementTimeout = Math.min(120000, Math.max(1000, Number(timeoutMs || 30000)));
+  const hash = crypto.createHash('sha256').update(query).digest('hex');
+  const started = Date.now();
+  await client.query('BEGIN READ ONLY');
+  try {
+    await client.query(`SET LOCAL statement_timeout='${statementTimeout}ms'`);
+    await client.query("SET LOCAL lock_timeout='3000ms'");
+    const result = await client.query({
+      text: `SELECT * FROM (${query}) AS __tbcli_read_query LIMIT $${params.length + 1}`,
+      values: [...params, rowLimit + 1],
+    });
+    await client.query('COMMIT');
+    const truncated = result.rows.length > rowLimit;
+    const dateColumns = new Set((result.fields || []).filter((field) => field.dataTypeID === 1082).map((field) => field.name));
+    const rows = result.rows.slice(0, rowLimit).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => {
+      if (!dateColumns.has(key) || !(value instanceof Date)) return [key, value];
+      const year = value.getFullYear();
+      const month = String(value.getMonth() + 1).padStart(2, '0');
+      const day = String(value.getDate()).padStart(2, '0');
+      return [key, `${year}-${month}-${day}`];
+    })));
+    return {
+      readOnly: true,
+      queryHash: hash,
+      rowLimit,
+      rowCount: rows.length,
+      truncated,
+      durationMs: Date.now() - started,
+      columns: (result.fields || []).map((field) => ({ name: field.name, dataTypeId: field.dataTypeID })),
+      rows,
+    };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  }
 }

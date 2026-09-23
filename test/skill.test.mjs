@@ -78,6 +78,18 @@ test('bundled Skill routes warehouse questions through discovery and semantic qu
   assert.match(skill, /descriptive average/);
 });
 
+test('bundled Skill routes physical and cross-table questions through guarded SQL', async () => {
+  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
+  const route = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'warehouse-sql.md'), 'utf8');
+  assert.match(skill, /references\/queries\/warehouse-sql\.md/);
+  assert.match(route, /tbcli db tables --json/);
+  assert.match(route, /tbcli db describe --relation/);
+  assert.match(route, /tbcli db sql --sql-file/);
+  assert.match(route, /parameterized/);
+  assert.match(route, /readOnly: true/);
+  assert.match(route, /never seek a stronger credential/);
+});
+
 test('bundled Skill resolves flexible profit periods and exports Chinese multi-owner workbooks', async () => {
   const profit = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'profit-estimate.md'), 'utf8');
   const route = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'profit-estimate.md'), 'utf8');

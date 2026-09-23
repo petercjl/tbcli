@@ -15,7 +15,10 @@ import {
   getDatasetCoverage,
   listDatasetFields,
   listDatasets,
+  listReadableRelations,
   loadDatabaseConfig,
+  describeReadableRelation,
+  executeReadOnlySql,
   queryBusinessData,
   resolveDatabaseCredentialPath,
   validateDatabaseCredentialFile,
@@ -382,6 +385,35 @@ export async function runDatabaseQuery(args) {
   const config = await loadDatabaseConfig(args.config);
   const client = await connectDatabase(config, 'reader');
   try { printResult(await queryBusinessData(client, args), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseTables(args) {
+  const config = await loadDatabaseConfig(args.config);
+  const client = await connectDatabase(config, 'reader');
+  try { printResult(await listReadableRelations(client, args), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseDescribe(args) {
+  if (!args.relation) throw new Error('缺少 --relation；请使用 schema.table');
+  const config = await loadDatabaseConfig(args.config);
+  const client = await connectDatabase(config, 'reader');
+  try { printResult(await describeReadableRelation(client, args.relation), args.json); }
+  finally { await client.end(); }
+}
+
+export async function runDatabaseSql(args) {
+  if (Boolean(args.sql) === Boolean(args.sqlFile)) throw new Error('必须且只能指定 --sql 或 --sql-file');
+  const sql = args.sqlFile ? await fsp.readFile(path.resolve(args.sqlFile), 'utf8') : args.sql;
+  let params = [];
+  if (args.paramsJson) {
+    try { params = JSON.parse(args.paramsJson); }
+    catch { throw new Error('--params-json 不是有效 JSON'); }
+  }
+  const config = await loadDatabaseConfig(args.config);
+  const client = await connectDatabase(config, 'reader');
+  try { printResult(await executeReadOnlySql(client, sql, { params, limit: args.limit, timeoutMs: args.timeoutMs }), args.json); }
   finally { await client.end(); }
 }
 
