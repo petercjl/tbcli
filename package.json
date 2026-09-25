@@ -1,6 +1,6 @@
 {
   "name": "@petercjl/tbcli",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "CLI for Taobao and Qianniu seller backend workflows",
   "type": "module",
   "bin": {
@@ -35,6 +35,7 @@
     "pg": "^8.23.0",
     "pgsql-ast-parser": "^12.0.2",
     "playwright-core": "^1.61.1",
+    "read-excel-file": "^9.3.10",
     "saxes": "^6.0.0"
   },
   "scripts": {

@@ -60,6 +60,7 @@ import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,ru
 import { runProfitEstimateExport,runProfitEstimateQuery } from './commands/profit-estimate.mjs';
 import { runProfitActualAuditCost,runProfitActualCoverage,runProfitActualQuery } from './commands/profit-actual.mjs';
 import { runProductImagesImport, runProductImagesValidate } from './commands/product-images.mjs';
+import { runYuceCategoryValidate, runYuceCategoryInit, runYuceCategoryImport, runYuceCategoryStatus } from './commands/yuce-market.mjs';
 import { runVersion } from './version.mjs';
 import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
@@ -130,6 +131,10 @@ const COMMAND_HANDLERS = Object.freeze({
   'profit actual audit-cost': runProfitActualAuditCost,
   'product images validate': runProductImagesValidate,
   'product images import': runProductImagesImport,
+  'db yuce validate': runYuceCategoryValidate,
+  'db yuce init': runYuceCategoryInit,
+  'db yuce import': runYuceCategoryImport,
+  'db yuce status': runYuceCategoryStatus,
   'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
   doctor: runDoctor,
@@ -177,6 +182,10 @@ export function usage() {
   tbcli db init [--config FILE] [--json]
   tbcli db coverage --dataset NAME [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--config FILE] [--json]
   tbcli db import --input FILE_OR_DIR [--dataset NAME] [--mode append|replace-range|replace-all] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--reimport] [--config FILE] [--json]
+  tbcli db yuce validate --input CATEGORY.xlsx [--json]
+  tbcli db yuce init [--config FILE] [--json]
+  tbcli db yuce import --input CATEGORY.xlsx [--mode append|upsert] [--config FILE] [--json]
+  tbcli db yuce status [--config FILE] [--json]
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]

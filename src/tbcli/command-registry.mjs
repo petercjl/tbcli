@@ -127,6 +127,37 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '按调用者明确指定的追加、区间替换或全量替换模式，把 tbcli 下载的 Excel 导入公司数据仓库',
   },
   {
+    key: 'db yuce validate', maturity: 'stable', audience: 'business',
+    capability: {
+      id: 'yuce-category-validate', name: '校验预策类目月数据',
+      description: '校验单工作表、类目层级、月份、数值和重复键，不修改数据库。',
+      examplePrompt: '检查这份预策类目月数据能否入库', requiredInputs: ['预策类目 Excel'], optionalInputs: [],
+      delivery: '类目级别、月份覆盖、行数、唯一类目数和成交量质量提示',
+      commandTemplate: 'tbcli db yuce validate --input <CATEGORY.xlsx> --json',
+    },
+  },
+  { key: 'db yuce init', maturity: 'stable', audience: 'internal', description: '初始化预策类目树、月数据、导入批次和待用排行表' },
+  {
+    key: 'db yuce import', maturity: 'stable', audience: 'business',
+    capability: {
+      id: 'yuce-category-import', name: '导入预策类目月数据',
+      description: '按一级、二级、三级顺序事务化导入预策月数据，校验父类目并保留来源批次。',
+      examplePrompt: '把校验过的预策类目月数据导入 NAS', requiredInputs: ['预策类目 Excel', '数据库维护权限'],
+      optionalInputs: ['导入模式 append 或 upsert'], delivery: '新增或更新行数、类目级别、月份覆盖和批次摘要',
+      commandTemplate: 'tbcli db yuce import --input <CATEGORY.xlsx> [--mode append|upsert] --json',
+    },
+  },
+  {
+    key: 'db yuce status', maturity: 'stable', audience: 'business',
+    capability: {
+      id: 'yuce-category-status', name: '核对预策类目入库结果',
+      description: '只读查看各级类目和月数据行数、排行预留表及父子成交额差异。',
+      examplePrompt: '核对预策类目数据是否全部入库', requiredInputs: ['数据库读取权限'], optionalInputs: [],
+      delivery: '分级行数、月份范围、批次数和父子成交额异常样本',
+      commandTemplate: 'tbcli db yuce status --json',
+    },
+  },
+  {
     key: 'db coverage',
     maturity: 'stable',
     audience: 'business',

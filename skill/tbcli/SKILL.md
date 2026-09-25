@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
 ---
 
 # tbcli
@@ -412,6 +412,10 @@ Require all of the following:
 - analysis distinguishes source facts from interpretation and calls out stale coverage or derived-metric limitations.
 
 ## Other Stable Tasks
+
+For 预策一级、二级、三级类目月数据 Excel 的校验、入库或入库核对，读取
+[预策类目入库](references/yuce-market.md)，只使用 `db yuce` 专用命令；普通
+`db import` 是生意参谋/无界报表导入器，不能解析预策月数据。
 
 For 商品ID与商品主图映射表校验、入库或定期刷新, read
 [references/product-images.md](references/product-images.md). Use the dedicated

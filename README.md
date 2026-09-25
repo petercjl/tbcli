@@ -169,6 +169,27 @@ busy-page signals.
 
 ## Company ecommerce warehouse
 
+### Yuce monthly market categories
+
+The Yuce importer is separate from the SYCM `db import` path. It accepts one
+data-only workbook per first-, second-, or third-level category export and
+keeps the category tree, monthly facts, source batches, and empty product/shop
+ranking tables in the `market` schema.
+
+```bash
+tbcli db yuce validate --input '<category-monthly.xlsx>' --json
+tbcli db yuce init --json
+tbcli db yuce import --input '<first-level.xlsx>' --mode append --json
+tbcli db yuce import --input '<second-level.xlsx>' --mode append --json
+tbcli db yuce import --input '<third-level.xlsx>' --mode append --json
+tbcli db yuce status --json
+```
+
+Import parents before children. `append` rejects overlapping category-months;
+use `--mode upsert` only for an approved source correction. A repeated identical
+file is skipped by its SHA-256 digest. Ranking tables are reserved for future
+on-demand exports; the current commands do not import ranking rows.
+
 `tbcli` can import its canonical full-history Excel exports into PostgreSQL and
 answer parameterized business questions without exposing SQL to employees. The
 warehouse connection is configured by an administrator; day-to-day Agents use a
