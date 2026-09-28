@@ -58,8 +58,16 @@ import {
 } from './commands/profit-orders.mjs';
 import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,runProfitRefundsValidate } from './commands/profit-refunds.mjs';
 import { runProfitEstimateExport,runProfitEstimateQuery } from './commands/profit-estimate.mjs';
-import { runProfitActualAuditCost,runProfitActualCoverage,runProfitActualQuery } from './commands/profit-actual.mjs';
+import { runProfitOwnersImport, runProfitOwnersReconcile, runProfitOwnersSync } from './commands/profit-owners.mjs';
+import { runProfitCostsFetch, runProfitCostsReconcile, runProfitCostsSync } from './commands/profit-costs.mjs';
+import { runProfitComponentsFetch, runProfitComponentsReconcile, runProfitComponentsSync } from './commands/profit-components.mjs';
+import {runProfitWeightsInfer,runProfitWeightsStage} from './commands/profit-weights.mjs';
+import { runSkuGrossInit, runSkuGrossUpdate, runSkuGrossManualImport } from './commands/platform-sku-gross-weights.mjs';
+import { runProfitActualAuditComboCost,runProfitActualAuditCost,runProfitActualAuditFreightFallback,runProfitActualAuditOrderCost,runProfitActualAuditReferenceCost,runProfitActualCoverage,runProfitActualQuery } from './commands/profit-actual.mjs';
 import { runProductImagesImport, runProductImagesValidate } from './commands/product-images.mjs';
+import { runYuceCategoriesImport, runYuceCategoriesValidate } from './commands/yuce-categories.mjs';
+import { runYuceCategoryValidate, runYuceCategoryInit, runYuceCategoryImport, runYuceCategoryStatus,
+  runYuceCategoryCoverage, runYuceCategoryExport } from './commands/yuce-market.mjs';
 import { runVersion } from './version.mjs';
 import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
@@ -125,11 +133,37 @@ const COMMAND_HANDLERS = Object.freeze({
   'profit refunds coverage': runProfitRefundsCoverage,
   'profit estimate query': runProfitEstimateQuery,
   'profit estimate export': runProfitEstimateExport,
+  'profit owners reconcile': runProfitOwnersReconcile,
+  'profit owners import': runProfitOwnersImport,
+  'profit owners sync': runProfitOwnersSync,
+  'profit costs fetch': runProfitCostsFetch,
+  'profit costs reconcile': runProfitCostsReconcile,
+  'profit costs sync': runProfitCostsSync,
+  'profit components fetch': runProfitComponentsFetch,
+  'profit components reconcile': runProfitComponentsReconcile,
+  'profit components sync': runProfitComponentsSync,
+  'profit weights infer': runProfitWeightsInfer,
+  'profit weights stage': runProfitWeightsStage,
+  'profit sku-gross-weight init': runSkuGrossInit,
+  'profit sku-gross-weight update': runSkuGrossUpdate,
+  'profit sku-gross-weight manual-import': runSkuGrossManualImport,
   'profit actual coverage': runProfitActualCoverage,
   'profit actual query': runProfitActualQuery,
   'profit actual audit-cost': runProfitActualAuditCost,
+  'profit actual audit-order-cost': runProfitActualAuditOrderCost,
+  'profit actual audit-combo-cost': runProfitActualAuditComboCost,
+  'profit actual audit-reference-cost': runProfitActualAuditReferenceCost,
+  'profit actual audit-freight-fallback': runProfitActualAuditFreightFallback,
   'product images validate': runProductImagesValidate,
   'product images import': runProductImagesImport,
+  'yuce categories validate': runYuceCategoriesValidate,
+  'yuce categories import': runYuceCategoriesImport,
+  'db yuce validate': runYuceCategoryValidate,
+  'db yuce init': runYuceCategoryInit,
+  'db yuce import': runYuceCategoryImport,
+  'db yuce status': runYuceCategoryStatus,
+  'db yuce coverage': runYuceCategoryCoverage,
+  'db yuce export': runYuceCategoryExport,
   'sycm market-rank': runSycmMarketRank,
   capabilities: runCapabilities,
   doctor: runDoctor,
@@ -177,6 +211,12 @@ export function usage() {
   tbcli db init [--config FILE] [--json]
   tbcli db coverage --dataset NAME [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--config FILE] [--json]
   tbcli db import --input FILE_OR_DIR [--dataset NAME] [--mode append|replace-range|replace-all] [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--reimport] [--config FILE] [--json]
+  tbcli db yuce validate --input CATEGORY.xlsx [--json]
+  tbcli db yuce init [--config FILE] [--json]
+  tbcli db yuce import --input CATEGORY.xlsx [--mode append|upsert] [--config FILE] [--json]
+  tbcli db yuce status [--config FILE] [--json]
+  tbcli db yuce coverage --category NAME --start-month YYYY-MM --end-month YYYY-MM [--config FILE] [--json]
+  tbcli db yuce export --category NAME --start-month YYYY-MM --end-month YYYY-MM --out NEW.json [--config FILE] [--json]
   tbcli db datasets [--config FILE] [--json]
   tbcli db fields --dataset NAME [--config FILE] [--json]
   tbcli db query --dataset NAME [--metrics FIELD,...] [--start-date YYYY-MM-DD] [--end-date YYYY-MM-DD] [--group-by total|day|shop|item|sku|keyword|related-item|traffic-source|search-term|scene|conversion-cycle|plan|unit|audience|subject|creative] [--item-ids ID,...] [--keyword TEXT] [--order-by FIELD] [--asc] [--limit 100] [--config FILE] [--json]
@@ -202,11 +242,31 @@ export function usage() {
   tbcli profit refunds coverage --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--config FILE] [--json]
   tbcli profit estimate query --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--owner NAME | --owners NAME,...] [--group-by shop|owner|product|day|month|owner-month] [--json]
   tbcli profit estimate export --shop-key KEY --start-date YYYY-MM-DD --end-date YYYY-MM-DD [--owner NAME | --owners NAME,...] --out FILE [--json]
+  tbcli profit owners reconcile --input FILE.json --shop-key KEY --effective-from YYYY-MM-DD --source-revision TEXT [--config FILE] [--json]
+  tbcli profit owners import --input FILE.json --shop-key KEY --effective-from YYYY-MM-DD --source-revision TEXT [--config FILE] [--json]
+  tbcli profit owners sync --input FILE.json --shop-key KEY --effective-from YYYY-MM-DD --source-revision TEXT [--config FILE] [--json]
+  tbcli profit costs fetch --out NEW_WDT_COSTS.json [--json]
+  tbcli profit costs reconcile --input WDT_COSTS.json --shop-key KEY --effective-from YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit costs sync --input WDT_COSTS.json --shop-key KEY --effective-from YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit components fetch --shop-key KEY --shop-id ID --replace-batch-id UUID --out NEW_SNAPSHOT.json [--json]
+  tbcli profit components reconcile --input SNAPSHOT.json --shop-key KEY --effective-from YYYY-MM-DD --replace-batch-id UUID [--out NEW_REPORT.json] [--json]
+  tbcli profit components sync --input SNAPSHOT.json --shop-key KEY --effective-from YYYY-MM-DD --replace-batch-id UUID --expected-old-count N --backup-out NEW_BACKUP.json --yes [--json]
+  tbcli profit weights infer --shop-key KEY --months YYYY-MM,YYYY-MM --out NEW_REPORT.json [--audit-sku ERP_SPEC_NO] [--config FILE] [--json]
+  tbcli profit weights stage --input REPORT.json --shop-key KEY --effective-from YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit sku-gross-weight init --input BILL.xlsx|DIR --shop-key KEY [--year YYYY] [--carrier sto|yunda|jt|sf --bill-month YYYY-MM] [--config FILE] [--json]
+  tbcli profit sku-gross-weight update --input BILL.xlsx|DIR --shop-key KEY [--year YYYY] [--carrier sto|yunda|jt|sf --bill-month YYYY-MM] [--config FILE] [--json]
+  tbcli profit sku-gross-weight manual-import --input WEIGHTS.json --shop-key KEY [--config FILE] [--json]
   tbcli profit actual coverage --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--config FILE] [--json]
-  tbcli profit actual query --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--group-by shop|owner|product|day|report] [--owner NAME | --owners NAME,...] [--config FILE] [--json]
+  tbcli profit actual query --shop-key KEY --month YYYY-MM [--policy-version VERSION] [--return-resale-rate 0..1] [--group-by shop|owner|product|day|report] [--owner NAME | --owners NAME,...] [--config FILE] [--json]
   tbcli profit actual audit-cost --shop-key KEY --month YYYY-MM --product-id ID [--config FILE] [--json]
+  tbcli profit actual audit-order-cost --shop-key KEY --month YYYY-MM [--order-nos NO,... | --sample-size N] [--config FILE] [--json]
+  tbcli profit actual audit-combo-cost --shop-key KEY --month YYYY-MM [--product-id ID] [--platform-sku-id ID] [--config FILE] [--json]
+  tbcli profit actual audit-reference-cost --shop-key KEY --month YYYY-MM [--config FILE] [--json]
+  tbcli profit actual audit-freight-fallback --shop-key KEY --month YYYY-MM [--order-nos NO,...] [--limit 30] [--config FILE] [--json]
   tbcli product images validate --input FILE --shop-key KEY --shop-name NAME [--json]
   tbcli product images import --input FILE --shop-key KEY --shop-name NAME [--config FILE] [--json]
+  tbcli yuce categories validate --input YC_EXPORT.json [--json]
+  tbcli yuce categories import --input YC_EXPORT.json [--config FILE] [--json]
   tbcli sycm market-rank --category-url URL --last-week YYYY-MM-DD [--out-dir DIR] [--json]
   tbcli skill source [--skill tbcli|ecommerce-monthly-profit-report] [--json]
   tbcli skill status [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)

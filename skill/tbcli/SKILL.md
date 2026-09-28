@@ -1,11 +1,13 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
+description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, platform SKU gross-weight initialization and incremental updates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, SKU毛重初始化, 新快递账单更新SKU重量, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
 ---
 
 # tbcli
 
 Use `tbcli` as the deterministic execution surface for supported ecommerce-browser work. Translate business language into commands, preflight the whole request, run the smallest stable command, and verify the delivered artifact.
+
+商品 ID 与运营负责人关系核对、缺失补充或同步使用 [商品负责人映射](references/product-owner-mapping.md)。先运行 `profit owners reconcile`；只有用户明确要求写入时才运行 `profit owners import` 或 `profit owners sync`。`import` 只补缺失关系；用户明确指定来源为准并要求保持一致时，`sync` 以历史版本接续冲突关系。
 
 Browser-only launch/status requests belong to the independently configured browser
 launcher, not this business Skill. The legacy `tbcli browser open` command remains
@@ -197,6 +199,7 @@ Require all of the following:
 - The `.xlsx` exists, is nonempty, and opens.
 - Headers include date, shop, required identity dimensions, and requested metrics.
 - The time granularity matches the request. For sparse filtered results, `workbook.dataPeriod` may be narrower than `requestedPeriod`; require it to stay inside the requested range rather than falsely requiring rows on both boundaries.
+- `workbook.dataStatus: all-null-placeholder` with `rows: 0` and a positive `allNullPlaceholderRows` means the platform generated only all-`NULL` placeholder rows. For ordinary downloads, report that the selected period has not produced usable data. For daily maintenance, follow the Daily Update pending-data branch: preserve the original workbook, do not import or register coverage, and continue with the other tables.
 - Multi-target delivery includes one verified result per target.
 
 If cleanup fails, preserve the downloaded file, report the exact temporary report ID/name, and do not claim full success. After an interrupted run, inspect `tbcli sycm reports --keyword 'tbcli-temp-' --json`; delete nothing manually without verifying tbcli ownership.
@@ -413,6 +416,19 @@ Require all of the following:
 
 ## Other Stable Tasks
 
+For 预策一级、二级、三级类目月数据 Excel 的校验、入库或入库核对，读取
+[预策类目入库](references/yuce-market.md)，只使用 `db yuce` 专用命令；普通
+`db import` 是生意参谋/无界报表导入器，不能解析预策月数据。
+
+For 预策/行情高手一级、二级或三级类目月数据的 JSON 增量入库, read
+[references/yuce-categories.md](references/yuce-categories.md). Use the
+dedicated `yuce categories validate|import` commands for yccli JSON exports;
+the generic `db import` command is for 生意参谋/无界报表 and does not parse 预策类目.
+Return here after verifying month coverage and the category hierarchy.
+
+For a specified 一级类目的逐路径月份缺口 or a read-only research snapshot, read
+[references/yuce-market.md](references/yuce-market.md) and use `db yuce coverage|export`.
+
 For 商品ID与商品主图映射表校验、入库或定期刷新, read
 [references/product-images.md](references/product-images.md). Use the dedicated
 `product images validate|import` commands; the mapping table is authoritative for
@@ -423,6 +439,21 @@ For 快递账单入库、运单实际运费 or courier bill validation, read
 [references/courier-bills.md](references/courier-bills.md). Use the dedicated
 freight commands rather than the SYCM workbook importer. Return here after
 verifying the import and its read-only summary.
+
+For 旺店通系统子件成本取数、核对或同步到当前 SKU 成本主数据, read
+[references/profit-costs.md](references/profit-costs.md). Only the explicitly authorized
+maintainer sync branch writes versioned master data; report unresolved zero and ambiguous costs.
+
+For 平台 SKU 与旺店通组合装子件的关系核对、重建或定期刷新, read
+[references/profit-components.md](references/profit-components.md). Follow its fetch →
+reconcile → authorized backup-and-sync → read-back main line; preserve unresolved
+platform SKUs as explicit gaps.
+
+For 从多月快递账单与订单组合反推子件净重、单件含包装计费重量及其置信度，或把结果暂存到重量主数据，read
+[references/profit-weights.md](references/profit-weights.md). 推断为只读；暂存需明确授权与维护权限，草稿不会取代当前已批准重量。
+
+For 依据快递账单 Excel 文件或目录初始化平台 SKU 毛重数据库，或在新账单到达后增量优化平台 SKU 毛重与置信度，read
+[references/platform-sku-gross-weight.md](references/platform-sku-gross-weight.md). 使用 `profit sku-gross-weight init|update|manual-import`；这与 ERP 子件净重推断是两个不同的数据主线。
 
 Read [references/command-reference.md](references/command-reference.md) when the request concerns shop products, logistics, AI点睛, DingTalk documents, browser startup, or the full command catalog. Do not load it for an ordinary SYCM report request.
 
@@ -441,7 +472,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 - **Warehouse unavailable:** report `DATABASE_UNAVAILABLE`, preserve the business question, and ask an administrator to configure or restore the approved warehouse connection. Do not request credentials from an employee or substitute a public/Tailscale endpoint.
 - **Database network adapter unavailable:** when a configured `zxvpn` command is missing, cannot ensure the route, or returns invalid JSON, stop with `DATABASE_NETWORK_UNAVAILABLE`. Do not repeatedly retry PostgreSQL, silently bypass the adapter, expose the database directly, or invent another VPN route. After the administrator restores `zxvpn`, return to Company Warehouse Flow discovery.
 - **Reader access check fails:** stop before any warehouse query. Report only the failed privilege category; ask the administrator to correct the reader role or local configuration. Never compensate by using a maintenance credential.
-- **Actual-profit capability unavailable:** return `CAPABILITY_UNAVAILABLE` with the missing `profit actual coverage|query|export|audit-cost` command and required input/output contract. The method remains defined, but do not claim a reconciled result or recreate it with raw SQL, generic `db query`, the estimate command, or a temporary script.
+- **Actual-profit capability unavailable:** return `CAPABILITY_UNAVAILABLE` with the missing `profit actual coverage|query|export|audit-cost|audit-order-cost|audit-combo-cost|audit-reference-cost` command and required input/output contract. The method remains defined, but do not claim a reconciled result or recreate it with raw SQL, generic `db query`, the estimate command, or a temporary script.
 
 ## Evolution Rule
 

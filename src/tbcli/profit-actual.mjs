@@ -3,10 +3,17 @@ import {getProfitRefundCoverage} from './profit-refunds.mjs';
 
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 export const ACTUAL_PROFIT_POLICY = Object.freeze({
-  version: 'operating-profit-v1',
+  version: 'operating-profit-v5',
+  costBasis: 'current_approved_sku_cost',
+  freightAllocationBasis: 'platform_sku_gross_weight',
+  missingWeightFallback: 'order_revenue_share',
+  residualPackagingAssumptionKg: 0.2,
+  ignoredPlaceholderSpecNo: 'dc99999',
   platformFeeRate: 0.06,
   taxRate: 0.02,
   missingFreightPerWaybill: 2,
+  returnResaleRate: 0.5,
+  refundCostRule: 'pre_shipment_full_credit_return_refund_resale_rate_credit',
   revenueBasis: 'order_header_paid',
   ownerOptionalProducts: Object.freeze({
     '2821074747423457561': Object.freeze({type:'delisted_product',ownerRequired:false}),
@@ -18,6 +25,37 @@ export const ACTUAL_PROFIT_POLICY = Object.freeze({
     '641773251256': Object.freeze({type:'price_adjustment_link',ownerRequired:false,costState:'explicit_zero'}),
   }),
 });
+const WEIGHT_ACTUAL_PROFIT_POLICY = Object.freeze({...ACTUAL_PROFIT_POLICY,
+  version:'operating-profit-v4',returnResaleRate:null,refundCostRule:null});
+const REVENUE_ACTUAL_PROFIT_POLICY = Object.freeze({...ACTUAL_PROFIT_POLICY,
+  version:'operating-profit-v3',freightAllocationBasis:'order_revenue_share',
+  missingWeightFallback:null,residualPackagingAssumptionKg:null,returnResaleRate:null,refundCostRule:null});
+const PREVIOUS_ACTUAL_PROFIT_POLICY = Object.freeze({...REVENUE_ACTUAL_PROFIT_POLICY,
+  version:'operating-profit-v2',ignoredPlaceholderSpecNo:null});
+const LEGACY_ACTUAL_PROFIT_POLICY = Object.freeze({...PREVIOUS_ACTUAL_PROFIT_POLICY,
+  version:'operating-profit-v1',costBasis:'order_goods_cost_then_paid_date_sku_cost'});
+
+function actualPolicy(version) {
+  if(version===LEGACY_ACTUAL_PROFIT_POLICY.version) return LEGACY_ACTUAL_PROFIT_POLICY;
+  if(version===PREVIOUS_ACTUAL_PROFIT_POLICY.version) return PREVIOUS_ACTUAL_PROFIT_POLICY;
+  if(version===REVENUE_ACTUAL_PROFIT_POLICY.version) return REVENUE_ACTUAL_PROFIT_POLICY;
+  if(version===WEIGHT_ACTUAL_PROFIT_POLICY.version) return WEIGHT_ACTUAL_PROFIT_POLICY;
+  return ACTUAL_PROFIT_POLICY;
+}
+
+// Only an entire zero-value, single-spec placeholder order is outside the v3 profit scope.
+// Keep this at the order boundary so its shipment charges cannot leak into freight.
+const PLACEHOLDER_ORDER_EXPR = `h.paid_amount=0
+  AND EXISTS (SELECT 1 FROM raw.wdt_order_lines p WHERE p.shop_key=h.shop_key
+    AND p.wdt_trade_no=h.wdt_trade_no AND p.erp_spec_no='dc99999')
+  AND NOT EXISTS (SELECT 1 FROM raw.wdt_order_lines p WHERE p.shop_key=h.shop_key
+    AND p.wdt_trade_no=h.wdt_trade_no AND (
+      p.erp_spec_no IS DISTINCT FROM 'dc99999' OR coalesce(p.source_share_amount,0)<>0
+      OR coalesce(p.source_line_paid,0)<>0 OR coalesce(p.source_goods_cost,0)<>0
+      OR coalesce(p.source_ref_unit_cost,0)<>0))`;
+export function excludePlaceholderOrder(param) {
+  return `AND NOT ($${param}::boolean AND (${PLACEHOLDER_ORDER_EXPR}))`;
+}
 
 function integer(value) { return Number(value || 0); }
 function decimal(value) { return value == null ? null : String(value); }
@@ -42,19 +80,25 @@ export function validateActualCoverageRequest(args = {}) {
   if (!args.shopKey) throw new Error('缺少 --shop-key');
   const period = actualProfitPeriod(args.month);
   if (args.policyVersion != null && !String(args.policyVersion).trim()) throw new Error('--policy-version 不能为空');
-  if (args.policyVersion && String(args.policyVersion).trim() !== ACTUAL_PROFIT_POLICY.version) {
-    throw new Error(`--policy-version 当前仅支持 ${ACTUAL_PROFIT_POLICY.version}`);
+  if (args.policyVersion && ![ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version,PREVIOUS_ACTUAL_PROFIT_POLICY.version,LEGACY_ACTUAL_PROFIT_POLICY.version].includes(String(args.policyVersion).trim())) {
+    throw new Error(`--policy-version 当前仅支持 ${ACTUAL_PROFIT_POLICY.version}、${WEIGHT_ACTUAL_PROFIT_POLICY.version}、${REVENUE_ACTUAL_PROFIT_POLICY.version}、${PREVIOUS_ACTUAL_PROFIT_POLICY.version} 或 ${LEGACY_ACTUAL_PROFIT_POLICY.version}`);
   }
-  return {...period, policyVersion: ACTUAL_PROFIT_POLICY.version};
+  const returnResaleRate=Number(args.returnResaleRate ?? ACTUAL_PROFIT_POLICY.returnResaleRate);
+  if (!Number.isFinite(returnResaleRate) || returnResaleRate<0 || returnResaleRate>1)
+    throw new Error('--return-resale-rate 必须是 0 到 1 之间的比例');
+  return {...period, policyVersion: args.policyVersion || ACTUAL_PROFIT_POLICY.version,returnResaleRate};
 }
 
 const ORDER_SCOPE_SQL = `
-  WITH scoped AS MATERIALIZED (
-    SELECT wdt_trade_no,paid_amount FROM raw.wdt_order_headers
-    WHERE shop_key=$1 AND order_status_code=95
-      AND (paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  WITH all_scoped AS MATERIALIZED (
+    SELECT h.wdt_trade_no,h.paid_amount,(${PLACEHOLDER_ORDER_EXPR}) AS is_placeholder
+    FROM raw.wdt_order_headers h WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  ), scoped AS MATERIALIZED (
+    SELECT wdt_trade_no,paid_amount FROM all_scoped WHERE NOT ($4::boolean AND is_placeholder)
   )
   SELECT (SELECT count(*)::bigint FROM scoped) AS eligible_orders,
+    (SELECT count(*)::bigint FROM all_scoped WHERE $4::boolean AND is_placeholder) AS ignored_placeholder_orders,
     (SELECT count(*)::bigint FROM raw.wdt_order_lines l JOIN scoped s USING(wdt_trade_no) WHERE l.shop_key=$1) AS order_lines,
     (SELECT count(*)::bigint FROM raw.shipments x JOIN scoped s USING(wdt_trade_no) WHERE x.shop_key=$1) AS shipments,
     (SELECT round(coalesce(sum(paid_amount),0),2)::text FROM scoped) AS paid_amount,
@@ -63,15 +107,16 @@ const ORDER_SCOPE_SQL = `
 
 const REFUND_SQL = `
   WITH scoped_orders AS MATERIALIZED (
-    SELECT wdt_trade_no,platform_trade_id FROM raw.wdt_order_headers
-    WHERE shop_key=$1 AND order_status_code=95
-      AND (paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+    SELECT h.wdt_trade_no,h.platform_trade_id FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(5)}
   ), scoped_refunds AS MATERIALIZED (
     SELECT h.*,o.platform_trade_id AS original_platform_trade_id
     FROM raw.wdt_refund_headers h JOIN scoped_orders o USING(wdt_trade_no)
     WHERE h.shop_key=$1 AND h.is_financially_refunded AND h.settled_at <= $4::timestamptz
   ), scoped_lines AS MATERIALIZED (
-    SELECT l.*,h.wdt_trade_no,h.original_platform_trade_id
+    SELECT l.*,h.wdt_trade_no,h.original_platform_trade_id,h.refund_type,h.refund_status_text
     FROM raw.wdt_refund_lines l JOIN scoped_refunds h USING(shop_key,refund_no)
   ), order_lookup AS MATERIALIZED (
     SELECT order_line_key,wdt_order_line_id,source_order_line_id,wdt_trade_no
@@ -93,6 +138,10 @@ const REFUND_SQL = `
   SELECT (SELECT count(*)::bigint FROM scoped_refunds) AS settled_refunds,
     (SELECT round(coalesce(sum(coalesce(actual_refund_amount,refunded_amount,return_amount,0)),0),2)::text FROM scoped_refunds) AS header_refund_amount,
     count(*)::bigint AS refund_lines,
+    count(*) FILTER(WHERE refund_type=1)::bigint AS pre_ship_refund_lines,
+    count(*) FILTER(WHERE refund_type=2)::bigint AS return_refund_lines,
+    count(*) FILTER(WHERE refund_type=2 AND refund_status_text='待入库')::bigint AS pending_stockin_return_lines,
+    count(*) FILTER(WHERE refund_type IN (1,2) AND NOT is_mapped)::bigint AS unmapped_cost_refund_lines,
     round(coalesce(sum(coalesce(actual_refund_amount,refunded_amount,refund_amount,0)),0),2)::text AS line_refund_amount,
     0::bigint AS unmatched_refund_headers,
     count(*) FILTER(WHERE NOT is_mapped)::bigint AS unmapped_refund_lines,
@@ -113,6 +162,7 @@ const FREIGHT_SQL = `
     FROM raw.shipments s JOIN raw.wdt_order_headers h USING(shop_key,wdt_trade_no)
     WHERE h.shop_key=$1 AND h.order_status_code=95
       AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(4)}
       AND nullif(trim(s.tracking_no),'') IS NOT NULL
     GROUP BY s.tracking_no
   ), charges AS MATERIALIZED (
@@ -148,9 +198,12 @@ const COST_SQL = `
     FROM raw.wdt_order_headers h JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
     WHERE h.shop_key=$1 AND h.order_status_code=95
       AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(6)}
   ), classified AS (
-    SELECT l.*,m.unit_cost,
+    SELECT l.*,CASE WHEN $5::boolean THEN c.unit_cost ELSE m.unit_cost END AS unit_cost,
       CASE WHEN l.platform_product_id=ANY($4::text[]) THEN 'explicit_zero'
+           WHEN $5::boolean AND c.cost_status='available' AND c.unit_cost>0 THEN 'standard_reference'
+           WHEN $5::boolean THEN 'missing'
            WHEN l.source_goods_cost IS NOT NULL THEN 'actual'
            WHEN m.unit_cost IS NOT NULL THEN 'standard_reference' ELSE 'missing' END AS value_state
     FROM lines l LEFT JOIN LATERAL (
@@ -159,6 +212,7 @@ const COST_SQL = `
         AND l.paid_date>=m.effective_from AND (m.effective_to IS NULL OR l.paid_date<=m.effective_to)
       ORDER BY m.effective_from DESC LIMIT 1
     ) m ON true
+    LEFT JOIN master.current_sku_costs c ON c.shop_key=$1 AND c.erp_spec_no=l.erp_spec_no
   )
   SELECT count(*)::bigint AS lines,
     count(*) FILTER(WHERE value_state='actual')::bigint AS actual_lines,
@@ -187,6 +241,7 @@ const OWNER_SQL = `
     FROM raw.wdt_order_headers h JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
     WHERE h.shop_key=$1 AND h.order_status_code=95
       AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(6)}
       AND l.platform_product_id IS NOT NULL
   ), products AS MATERIALIZED (
     SELECT DISTINCT paid_date,platform_product_id FROM lines
@@ -254,13 +309,23 @@ export async function getActualProfitCoverage(client, args = {}) {
   const adShopName = sourceShopName.replace(/^天猫\s*/, '');
   const ordersCoverage = await getProfitOrderCoverage(client, {shopKey: args.shopKey, startDate: period.startDate, endDate: period.endDate});
   const refundSourceCoverage = await getProfitRefundCoverage(client, {shopKey: args.shopKey, startDate: period.startDate, endDate: period.refundCutoffDate});
-  const orderResult = await client.query(ORDER_SCOPE_SQL, monthParams);
-  const refundResult = await client.query(REFUND_SQL, params);
-  const freightResult = await client.query(FREIGHT_SQL, monthParams);
-  const costResult = await client.query(COST_SQL, [...monthParams, nonMerchandiseProductIds]);
-  const ownerResult = await client.query(OWNER_SQL, [...monthParams, ownerOptionalProductIds, nonMerchandiseProductIds]);
+  const currentCostPolicy=period.policyVersion!==LEGACY_ACTUAL_PROFIT_POLICY.version;
+  const placeholderPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
+  const orderResult = await client.query(ORDER_SCOPE_SQL, [...monthParams,placeholderPolicy]);
+  const refundResult = await client.query(REFUND_SQL, [...params,placeholderPolicy]);
+  const freightResult = await client.query(FREIGHT_SQL, [...monthParams,placeholderPolicy]);
+  const costResult = await client.query(COST_SQL, [...monthParams, nonMerchandiseProductIds,currentCostPolicy,placeholderPolicy]);
+  const ownerResult = await client.query(OWNER_SQL, [...monthParams, ownerOptionalProductIds, nonMerchandiseProductIds,placeholderPolicy]);
   const adsResult = await client.query(ADS_SQL, [period.startDate, period.endDate, adShopName]);
-  const orderScope = rowNumbers(orderResult.rows[0], ['eligible_orders','order_lines','shipments']);
+  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
+  const weightResult=weightPolicy?await client.query(SKU_GROSS_WEIGHT_COVERAGE_SQL,[...monthParams,placeholderPolicy,nonMerchandiseProductIds,
+    ACTUAL_PROFIT_POLICY.missingFreightPerWaybill,period.refundCutoff,period.policyVersion===ACTUAL_PROFIT_POLICY.version]):null;
+  const weightRun=weightPolicy?await client.query(`SELECT run_id,method,created_at,
+      changed_estimate_count,changed_inferred_count
+    FROM meta.platform_sku_gross_weight_runs WHERE shop_key=$1
+      AND (changed_estimate_count>0 OR changed_inferred_count>0)
+    ORDER BY created_at DESC LIMIT 1`,[args.shopKey]):null;
+  const orderScope = rowNumbers(orderResult.rows[0], ['eligible_orders','ignored_placeholder_orders','order_lines','shipments']);
   orderScope.paid_amount = decimal(orderScope.paid_amount);
   orderScope.allocated_line_revenue = decimal(orderScope.allocated_line_revenue);
   orderScope.line_revenue_difference = (Number(orderScope.allocated_line_revenue || 0) - Number(orderScope.paid_amount || 0)).toFixed(2);
@@ -271,7 +336,8 @@ export async function getActualProfitCoverage(client, args = {}) {
     headerAmount:{table:'raw.wdt_order_headers',column:'paid_amount',sourceField:'orders[].paid'},
     lineAmount:{table:'raw.wdt_order_lines',column:'source_share_amount',fallbackColumn:'source_line_paid',sourceFields:['orders[].items[].shareAmount','orders[].items[].paid']},
   };
-  const refunds = rowNumbers(refundResult.rows[0], ['settled_refunds','refund_lines','unmatched_refund_headers','unmapped_refund_lines']);
+  const refunds = rowNumbers(refundResult.rows[0], ['settled_refunds','refund_lines','unmatched_refund_headers','unmapped_refund_lines',
+    'pre_ship_refund_lines','return_refund_lines','pending_stockin_return_lines','unmapped_cost_refund_lines']);
   const freight = rowNumbers(freightResult.rows[0], ['shipment_waybills','matched_waybills','unmatched_waybills','shared_tracking_waybills','multi_charge_waybills','multi_carrier_waybills']);
   freight.estimated_waybills = freight.unmatched_waybills;
   freight.estimated_unit_amount = ACTUAL_PROFIT_POLICY.missingFreightPerWaybill.toFixed(2);
@@ -282,10 +348,26 @@ export async function getActualProfitCoverage(client, args = {}) {
     estimated:{waybills:freight.estimated_waybills,amount:freight.estimated_freight_amount,rule:'每个未匹配运单 2 元'},
   };
   const costs = rowNumbers(costResult.rows[0], ['lines','actual_lines','standard_reference_lines','explicit_zero_lines','missing_lines']);
+  costs.basis=currentCostPolicy?'master.current_sku_costs.unit_cost × raw.wdt_order_lines.quantity'
+    :'raw.wdt_order_lines.source_goods_cost; fallback paid-date master.sku_cost_versions.unit_cost × quantity';
+  if(period.policyVersion===ACTUAL_PROFIT_POLICY.version) costs.basis+=`; 未发货退款数量全额冲回，退货退款数量按 ${(period.returnResaleRate*100).toFixed(0)}% 可二次销售比例冲回`;
+  if(currentCostPolicy) {
+    const syncBatch=await client.query(`SELECT batch_id,source_metadata,imported_at,effective_from::text
+      FROM meta.master_data_batches WHERE shop_key=$1 AND data_type='sku-cost-sync'
+        AND status='approved' ORDER BY imported_at DESC LIMIT 1`,[args.shopKey]);
+    costs.latestSync=syncBatch.rows[0]??null;
+  }
   const owners = rowNumbers(ownerResult.rows[0], ['product_days','assigned_product_days','unassigned_product_days','unassigned_products','review_unassigned_products','intentional_unassigned_products']);
   const ads = rowNumbers(adsResult.rows[0], ['covered_days','rows']);
   ads.expected_days = Number(period.endDate.slice(8,10));
   ads.missing_days = Math.max(0, ads.expected_days - ads.covered_days);
+  const freightWeightAllocation=weightPolicy?{
+    method:'platform_sku_gross_weight',sourceTable:'master.current_platform_sku_gross_weights',
+    componentTable:'master.current_platform_sku_components',
+    latestWeightRun:weightRun.rows[0]??null,
+    ...rowNumbers(weightResult.rows[0],['sku_groups','weighted_sku_groups','missing_sku_groups','inferred_sku_groups','shared_inferred_sku_groups','low_confidence_sku_groups','orders','missing_weight_orders','missing_platform_skus']),
+  }:{method:'order_revenue_share',status:'revenue_share'};
+  if(weightPolicy) freightWeightAllocation.status=freightWeightAllocation.missing_weight_orders>0?'weight_with_revenue_fallback':'weight_allocated';
 
   const blockingGaps = [];
   const advisoryGaps = [];
@@ -298,17 +380,42 @@ export async function getActualProfitCoverage(client, args = {}) {
   addGap(blockingGaps, Math.abs(Number(refunds.header_refund_amount || 0) - Number(refunds.line_refund_amount || 0)) > 0.01,
     {code:'REFUND_LINE_AMOUNT_MISMATCH', headerAmount:refunds.header_refund_amount, lineAmount:refunds.line_refund_amount});
   addGap(advisoryGaps, refunds.unmapped_refund_lines > 0, {code:'REFUND_LINE_UNMAPPED', count:refunds.unmapped_refund_lines, amount:refunds.unmapped_refund_amount});
+  if(period.policyVersion===ACTUAL_PROFIT_POLICY.version) {
+    addGap(advisoryGaps, refunds.unmapped_cost_refund_lines>0,
+      {code:'REFUND_COST_LINE_UNMAPPED',count:refunds.unmapped_cost_refund_lines,rule:'无法映射的退款行暂不冲回商品成本，需人工核对'});
+    addGap(advisoryGaps, refunds.pending_stockin_return_lines>0,
+      {code:'RETURN_RESALE_ASSUMPTION_PENDING_STOCKIN',count:refunds.pending_stockin_return_lines,
+        returnResaleRate:period.returnResaleRate,rule:'退货退款虽为待入库，按人为设定的可二次销售比例暂估冲回成本'});
+  }
   addGap(advisoryGaps, freight.estimated_waybills > 0, {code:'FREIGHT_ESTIMATED_BY_CONFIRMED_POLICY', count:freight.estimated_waybills, amount:freight.estimated_freight_amount, unitAmount:freight.estimated_unit_amount});
   addGap(advisoryGaps, freight.shared_tracking_waybills > 0, {code:'TRACKING_SHARED_BY_MULTIPLE_ORDERS', count:freight.shared_tracking_waybills});
   addGap(advisoryGaps, freight.multi_carrier_waybills > 0, {code:'TRACKING_MATCHES_MULTIPLE_CARRIERS', count:freight.multi_carrier_waybills});
   addGap(advisoryGaps, owners.review_unassigned_products > 0, {code:'PRODUCT_OWNER_REVIEW_REQUIRED', productDays:owners.unassigned_product_days, products:owners.review_unassigned_products});
-  addGap(advisoryGaps, true, {code:'FREIGHT_ALLOCATED_BY_REVENUE_FALLBACK', reason:'商品重量覆盖未作为利润分摊依据，按订单内归一化收入占比分配'});
+  if(weightPolicy) {
+    addGap(advisoryGaps, freightWeightAllocation.missing_weight_orders>0,
+      {code:'SKU_GROSS_WEIGHT_REVENUE_FALLBACK',orders:freightWeightAllocation.missing_weight_orders,
+        skuGroups:freightWeightAllocation.missing_sku_groups,
+        freightAmount:freightWeightAllocation.fallback_freight_amount,
+        rule:period.policyVersion===ACTUAL_PROFIT_POLICY.version
+          ?'整单按有效发货数量加权的收入占比分摊；收入权重为零时按发货数量分摊'
+          :'整单按收入比例分摊；零实付时按子件行等分',
+        examples:freightWeightAllocation.missing_examples});
+    addGap(advisoryGaps, freightWeightAllocation.low_confidence_sku_groups>0,
+      {code:'SKU_GROSS_WEIGHT_LOW_CONFIDENCE',skuGroups:freightWeightAllocation.low_confidence_sku_groups});
+    addGap(advisoryGaps, freightWeightAllocation.inferred_sku_groups>0,
+      {code:'SKU_GROSS_WEIGHT_MULTI_SKU_INFERRED',skuGroups:freightWeightAllocation.inferred_sku_groups,
+        packagingAssumptionKg:ACTUAL_PROFIT_POLICY.residualPackagingAssumptionKg});
+    addGap(advisoryGaps, freightWeightAllocation.shared_inferred_sku_groups>0,
+      {code:'SKU_GROSS_WEIGHT_SHARED_RESIDUAL',skuGroups:freightWeightAllocation.shared_inferred_sku_groups,
+        rule:'多个未知 SKU 的剩余净货重按购买件数均分',confidenceCap:0.1});
+  } else addGap(advisoryGaps, true, {code:'FREIGHT_ALLOCATED_BY_REVENUE', reason:'按订单内归一化收入占比分配'});
 
   return {
     mode:'live-read-only', calculationPerformed:false, shopKey:args.shopKey, shopName:sourceShopName,
-    period, targetState:'actual/reconciled', status:blockingGaps.length ? 'incomplete' : freight.estimated_waybills > 0 ? 'provisional' : 'actual/reconciled',
+    period, targetState:'actual/reconciled', status:blockingGaps.length ? 'incomplete' :
+      freight.estimated_waybills > 0 || weightPolicy ? 'provisional' : 'actual/reconciled',
     coverage:{orders:ordersCoverage, refundSource:{...refundSourceCoverage,dateBasis:'退款申请日批次覆盖；退款金额另按原支付月订单与结算截止时间核对'}, orderScope, refunds, freight, costs, owners, ads,
-      policy:{...ACTUAL_PROFIT_POLICY,status:'confirmed'}, freightWeightAllocation:{status:'revenue_fallback'}},
+      policy:{...actualPolicy(period.policyVersion),returnResaleRate:period.policyVersion===ACTUAL_PROFIT_POLICY.version?period.returnResaleRate:null,status:'confirmed'}, freightWeightAllocation},
     blockingGaps, advisoryGaps,
   };
 }
@@ -335,6 +442,27 @@ export function validateActualCostAuditRequest(args = {}) {
   const productId = String(args.productId || '').trim();
   if (!productId) throw new Error('缺少 --product-id');
   return {...period, productId};
+}
+
+export function validateActualOrderCostAuditRequest(args = {}) {
+  const period = validateActualCoverageRequest(args);
+  const orderNos = [...new Set(String(args.orderNos || '').split(/[,，\s]+/).map(value=>value.trim()).filter(Boolean))];
+  if (orderNos.length > 100) throw new Error('--order-nos 最多支持 100 个订单号');
+  if (orderNos.length && args.sampleSize != null) throw new Error('--order-nos 与 --sample-size 不能同时使用');
+  const sampleSize = orderNos.length ? orderNos.length : Number(args.sampleSize ?? 30);
+  if (!Number.isInteger(sampleSize) || sampleSize < 1 || sampleSize > 1000) throw new Error('--sample-size 必须是 1 到 1000 的整数');
+  return {...period, orderNos, sampleSize, selectionMode:orderNos.length ? 'explicit-orders' : 'deterministic-sample'};
+}
+
+export function validateActualComboCostAuditRequest(args = {}) {
+  const period = validateActualCoverageRequest(args);
+  const productId = String(args.productId || '').trim() || null;
+  const platformSkuId = String(args.platformSkuId || '').trim() || null;
+  return {...period, productId, platformSkuId};
+}
+
+export function validateActualReferenceCostAuditRequest(args = {}) {
+  return validateActualCoverageRequest(args);
 }
 
 const COST_AUDIT_SQL = `
@@ -434,6 +562,335 @@ export async function getActualCostAudit(client,args={}) {
   };
 }
 
+const ORDER_COST_AUDIT_SQL = `
+  WITH eligible_orders AS MATERIALIZED (
+    SELECT h.shop_key,h.wdt_trade_no,(h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date
+    FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  ), selected_orders AS MATERIALIZED (
+    SELECT * FROM eligible_orders
+    WHERE ($4::text[] IS NULL OR wdt_trade_no=ANY($4::text[]))
+    ORDER BY CASE WHEN $4::text[] IS NULL THEN md5(wdt_trade_no) ELSE wdt_trade_no END
+    LIMIT $5
+  ), line_costs AS MATERIALIZED (
+    SELECT o.paid_date,o.wdt_trade_no,l.order_line_key,l.platform_product_id,l.platform_sku_id,l.erp_spec_no,
+      l.product_name,l.sku_name,coalesce(l.quantity,0) AS quantity,
+      l.source_goods_cost,l.source_ref_unit_cost,c.unit_cost AS master_unit_cost
+    FROM selected_orders o JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
+    LEFT JOIN LATERAL (
+      SELECT unit_cost FROM master.sku_cost_versions c
+      WHERE c.shop_key=$1 AND c.erp_spec_no=l.erp_spec_no AND c.status='approved'
+        AND o.paid_date>=c.effective_from AND (c.effective_to IS NULL OR o.paid_date<=c.effective_to)
+      ORDER BY c.effective_from DESC LIMIT 1
+    ) c ON true
+  )
+  SELECT min(paid_date)::text AS paid_date,wdt_trade_no,count(*)::text AS line_count,
+    count(DISTINCT platform_product_id)::text AS product_count,
+    count(DISTINCT coalesce(erp_spec_no,platform_sku_id))::text AS sku_count,
+    sum(quantity)::text AS quantity_total,
+    count(*) FILTER(WHERE source_goods_cost IS NULL)::text AS source_goods_missing_lines,
+    count(*) FILTER(WHERE source_goods_cost=0)::text AS source_goods_zero_lines,
+    sum(source_goods_cost)::text AS source_goods_cost_total,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NULL)::text AS source_ref_missing_lines,
+    sum(source_ref_unit_cost*quantity)::text AS source_ref_calculated_cost_total,
+    count(*) FILTER(WHERE master_unit_cost IS NULL)::text AS master_missing_lines,
+    sum(master_unit_cost*quantity)::text AS master_calculated_cost_total,
+    (SELECT count(*)::text FROM eligible_orders) AS eligible_order_count,
+    CASE WHEN $4::text[] IS NOT NULL THEN jsonb_agg(jsonb_build_object(
+      'orderLineKey',order_line_key,'platformProductId',platform_product_id,
+      'platformSkuId',platform_sku_id,'erpSpecNo',erp_spec_no,
+      'productName',product_name,'skuName',sku_name,'quantity',quantity,
+      'sourceGoodsCost',source_goods_cost,'sourceRefUnitCost',source_ref_unit_cost,
+      'sourceRefCalculatedCost',source_ref_unit_cost*quantity,
+      'masterUnitCost',master_unit_cost,'masterCalculatedCost',master_unit_cost*quantity
+    ) ORDER BY order_line_key) END AS detail_lines
+  FROM line_costs GROUP BY wdt_trade_no
+  ORDER BY min(paid_date),wdt_trade_no`;
+
+function orderComparisonSummary(rows,key) {
+  const comparisons = rows.map(row=>row[key]);
+  const comparable = comparisons.filter(item=>item.comparable);
+  const mismatches = comparable.filter(item=>!item.matches);
+  return {
+    comparableOrderCount:comparable.length,
+    matchOrderCount:comparable.length-mismatches.length,
+    mismatchOrderCount:mismatches.length,
+    unavailableOrderCount:comparisons.length-comparable.length,
+    absoluteDifferenceTotal:auditAmount(mismatches.reduce((sum,item)=>sum+Math.abs(item.difference),0)),
+    maximumAbsoluteDifference:auditAmount(mismatches.reduce((max,item)=>Math.max(max,Math.abs(item.difference)),0)),
+  };
+}
+
+export async function getActualOrderCostAudit(client,args={}) {
+  const request = validateActualOrderCostAuditRequest(args);
+  const shop = await client.query('SELECT shop_name FROM raw.wdt_order_headers WHERE shop_key=$1 ORDER BY observed_at DESC LIMIT 1',[args.shopKey]);
+  if (!shop.rows.length) throw new Error('没有找到该店铺的订单事实');
+  const params=[args.shopKey,request.startDate,request.endDate,request.orderNos.length ? request.orderNos : null,request.sampleSize];
+  const sourceRows=(await client.query(ORDER_COST_AUDIT_SQL,params)).rows;
+  const rows=sourceRows.map(row=>{
+    const sourceGoodsMissingLines=Number(row.source_goods_missing_lines);
+    const sourceRefMissingLines=Number(row.source_ref_missing_lines);
+    const masterMissingLines=Number(row.master_missing_lines);
+    const sourceGoodsCostTotal=auditNumber(row.source_goods_cost_total);
+    const sourceRefCalculatedCostTotal=auditNumber(row.source_ref_calculated_cost_total);
+    const masterCalculatedCostTotal=auditNumber(row.master_calculated_cost_total);
+    const detailLines=request.selectionMode==='explicit-orders' ? (row.detail_lines || []).map(line=>{
+      const sourceGoodsCost=auditNumber(line.sourceGoodsCost);
+      const sourceRefCalculatedCost=auditNumber(line.sourceRefCalculatedCost);
+      const masterCalculatedCost=auditNumber(line.masterCalculatedCost);
+      return {
+        orderLineKey:line.orderLineKey,platformProductId:line.platformProductId,
+        platformSkuId:line.platformSkuId,erpSpecNo:line.erpSpecNo,
+        productName:line.productName,skuName:line.skuName,quantity:auditAmount(auditNumber(line.quantity)),
+        sourceGoodsCost:auditAmount(sourceGoodsCost),sourceRefUnitCost:auditAmount(auditNumber(line.sourceRefUnitCost)),
+        sourceRefCalculatedCost:auditAmount(sourceRefCalculatedCost),masterUnitCost:auditAmount(auditNumber(line.masterUnitCost)),
+        masterCalculatedCost:auditAmount(masterCalculatedCost),
+        goodsVsSourceRef:costComparison(sourceGoodsCost,sourceRefCalculatedCost),
+        goodsVsMaster:costComparison(sourceGoodsCost,masterCalculatedCost),
+        sourceRefVsMaster:costComparison(sourceRefCalculatedCost,masterCalculatedCost),
+      };
+    }) : undefined;
+    return {
+      paidDate:row.paid_date,wdtTradeNo:row.wdt_trade_no,lineCount:Number(row.line_count),
+      productCount:Number(row.product_count),skuCount:Number(row.sku_count),quantityTotal:auditNumber(row.quantity_total),
+      sourceGoodsMissingLines,sourceGoodsZeroLines:Number(row.source_goods_zero_lines),
+      sourceGoodsCostTotal:auditAmount(sourceGoodsCostTotal),sourceRefMissingLines,
+      sourceRefCalculatedCostTotal:auditAmount(sourceRefCalculatedCostTotal),masterMissingLines,
+      masterCalculatedCostTotal:auditAmount(masterCalculatedCostTotal),
+      goodsVsSourceRef:costComparison(sourceGoodsMissingLines ? null : sourceGoodsCostTotal,sourceRefMissingLines ? null : sourceRefCalculatedCostTotal),
+      goodsVsMaster:costComparison(sourceGoodsMissingLines ? null : sourceGoodsCostTotal,masterMissingLines ? null : masterCalculatedCostTotal),
+      sourceRefVsMaster:costComparison(sourceRefMissingLines ? null : sourceRefCalculatedCostTotal,masterMissingLines ? null : masterCalculatedCostTotal),
+      detailLines,
+    };
+  });
+  const returnedOrderNos=new Set(rows.map(row=>row.wdtTradeNo));
+  const goodsVsSourceRef=orderComparisonSummary(rows,'goodsVsSourceRef');
+  const goodsVsMaster=orderComparisonSummary(rows,'goodsVsMaster');
+  const sourceRefVsMaster=orderComparisonSummary(rows,'sourceRefVsMaster');
+  return {
+    mode:'live-read-only',calculationPerformed:false,audit:'whole-order-cost-consistency',tolerance:'0.01',
+    shopKey:args.shopKey,shopName:shop.rows[0].shop_name,period:request,
+    selection:{mode:request.selectionMode,sampleSize:request.sampleSize,eligibleOrderCount:Number(sourceRows[0]?.eligible_order_count || 0),requestedOrderNos:request.orderNos,missingRequestedOrderNos:request.orderNos.filter(value=>!returnedOrderNos.has(value))},
+    summary:{
+      orderCount:rows.length,lineCount:rows.reduce((sum,row)=>sum+row.lineCount,0),
+      ordersWithZeroGoodsCostLines:rows.filter(row=>row.sourceGoodsZeroLines>0).length,
+      goodsVsSourceRef,goodsVsMaster,sourceRefVsMaster,
+      allComparableOrderCostsMatch:goodsVsSourceRef.mismatchOrderCount===0&&goodsVsMaster.mismatchOrderCount===0&&sourceRefVsMaster.mismatchOrderCount===0,
+      fullyComparable:goodsVsSourceRef.unavailableOrderCount===0&&goodsVsMaster.unavailableOrderCount===0&&sourceRefVsMaster.unavailableOrderCount===0,
+    },
+    rows,
+  };
+}
+
+const COMBO_COST_AUDIT_SQL = `
+  WITH scoped_lines AS MATERIALIZED (
+    SELECT (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,h.wdt_trade_no,
+      l.platform_product_id,l.platform_sku_id,l.erp_spec_no,l.product_name,l.sku_name,
+      coalesce(l.quantity,0) AS quantity,l.source_goods_cost,l.source_ref_unit_cost,
+      c.unit_cost AS master_unit_cost
+    FROM raw.wdt_order_headers h JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
+    LEFT JOIN LATERAL (
+      SELECT unit_cost FROM master.sku_cost_versions c
+      WHERE c.shop_key=$1 AND c.erp_spec_no=l.erp_spec_no AND c.status='approved'
+        AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date>=c.effective_from
+        AND (c.effective_to IS NULL OR (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date<=c.effective_to)
+      ORDER BY c.effective_from DESC LIMIT 1
+    ) c ON true
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      AND ($4::text IS NULL OR l.platform_product_id=$4)
+      AND ($5::text IS NULL OR l.platform_sku_id=$5)
+      AND l.platform_product_id IS NOT NULL AND l.platform_sku_id IS NOT NULL AND l.erp_spec_no IS NOT NULL
+  ), combo_instances AS MATERIALIZED (
+    SELECT wdt_trade_no,platform_product_id,platform_sku_id
+    FROM scoped_lines
+    GROUP BY wdt_trade_no,platform_product_id,platform_sku_id
+    HAVING count(DISTINCT erp_spec_no)>1
+  ), combo_lines AS MATERIALIZED (
+    SELECT l.* FROM scoped_lines l JOIN combo_instances c USING(wdt_trade_no,platform_product_id,platform_sku_id)
+  ), order_combo AS MATERIALIZED (
+    SELECT min(paid_date) AS paid_date,wdt_trade_no,platform_product_id,platform_sku_id,
+      count(*) AS line_count,count(DISTINCT erp_spec_no) AS component_count,
+      count(*) FILTER(WHERE source_goods_cost IS NULL) AS goods_missing_lines,
+      count(*) FILTER(WHERE source_goods_cost=0) AS goods_zero_lines,
+      count(*) FILTER(WHERE source_goods_cost=0 AND coalesce(source_ref_unit_cost*quantity,master_unit_cost*quantity,0)>0) AS positive_cost_zero_lines,
+      sum(source_goods_cost) AS goods_cost_total,
+      count(*) FILTER(WHERE source_ref_unit_cost IS NULL) AS ref_missing_lines,
+      sum(source_ref_unit_cost*quantity) AS ref_cost_total,
+      count(*) FILTER(WHERE master_unit_cost IS NULL) AS master_missing_lines,
+      sum(master_unit_cost*quantity) AS master_cost_total
+    FROM combo_lines GROUP BY wdt_trade_no,platform_product_id,platform_sku_id
+  ), component_summary AS MATERIALIZED (
+    SELECT platform_product_id,platform_sku_id,max(product_name) AS product_name,
+      array_agg(DISTINCT erp_spec_no ORDER BY erp_spec_no) AS erp_spec_nos,
+      count(*) AS line_count,sum(quantity) AS quantity_total,
+      count(*) FILTER(WHERE source_goods_cost=0) AS goods_zero_lines,
+      count(*) FILTER(WHERE source_goods_cost=0 AND coalesce(source_ref_unit_cost*quantity,master_unit_cost*quantity,0)>0) AS positive_cost_zero_lines,
+      count(*) FILTER(WHERE source_goods_cost IS NULL) AS goods_missing_lines,
+      count(*) FILTER(WHERE source_ref_unit_cost IS NULL) AS ref_missing_lines,
+      count(*) FILTER(WHERE master_unit_cost IS NULL) AS master_missing_lines
+    FROM combo_lines GROUP BY platform_product_id,platform_sku_id
+  ), order_summary AS MATERIALIZED (
+    SELECT platform_product_id,platform_sku_id,min(paid_date) AS first_paid_date,max(paid_date) AS last_paid_date,
+      count(*) AS order_count,
+      count(*) FILTER(WHERE goods_missing_lines=0 AND ref_missing_lines=0 AND abs(goods_cost_total-ref_cost_total)<=0.01) AS goods_ref_match_orders,
+      count(*) FILTER(WHERE goods_missing_lines=0 AND ref_missing_lines=0 AND abs(goods_cost_total-ref_cost_total)>0.01) AS goods_ref_mismatch_orders,
+      count(*) FILTER(WHERE goods_missing_lines>0 OR ref_missing_lines>0) AS goods_ref_unavailable_orders,
+      count(*) FILTER(WHERE goods_missing_lines=0 AND goods_cost_total=0 AND ref_missing_lines=0 AND ref_cost_total>0) AS all_goods_zero_orders,
+      sum(goods_cost_total) AS goods_cost_total,sum(ref_cost_total) AS ref_cost_total,sum(master_cost_total) AS master_cost_total,
+      (array_agg(wdt_trade_no ORDER BY wdt_trade_no) FILTER(WHERE goods_missing_lines=0 AND ref_missing_lines=0 AND abs(goods_cost_total-ref_cost_total)>0.01))[1:10] AS mismatch_order_examples
+    FROM order_combo GROUP BY platform_product_id,platform_sku_id
+  )
+  SELECT c.platform_product_id,c.platform_sku_id,c.product_name,c.erp_spec_nos,
+    o.first_paid_date::text,o.last_paid_date::text,o.order_count::text,c.line_count::text,c.quantity_total::text,
+    c.goods_zero_lines::text,c.positive_cost_zero_lines::text,c.goods_missing_lines::text,c.ref_missing_lines::text,c.master_missing_lines::text,
+    o.goods_ref_match_orders::text,o.goods_ref_mismatch_orders::text,o.goods_ref_unavailable_orders::text,o.all_goods_zero_orders::text,
+    o.goods_cost_total::text,o.ref_cost_total::text,o.master_cost_total::text,o.mismatch_order_examples
+  FROM component_summary c JOIN order_summary o USING(platform_product_id,platform_sku_id)
+  ORDER BY o.goods_ref_mismatch_orders DESC,abs(o.goods_cost_total-o.ref_cost_total) DESC,c.platform_product_id,c.platform_sku_id`;
+
+export async function getActualComboCostAudit(client,args={}) {
+  const request=validateActualComboCostAuditRequest(args);
+  const shop=await client.query('SELECT shop_name FROM raw.wdt_order_headers WHERE shop_key=$1 ORDER BY observed_at DESC LIMIT 1',[args.shopKey]);
+  if(!shop.rows.length) throw new Error('没有找到该店铺的订单事实');
+  const sourceRows=(await client.query(COMBO_COST_AUDIT_SQL,[args.shopKey,request.startDate,request.endDate,request.productId,request.platformSkuId])).rows;
+  const rows=sourceRows.map(row=>{
+    const goodsCostTotal=auditNumber(row.goods_cost_total);
+    const refCostTotal=auditNumber(row.ref_cost_total);
+    const masterCostTotal=auditNumber(row.master_cost_total);
+    const goodsMissingLines=Number(row.goods_missing_lines);
+    const refMissingLines=Number(row.ref_missing_lines);
+    const masterMissingLines=Number(row.master_missing_lines);
+    return {
+      platformProductId:row.platform_product_id,platformSkuId:row.platform_sku_id,productName:row.product_name,
+      erpSpecNos:row.erp_spec_nos || [],firstPaidDate:row.first_paid_date,lastPaidDate:row.last_paid_date,
+      orderCount:Number(row.order_count),lineCount:Number(row.line_count),quantityTotal:auditAmount(auditNumber(row.quantity_total)),
+      goodsZeroLines:Number(row.goods_zero_lines),positiveCostZeroLines:Number(row.positive_cost_zero_lines),
+      goodsMissingLines,refMissingLines,masterMissingLines,
+      goodsRefMatchOrders:Number(row.goods_ref_match_orders),goodsRefMismatchOrders:Number(row.goods_ref_mismatch_orders),
+      goodsRefUnavailableOrders:Number(row.goods_ref_unavailable_orders),allGoodsZeroOrders:Number(row.all_goods_zero_orders),
+      goodsCostTotal:auditAmount(goodsCostTotal),refCostTotal:auditAmount(refCostTotal),masterCostTotal:auditAmount(masterCostTotal),
+      goodsVsRef:costComparison(goodsMissingLines ? null : goodsCostTotal,refMissingLines ? null : refCostTotal),
+      refVsMaster:costComparison(refMissingLines ? null : refCostTotal,masterMissingLines ? null : masterCostTotal),
+      mismatchOrderExamples:row.mismatch_order_examples || [],
+    };
+  });
+  return {
+    mode:'live-read-only',calculationPerformed:false,audit:'combo-sku-cost-consistency',tolerance:'0.01',
+    combinationDefinition:'同一旺店通订单内，同一商品ID与平台SKU ID展开为两个及以上不同ERP规格',
+    shopKey:args.shopKey,shopName:shop.rows[0].shop_name,period:request,
+    summary:{
+      comboSkuCount:rows.length,comboOrderInstances:rows.reduce((sum,row)=>sum+row.orderCount,0),
+      affectedComboSkuCount:rows.filter(row=>row.goodsRefMismatchOrders>0).length,
+      mismatchOrderInstances:rows.reduce((sum,row)=>sum+row.goodsRefMismatchOrders,0),
+      positiveCostZeroLines:rows.reduce((sum,row)=>sum+row.positiveCostZeroLines,0),
+      goodsCostTotal:auditAmount(rows.reduce((sum,row)=>sum+(row.goodsCostTotal||0),0)),
+      refCostTotal:auditAmount(rows.reduce((sum,row)=>sum+(row.refCostTotal||0),0)),
+      costDifference:auditAmount(rows.reduce((sum,row)=>sum+((row.goodsCostTotal||0)-(row.refCostTotal||0)),0)),
+    },
+    rows,
+  };
+}
+
+const REFERENCE_COST_AUDIT_SQL = `
+  WITH scoped_lines AS MATERIALIZED (
+    SELECT (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,h.wdt_trade_no,
+      l.order_line_key,l.platform_product_id,l.platform_sku_id,l.erp_goods_no,l.erp_spec_no,l.product_name,l.sku_name,
+      coalesce(l.quantity,0) AS quantity,l.source_goods_cost,l.source_ref_unit_cost,
+      c.unit_cost AS master_unit_cost
+    FROM raw.wdt_order_headers h JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
+    LEFT JOIN LATERAL (
+      SELECT unit_cost FROM master.sku_cost_versions c
+      WHERE c.shop_key=$1 AND c.erp_spec_no=l.erp_spec_no AND c.status='approved'
+        AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date>=c.effective_from
+        AND (c.effective_to IS NULL OR (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date<=c.effective_to)
+      ORDER BY c.effective_from DESC LIMIT 1
+    ) c ON true
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  ), merchandise AS MATERIALIZED (
+    SELECT * FROM scoped_lines WHERE platform_product_id IS NULL OR NOT(platform_product_id=ANY($4::text[]))
+  )
+  SELECT (SELECT count(*)::text FROM scoped_lines) AS line_count,
+    (SELECT count(*)::text FROM scoped_lines WHERE platform_product_id=ANY($4::text[])) AS explicit_zero_lines,
+    count(*)::text AS merchandise_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NOT NULL)::text AS reference_present_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NULL)::text AS reference_missing_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost=0)::text AS reference_zero_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost=0 AND source_goods_cost>0)::text AS reference_zero_goods_positive_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost=0 AND master_unit_cost>0)::text AS reference_false_zero_lines,
+    count(*) FILTER(WHERE master_unit_cost IS NOT NULL)::text AS master_present_lines,
+    count(*) FILTER(WHERE master_unit_cost IS NULL)::text AS master_missing_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NOT NULL AND master_unit_cost IS NOT NULL)::text AS comparable_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NOT NULL AND master_unit_cost IS NOT NULL
+      AND abs(source_ref_unit_cost-master_unit_cost)<=0.01)::text AS matching_lines,
+    count(*) FILTER(WHERE source_ref_unit_cost IS NOT NULL AND master_unit_cost IS NOT NULL
+      AND abs(source_ref_unit_cost-master_unit_cost)>0.01)::text AS mismatch_lines,
+    round(coalesce(sum(source_ref_unit_cost*quantity),0),2)::text AS reference_cost_total,
+    round(coalesce(sum(master_unit_cost*quantity),0),2)::text AS master_cost_total,
+    round(coalesce(sum((source_ref_unit_cost-master_unit_cost)*quantity)
+      FILTER(WHERE source_ref_unit_cost IS NOT NULL AND master_unit_cost IS NOT NULL),0),2)::text AS comparable_difference,
+    (SELECT coalesce(jsonb_agg(x ORDER BY abs((x->>'difference')::numeric) DESC),'[]'::jsonb) FROM (
+      SELECT jsonb_build_object('paidDate',paid_date,'wdtTradeNo',wdt_trade_no,'orderLineKey',order_line_key,
+        'platformProductId',platform_product_id,'platformSkuId',platform_sku_id,'erpSpecNo',erp_spec_no,
+        'productName',product_name,'skuName',sku_name,'quantity',quantity,
+        'referenceUnitCost',source_ref_unit_cost,'masterUnitCost',master_unit_cost,
+        'difference',round((source_ref_unit_cost-master_unit_cost)*quantity,2)) AS x
+      FROM merchandise WHERE source_ref_unit_cost IS NOT NULL AND master_unit_cost IS NOT NULL
+        AND abs(source_ref_unit_cost-master_unit_cost)>0.01
+      ORDER BY abs((source_ref_unit_cost-master_unit_cost)*quantity) DESC,paid_date,wdt_trade_no,order_line_key LIMIT 100
+    ) mismatches) AS mismatch_examples,
+    (SELECT coalesce(jsonb_agg(x ORDER BY x->>'erpSpecNo'),'[]'::jsonb) FROM (
+      SELECT jsonb_build_object('erpGoodsNo',max(erp_goods_no),'erpSpecNo',erp_spec_no,'platformProductId',max(platform_product_id),
+        'platformSkuId',max(platform_sku_id),'productName',max(product_name),'skuName',max(sku_name),
+        'lineCount',count(*),'quantity',round(coalesce(sum(quantity),0),2),
+        'goodsCostTotal',round(coalesce(sum(source_goods_cost),0),2),
+        'masterUnitCost',max(master_unit_cost)) AS x
+      FROM merchandise WHERE source_ref_unit_cost=0 GROUP BY erp_spec_no
+    ) zeroes) AS zero_reference_items,
+    (SELECT coalesce(jsonb_agg(x ORDER BY x->>'erpSpecNo'),'[]'::jsonb) FROM (
+      SELECT jsonb_build_object('erpGoodsNo',max(erp_goods_no),'erpSpecNo',erp_spec_no,'platformProductId',max(platform_product_id),
+        'platformSkuId',max(platform_sku_id),'productName',max(product_name),'skuName',max(sku_name),
+        'lineCount',count(*),'quantity',round(coalesce(sum(quantity),0),2)) AS x
+      FROM merchandise WHERE source_ref_unit_cost IS NULL GROUP BY erp_spec_no
+    ) missing) AS missing_reference_items
+  FROM merchandise`;
+
+export async function getActualReferenceCostAudit(client,args={}) {
+  const request=validateActualReferenceCostAuditRequest(args);
+  const shop=await client.query('SELECT shop_name FROM raw.wdt_order_headers WHERE shop_key=$1 ORDER BY observed_at DESC LIMIT 1',[args.shopKey]);
+  if(!shop.rows.length) throw new Error('没有找到该店铺的订单事实');
+  const row=(await client.query(REFERENCE_COST_AUDIT_SQL,[args.shopKey,request.startDate,request.endDate,Object.keys(ACTUAL_PROFIT_POLICY.nonMerchandiseProducts)])).rows[0] || {};
+  const merchandiseLines=Number(row.merchandise_lines || 0);
+  const referencePresentLines=Number(row.reference_present_lines || 0);
+  const masterPresentLines=Number(row.master_present_lines || 0);
+  const comparableLines=Number(row.comparable_lines || 0);
+  const mismatchLines=Number(row.mismatch_lines || 0);
+  const referenceMissingLines=Number(row.reference_missing_lines || 0);
+  const referenceFalseZeroLines=Number(row.reference_false_zero_lines || 0);
+  return {
+    mode:'live-read-only',calculationPerformed:false,audit:'reference-cost-policy-readiness',tolerance:'0.01',
+    shopKey:args.shopKey,shopName:shop.rows[0].shop_name,period:request,
+    summary:{
+      lineCount:Number(row.line_count || 0),explicitZeroLines:Number(row.explicit_zero_lines || 0),merchandiseLines,
+      referencePresentLines,referenceMissingLines,referenceZeroLines:Number(row.reference_zero_lines || 0),referenceFalseZeroLines,
+      referenceZeroGoodsPositiveLines:Number(row.reference_zero_goods_positive_lines || 0),
+      masterPresentLines,masterMissingLines:Number(row.master_missing_lines || 0),comparableLines,
+      matchingLines:Number(row.matching_lines || 0),mismatchLines,
+      referenceCoverageRate:merchandiseLines ? referencePresentLines/merchandiseLines : 1,
+      masterCoverageRate:merchandiseLines ? masterPresentLines/merchandiseLines : 1,
+      comparableRate:merchandiseLines ? comparableLines/merchandiseLines : 1,
+      referenceCostTotal:auditAmount(auditNumber(row.reference_cost_total)),
+      masterCostTotal:auditAmount(auditNumber(row.master_cost_total)),
+      comparableDifference:auditAmount(auditNumber(row.comparable_difference)),
+      readyForReferenceFirstPolicy:referenceMissingLines===0&&referenceFalseZeroLines===0&&mismatchLines===0&&comparableLines===merchandiseLines,
+    },
+    mismatchExamples:row.mismatch_examples || [],zeroReferenceItems:row.zero_reference_items || [],
+    missingReferenceItems:row.missing_reference_items || [],
+  };
+}
+
 function actualProfitGroupSql(groupBy) {
   if (groupBy === 'report') return {
     select:`CASE WHEN grouping(platform_product_id)=0 THEN 'product' WHEN grouping(owner_name)=0 THEN 'owner' ELSE 'shop' END AS level,
@@ -454,15 +911,186 @@ function actualProfitGroupSql(groupBy) {
   return groups[groupBy];
 }
 
-export function buildActualProfitQuery(groupBy='shop') {
+// One platform SKU has one gross-weight estimate. ERP component quantities are
+// used only to recover how many units of that platform SKU were purchased.
+export const SKU_GROSS_WEIGHT_CTES = `, order_sku_components AS MATERIALIZED (
+    SELECT wdt_trade_no,platform_sku_id,erp_spec_no,sum(shipped_quantity) AS actual_qty
+    FROM valued_lines GROUP BY wdt_trade_no,platform_sku_id,erp_spec_no
+  ), order_sku_products AS MATERIALIZED (
+    SELECT wdt_trade_no,platform_sku_id,
+      count(DISTINCT platform_product_id)::integer AS product_count,
+      bool_and(platform_product_id=ANY(__NON_MERCH_PARAM__::text[])) AS non_merchandise
+    FROM valued_lines GROUP BY wdt_trade_no,platform_sku_id
+  ), expected_sku_component_counts AS MATERIALIZED (
+    SELECT platform_sku_id,count(*)::integer AS expected_count
+    FROM master.current_platform_sku_components WHERE shop_key=$1 AND component_qty>0
+    GROUP BY platform_sku_id
+  ), order_sku_component_checks AS MATERIALIZED (
+    SELECT a.wdt_trade_no,a.platform_sku_id,count(*)::integer AS observed_count,
+      count(m.erp_spec_no)::integer AS matched_count,max(e.expected_count) AS expected_count,
+      sum(a.actual_qty) AS total_shipped_component_qty,
+      min(a.actual_qty/m.component_qty) AS min_units,
+      max(a.actual_qty/m.component_qty) AS max_units,
+      bool_or(a.erp_spec_no IS NULL OR a.actual_qty<=0 OR m.component_qty IS NULL OR m.component_qty<=0) AS invalid_component
+    FROM order_sku_components a
+    LEFT JOIN master.current_platform_sku_components m ON m.shop_key=$1
+      AND m.platform_sku_id=a.platform_sku_id AND m.erp_spec_no=a.erp_spec_no
+    LEFT JOIN expected_sku_component_counts e ON e.platform_sku_id=a.platform_sku_id
+    GROUP BY a.wdt_trade_no,a.platform_sku_id
+  ), order_sku_units AS MATERIALIZED (
+    SELECT c.*,p.product_count,p.non_merchandise,
+      CASE WHEN NOT invalid_component AND p.product_count=1 AND observed_count=matched_count
+        AND observed_count=expected_count AND min_units=max_units
+        AND min_units>0 AND min_units=trunc(min_units)
+        THEN min_units END AS purchased_units
+    FROM order_sku_component_checks c JOIN order_sku_products p
+      ON p.wdt_trade_no=c.wdt_trade_no AND p.platform_sku_id IS NOT DISTINCT FROM c.platform_sku_id
+  ), order_sku_weights AS MATERIALIZED (
+    SELECT u.*,
+      w.estimate_kg AS unit_gross_weight_kg,w.status AS weight_status,
+      w.method AS weight_method,
+      w.confidence_score,w.confidence_level,
+      w.sample_count,w.run_id AS weight_run_id,
+      CASE WHEN u.non_merchandise OR u.total_shipped_component_qty=0 THEN 0::numeric
+        WHEN u.purchased_units IS NOT NULL AND w.estimate_kg>0
+        AND ((w.status IN ('estimated','inferred') AND w.sample_count>0)
+          OR w.status='manual-estimate')
+        THEN u.purchased_units*w.estimate_kg END AS allocation_weight_kg
+    FROM order_sku_units u LEFT JOIN master.current_platform_sku_gross_weights w
+      ON w.shop_key=$1 AND w.platform_sku_id=u.platform_sku_id
+  ), order_weight_totals AS MATERIALIZED (
+    SELECT wdt_trade_no,sum(allocation_weight_kg) AS order_weight_kg,
+      count(*) FILTER(WHERE allocation_weight_kg IS NULL)::integer AS missing_sku_count
+    FROM order_sku_weights GROUP BY wdt_trade_no
+  ), order_sku_line_counts AS MATERIALIZED (
+    SELECT wdt_trade_no,platform_sku_id,count(*)::integer AS line_count,
+      sum(shipped_quantity) AS shipped_quantity
+    FROM valued_lines GROUP BY wdt_trade_no,platform_sku_id
+  )`;
+
+const SKU_GROSS_WEIGHT_COVERAGE_SQL = `WITH scoped_orders AS MATERIALIZED (
+    SELECT h.wdt_trade_no FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(4)}
+      AND EXISTS (SELECT 1 FROM raw.shipments s WHERE s.shop_key=h.shop_key
+        AND s.wdt_trade_no=h.wdt_trade_no AND nullif(trim(s.tracking_no),'') IS NOT NULL)
+  ), pre_ship_refund_events AS MATERIALIZED (
+    SELECT coalesce(oi.order_line_key,os.order_line_key) AS order_line_key,
+      coalesce(l.refund_quantity,0) AS refund_quantity
+    FROM raw.wdt_refund_headers h JOIN scoped_orders o USING(wdt_trade_no)
+    JOIN raw.wdt_refund_lines l USING(shop_key,refund_no)
+    LEFT JOIN LATERAL (
+      SELECT order_line_key FROM raw.wdt_order_lines original
+      WHERE original.shop_key=$1 AND original.wdt_trade_no=h.wdt_trade_no
+        AND original.wdt_order_line_id=l.wdt_order_line_id
+      ORDER BY order_line_key LIMIT 1
+    ) oi ON true
+    LEFT JOIN LATERAL (
+      SELECT order_line_key FROM raw.wdt_order_lines original
+      WHERE original.shop_key=$1 AND original.wdt_trade_no=h.wdt_trade_no
+        AND original.source_order_line_id=l.source_order_line_id
+      ORDER BY order_line_key LIMIT 1
+    ) os ON oi.order_line_key IS NULL
+    WHERE $8::boolean AND h.shop_key=$1 AND h.refund_type=1
+      AND h.is_financially_refunded AND h.settled_at<=$7::timestamptz
+  ), pre_ship_refund_quantities AS MATERIALIZED (
+    SELECT order_line_key,sum(refund_quantity) AS refund_quantity
+    FROM pre_ship_refund_events WHERE order_line_key IS NOT NULL GROUP BY order_line_key
+  ), valued_lines AS MATERIALIZED (
+    SELECT l.wdt_trade_no,l.platform_product_id,l.platform_sku_id,l.erp_spec_no,
+      coalesce(l.quantity,0) AS quantity,
+      CASE WHEN $8::boolean THEN greatest(0,coalesce(l.quantity,0)
+        -least(coalesce(l.quantity,0),coalesce(r.refund_quantity,0)))
+        ELSE coalesce(l.quantity,0) END AS shipped_quantity
+    FROM raw.wdt_order_lines l JOIN scoped_orders o USING(wdt_trade_no)
+    LEFT JOIN pre_ship_refund_quantities r ON r.order_line_key=l.order_line_key
+    WHERE l.shop_key=$1
+  )${SKU_GROSS_WEIGHT_CTES.replaceAll('__NON_MERCH_PARAM__','$5')}, scoped_tracking AS MATERIALIZED (
+    SELECT DISTINCT s.wdt_trade_no,s.tracking_no FROM raw.shipments s
+    JOIN scoped_orders o USING(wdt_trade_no) WHERE s.shop_key=$1
+      AND nullif(trim(s.tracking_no),'') IS NOT NULL
+  ), tracking_order_counts AS MATERIALIZED (
+    SELECT tracking_no,count(DISTINCT wdt_trade_no)::numeric AS order_count
+    FROM scoped_tracking GROUP BY tracking_no
+  ), tracking_charges AS MATERIALIZED (
+    SELECT tracking_no,round(sum(charge_amount),2) AS charge_amount
+    FROM raw.courier_bill_charges WHERE tracking_no IN (SELECT tracking_no FROM scoped_tracking)
+    GROUP BY tracking_no
+  ), order_freight AS MATERIALIZED (
+    SELECT t.wdt_trade_no,sum(coalesce(c.charge_amount,$6::numeric)/n.order_count) AS freight_cost
+    FROM scoped_tracking t JOIN tracking_order_counts n USING(tracking_no)
+    LEFT JOIN tracking_charges c USING(tracking_no)
+    GROUP BY t.wdt_trade_no
+  )
+  SELECT count(*)::integer AS sku_groups,
+    count(*) FILTER(WHERE allocation_weight_kg IS NOT NULL)::integer AS weighted_sku_groups,
+    count(*) FILTER(WHERE allocation_weight_kg IS NULL)::integer AS missing_sku_groups,
+    count(*) FILTER(WHERE allocation_weight_kg>0 AND weight_status='inferred')::integer AS inferred_sku_groups,
+    count(*) FILTER(WHERE allocation_weight_kg>0 AND weight_method='platform-sku-gross-shared-residual-v1')::integer AS shared_inferred_sku_groups,
+    count(*) FILTER(WHERE allocation_weight_kg>0 AND confidence_level='low')::integer AS low_confidence_sku_groups,
+    count(DISTINCT wdt_trade_no)::integer AS orders,
+    (SELECT count(*)::integer FROM order_weight_totals
+      WHERE missing_sku_count>0 OR coalesce(order_weight_kg,0)<=0) AS missing_weight_orders,
+    (SELECT round(coalesce(sum(f.freight_cost),0),2)::text
+      FROM order_weight_totals o JOIN order_freight f USING(wdt_trade_no)
+      WHERE o.missing_sku_count>0 OR coalesce(o.order_weight_kg,0)<=0) AS fallback_freight_amount,
+    count(DISTINCT platform_sku_id) FILTER(WHERE allocation_weight_kg IS NULL)::integer AS missing_platform_skus,
+    (SELECT coalesce(jsonb_agg(to_jsonb(x)),'[]'::jsonb) FROM (
+      SELECT wdt_trade_no,platform_sku_id,observed_count,matched_count,expected_count,product_count,
+        purchased_units,unit_gross_weight_kg,confidence_score,sample_count,
+        CASE WHEN purchased_units IS NULL THEN 'component_mapping_or_quantity_mismatch'
+          WHEN unit_gross_weight_kg IS NULL THEN 'sku_weight_missing'
+          ELSE 'sku_weight_unusable' END AS reason
+      FROM order_sku_weights WHERE allocation_weight_kg IS NULL
+      ORDER BY wdt_trade_no,platform_sku_id LIMIT 50
+    ) x) AS missing_examples
+  FROM order_sku_weights`;
+
+export function buildActualProfitQuery(groupBy='shop',policyVersion=ACTUAL_PROFIT_POLICY.version) {
   if (!ACTUAL_QUERY_GROUPS.has(groupBy)) throw new Error('--group-by 仅支持 shop|owner|product|day|report');
   const group = actualProfitGroupSql(groupBy);
   const precision = groupBy==='report' ? 4 : 2;
+  const refundCostPolicy=policyVersion===ACTUAL_PROFIT_POLICY.version;
+  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(policyVersion);
+  const revenueShare=`CASE WHEN l.paid_amount<>0 THEN l.line_revenue/l.paid_amount ELSE 1::numeric/l.order_line_count END`;
+  const shippedRevenueWeight=`greatest(l.line_revenue,0)*l.shipped_quantity/nullif(l.quantity,0)`;
+  const shippedRevenueShare=`CASE WHEN sum(${shippedRevenueWeight}) OVER(PARTITION BY l.wdt_trade_no)>0
+    THEN ${shippedRevenueWeight}/sum(${shippedRevenueWeight}) OVER(PARTITION BY l.wdt_trade_no)
+    WHEN sum(l.shipped_quantity) OVER(PARTITION BY l.wdt_trade_no)>0
+    THEN l.shipped_quantity/sum(l.shipped_quantity) OVER(PARTITION BY l.wdt_trade_no)
+    ELSE ${revenueShare} END`;
+  const weightShare=`CASE WHEN ow.missing_sku_count=0 AND ow.order_weight_kg>0
+      THEN ${refundCostPolicy?'sw.allocation_weight_kg/ow.order_weight_kg*coalesce(l.shipped_quantity/nullif(sc.shipped_quantity,0),0)':'sw.allocation_weight_kg/ow.order_weight_kg/sc.line_count'}
+      ELSE ${refundCostPolicy?shippedRevenueShare:revenueShare} END`;
+  const lineShare=weightPolicy?weightShare:revenueShare;
+  const refundAdjustmentCtes=refundCostPolicy?`, refund_order_by_id AS MATERIALIZED (
+    SELECT DISTINCT ON (wdt_order_line_id) wdt_order_line_id,order_line_key
+    FROM raw_lines WHERE wdt_order_line_id IS NOT NULL ORDER BY wdt_order_line_id,order_line_key
+  ), refund_order_by_source AS MATERIALIZED (
+    SELECT DISTINCT ON (wdt_trade_no,source_order_line_id) wdt_trade_no,source_order_line_id,order_line_key
+    FROM raw_lines WHERE source_order_line_id IS NOT NULL ORDER BY wdt_trade_no,source_order_line_id,order_line_key
+  ), refund_cost_events AS MATERIALIZED (
+    SELECT coalesce(oi.order_line_key,os.order_line_key) AS order_line_key,h.refund_type,
+      coalesce(l.refund_quantity,0) AS refund_quantity
+    FROM raw.wdt_refund_headers h JOIN scoped_orders o USING(wdt_trade_no)
+    JOIN raw.wdt_refund_lines l USING(shop_key,refund_no)
+    LEFT JOIN refund_order_by_id oi ON oi.wdt_order_line_id=l.wdt_order_line_id
+    LEFT JOIN refund_order_by_source os ON os.wdt_trade_no=h.wdt_trade_no
+      AND os.source_order_line_id=l.source_order_line_id
+    WHERE h.shop_key=$1 AND h.is_financially_refunded AND h.settled_at<=$4::timestamptz
+      AND h.refund_type IN (1,2)
+  ), refund_cost_quantities AS MATERIALIZED (
+    SELECT order_line_key,sum(refund_quantity) FILTER(WHERE refund_type=1) AS pre_ship_qty,
+      sum(refund_quantity) FILTER(WHERE refund_type=2) AS returned_qty
+    FROM refund_cost_events WHERE order_line_key IS NOT NULL GROUP BY order_line_key
+  )`:'';
   return `WITH scoped_orders AS MATERIALIZED (
-    SELECT wdt_trade_no,(paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,paid_amount
-    FROM raw.wdt_order_headers
-    WHERE shop_key=$1 AND order_status_code=95
-      AND (paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+    SELECT h.wdt_trade_no,(h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,h.paid_amount
+    FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code=95
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+      ${excludePlaceholderOrder(13)}
   ), raw_lines AS MATERIALIZED (
     SELECT o.paid_date,o.paid_amount,l.order_line_key,l.wdt_order_line_id,l.source_order_line_id,l.wdt_trade_no,
       l.platform_product_id,l.platform_sku_id,l.erp_spec_no,coalesce(i.product_title,l.product_name) AS product_name,l.sku_name,
@@ -472,17 +1100,34 @@ export function buildActualProfitQuery(groupBy='shop') {
     FROM scoped_orders o JOIN raw.wdt_order_lines l USING(wdt_trade_no)
     LEFT JOIN master.product_image_mappings i USING(platform_product_id)
     WHERE l.shop_key=$1
-  ), weighted_lines AS MATERIALIZED (
+  )${refundAdjustmentCtes}, weighted_lines AS MATERIALIZED (
     SELECT l.*,sum(allocation_weight) OVER(PARTITION BY wdt_trade_no) AS order_weight,
       count(*) OVER(PARTITION BY wdt_trade_no) AS order_line_count
     FROM raw_lines l
   ), valued_lines AS MATERIALIZED (
     SELECT l.*,
+      ${refundCostPolicy?`greatest(0,l.quantity-least(l.quantity,coalesce(r.pre_ship_qty,0)))`:'l.quantity'} AS shipped_quantity,
+      ${refundCostPolicy?`least(l.quantity,coalesce(r.pre_ship_qty,0))`:'0::numeric'} AS pre_ship_refund_quantity,
+      ${refundCostPolicy?`least(greatest(0,l.quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0))`:'0::numeric'} AS returned_refund_quantity,
+      ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
+        THEN current_cost.unit_cost*quantity END`:'NULL::numeric'} AS gross_goods_cost,
+      ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
+        THEN current_cost.unit_cost*least(quantity,coalesce(r.pre_ship_qty,0)) END`:'NULL::numeric'} AS pre_ship_cost_credit,
+      ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
+        THEN current_cost.unit_cost*$14::numeric*least(greatest(0,quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0)) END`:'NULL::numeric'} AS return_cost_credit,
       CASE WHEN order_weight<>0 THEN paid_amount*allocation_weight/order_weight ELSE paid_amount/order_line_count END AS line_revenue,
       CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+           WHEN $12::boolean THEN CASE WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
+             THEN current_cost.unit_cost*(${refundCostPolicy?`quantity-least(quantity,coalesce(r.pre_ship_qty,0))
+               -$14::numeric*least(greatest(0,quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0))`:'quantity'}) END
            WHEN source_goods_cost IS NOT NULL THEN source_goods_cost
            WHEN c.unit_cost IS NOT NULL THEN c.unit_cost*quantity END AS goods_cost,
       CASE WHEN platform_product_id=ANY($9::text[]) THEN 'explicit_zero'
+           WHEN $12::boolean AND current_cost.cost_status='available' AND current_cost.unit_cost>0 THEN 'standard_reference'
+           WHEN $12::boolean THEN 'missing'
            WHEN source_goods_cost IS NOT NULL THEN 'actual'
            WHEN c.unit_cost IS NOT NULL THEN 'standard_reference' ELSE 'missing' END AS cost_state
     FROM weighted_lines l LEFT JOIN LATERAL (
@@ -491,7 +1136,10 @@ export function buildActualProfitQuery(groupBy='shop') {
         AND (c.effective_to IS NULL OR l.paid_date<=c.effective_to)
       ORDER BY c.effective_from DESC LIMIT 1
     ) c ON true
-  ), scoped_tracking AS MATERIALIZED (
+    LEFT JOIN master.current_sku_costs current_cost
+      ON current_cost.shop_key=$1 AND current_cost.erp_spec_no=l.erp_spec_no
+    ${refundCostPolicy?'LEFT JOIN refund_cost_quantities r ON r.order_line_key=l.order_line_key':''}
+  )${weightPolicy?SKU_GROSS_WEIGHT_CTES.replaceAll('__NON_MERCH_PARAM__','$9'):''}, scoped_tracking AS MATERIALIZED (
     SELECT DISTINCT s.wdt_trade_no,s.tracking_no
     FROM raw.shipments s JOIN scoped_orders o USING(wdt_trade_no)
     WHERE s.shop_key=$1 AND nullif(trim(s.tracking_no),'') IS NOT NULL
@@ -513,10 +1161,15 @@ export function buildActualProfitQuery(groupBy='shop') {
     FROM (SELECT DISTINCT tracking_no FROM scoped_tracking) t LEFT JOIN tracking_charges c USING(tracking_no)
   ), line_facts_raw AS MATERIALIZED (
     SELECT l.*,
-      CASE WHEN l.paid_amount<>0 THEN coalesce(f.freight_cost,0)*l.line_revenue/l.paid_amount ELSE coalesce(f.freight_cost,0)/l.order_line_count END AS raw_freight_cost,
-      CASE WHEN l.paid_amount<>0 THEN coalesce(f.actual_freight,0)*l.line_revenue/l.paid_amount ELSE coalesce(f.actual_freight,0)/l.order_line_count END AS raw_actual_freight,
-      CASE WHEN l.paid_amount<>0 THEN coalesce(f.estimated_freight,0)*l.line_revenue/l.paid_amount ELSE coalesce(f.estimated_freight,0)/l.order_line_count END AS raw_estimated_freight
+      coalesce(f.freight_cost,0)*(${lineShare}) AS raw_freight_cost,
+      coalesce(f.actual_freight,0)*(${lineShare}) AS raw_actual_freight,
+      coalesce(f.estimated_freight,0)*(${lineShare}) AS raw_estimated_freight
     FROM valued_lines l LEFT JOIN order_freight f USING(wdt_trade_no)
+    ${weightPolicy?`LEFT JOIN order_sku_weights sw ON sw.wdt_trade_no=l.wdt_trade_no
+      AND sw.platform_sku_id IS NOT DISTINCT FROM l.platform_sku_id
+    LEFT JOIN order_weight_totals ow ON ow.wdt_trade_no=l.wdt_trade_no
+    LEFT JOIN order_sku_line_counts sc ON sc.wdt_trade_no=l.wdt_trade_no
+      AND sc.platform_sku_id IS NOT DISTINCT FROM l.platform_sku_id`:''}
   ), freight_allocated AS MATERIALIZED (
     SELECT sum(raw_actual_freight) AS actual_freight,sum(raw_estimated_freight) AS estimated_freight FROM line_facts_raw
   ), line_facts AS MATERIALIZED (
@@ -530,7 +1183,9 @@ export function buildActualProfitQuery(groupBy='shop') {
     SELECT paid_date AS stat_date,coalesce(platform_product_id,'__UNMAPPED_ORDER_LINE__') AS platform_product_id,
       max(coalesce(product_name,'无法归属商品的订单明细')) AS product_name,
       max(product_image_url) AS product_image_url,
-      sum(line_revenue) AS gross_revenue,sum(goods_cost) AS goods_cost,sum(freight_cost) AS freight_cost,
+      sum(line_revenue) AS gross_revenue,sum(goods_cost) AS goods_cost,
+      sum(gross_goods_cost) AS gross_goods_cost,sum(pre_ship_cost_credit) AS pre_ship_cost_credit,
+      sum(return_cost_credit) AS return_cost_credit,sum(freight_cost) AS freight_cost,
       sum(actual_freight) AS actual_freight,sum(estimated_freight) AS estimated_freight,
       sum(goods_cost) FILTER(WHERE cost_state='actual') AS actual_cost,
       sum(goods_cost) FILTER(WHERE cost_state='standard_reference') AS reference_cost,
@@ -577,6 +1232,9 @@ export function buildActualProfitQuery(groupBy='shop') {
       s.product_image_url,
       coalesce(s.gross_revenue,0) AS gross_revenue,coalesce(r.refund_amount,0) AS refund_amount,
       coalesce(s.goods_cost,0) AS goods_cost,coalesce(s.freight_cost,0) AS freight_cost,
+      coalesce(s.gross_goods_cost,0) AS gross_goods_cost,
+      coalesce(s.pre_ship_cost_credit,0) AS pre_ship_cost_credit,
+      coalesce(s.return_cost_credit,0) AS return_cost_credit,
       coalesce(s.actual_freight,0) AS actual_freight,coalesce(s.estimated_freight,0) AS estimated_freight,
       coalesce(s.actual_cost,0) AS actual_cost,coalesce(s.reference_cost,0) AS reference_cost,
       coalesce(s.explicit_zero_cost,0) AS explicit_zero_cost,coalesce(a.ad_spend,0) AS ad_spend,
@@ -608,6 +1266,9 @@ export function buildActualProfitQuery(groupBy='shop') {
     min(stat_date)::text AS first_date,max(stat_date)::text AS last_date,
     round(sum(gross_revenue),${precision}) AS gross_revenue,round(sum(refund_amount),${precision}) AS refund_amount,
     round(sum(net_sales),${precision}) AS net_sales,round(sum(goods_cost),${precision}) AS goods_cost,
+    round(sum(gross_goods_cost),${precision}) AS gross_goods_cost,
+    round(sum(pre_ship_cost_credit),${precision}) AS pre_ship_cost_credit,
+    round(sum(return_cost_credit),${precision}) AS return_cost_credit,
     round(sum(actual_cost),${precision}) AS actual_cost_amount,round(sum(reference_cost),${precision}) AS reference_cost_amount,
     round(sum(explicit_zero_cost),${precision}) AS explicit_zero_cost_amount,
     round(sum(freight_cost),${precision}) AS freight_cost,round(sum(actual_freight),${precision}) AS actual_freight_amount,
@@ -646,8 +1307,11 @@ export async function getActualProfitQuery(client,args={}) {
   const ownerOptionalProductIds = Object.keys(ACTUAL_PROFIT_POLICY.ownerOptionalProducts);
   const params = [args.shopKey,request.startDate,request.endDate,request.refundCutoff,adShopName,
     ACTUAL_PROFIT_POLICY.platformFeeRate,ACTUAL_PROFIT_POLICY.taxRate,ACTUAL_PROFIT_POLICY.missingFreightPerWaybill,
-    nonMerchandiseProductIds,ownerOptionalProductIds,request.owners];
-  const rows = (await client.query(buildActualProfitQuery(request.groupBy),params)).rows;
+    nonMerchandiseProductIds,ownerOptionalProductIds,request.owners,
+    request.policyVersion!==LEGACY_ACTUAL_PROFIT_POLICY.version,
+    [ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(request.policyVersion)];
+  if(request.policyVersion===ACTUAL_PROFIT_POLICY.version) params.push(request.returnResaleRate);
+  const rows = (await client.query(buildActualProfitQuery(request.groupBy,request.policyVersion),params)).rows;
   const sections = request.groupBy==='report' ? {
     shop:rows.filter(row=>row.level==='shop'),owners:rows.filter(row=>row.level==='owner'),products:rows.filter(row=>row.level==='product'),
   } : undefined;
@@ -660,6 +1324,16 @@ export async function getActualProfitQuery(client,args={}) {
     period:coverage.period,policy:coverage.coverage.policy,status:coverage.status,groupBy:request.groupBy,owners:request.owners,
     quality:{blockingGaps:coverage.blockingGaps,advisoryGaps:coverage.advisoryGaps,
       orderCoverageComplete:coverage.coverage.orders.complete,refundCoverageComplete:coverage.coverage.refundSource.complete,
+      costBasis:coverage.coverage.costs.basis,costSyncBatch:coverage.coverage.costs.latestSync??null,
+      freightAllocation:{method:coverage.coverage.freightWeightAllocation.method,
+        status:coverage.coverage.freightWeightAllocation.status,
+        missingWeightOrders:coverage.coverage.freightWeightAllocation.missing_weight_orders??0,
+        missingSkuGroups:coverage.coverage.freightWeightAllocation.missing_sku_groups??0,
+        inferredSkuGroups:coverage.coverage.freightWeightAllocation.inferred_sku_groups??0,
+        sharedInferredSkuGroups:coverage.coverage.freightWeightAllocation.shared_inferred_sku_groups??0,
+        fallbackFreightAmount:coverage.coverage.freightWeightAllocation.fallback_freight_amount??'0.00',
+        latestWeightRun:coverage.coverage.freightWeightAllocation.latestWeightRun??null},
+      ignoredPlaceholderOrders:coverage.coverage.orderScope.ignored_placeholder_orders,
       missingCostLines:coverage.coverage.costs.missing_lines,estimatedFreightAmount:coverage.coverage.freight.estimated_freight_amount,
       unmappedRefundAmount:coverage.coverage.refunds.unmapped_refund_amount,unassignedOwnerProducts:coverage.coverage.owners.review_unassigned_products},
     ...(sections?{sections,reconciliation}:{rows}),

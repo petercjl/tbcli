@@ -179,6 +179,7 @@ test('bundled Skill has a portable Windows SealSeek adapter', async () => {
 test('bundled Skill keeps recent report maintenance orchestration outside the CLI', async () => {
   const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
   const maintenance = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'report-maintenance.md'), 'utf8');
+  const daily = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'daily-update.md'), 'utf8');
   assert.match(skill, /references\/report-maintenance\.md/);
   assert.match(maintenance, /当前自然年/);
   assert.match(maintenance, /tbcli db coverage/);
@@ -245,6 +246,11 @@ test('bundled Skill keeps recent report maintenance orchestration outside the CL
   assert.doesNotMatch(maintenance, /tbcli sycm sync/);
   assert.match(maintenance, /旺店通-退款及明细.*wdt-refunds/);
   assert.match(maintenance, /45 个完整自然日/);
+  assert.match(skill, /dataStatus: all-null-placeholder/);
+  assert.match(daily, /PLATFORM_DATA_PENDING/);
+  assert.match(daily, /继续处理本轮其他表/);
+  assert.match(daily, /同一日不再重试该表/);
+  assert.match(daily, /不得误报 `SHOP_SCOPE_MISMATCH`/);
   const profit = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'profit-estimate.md'), 'utf8');
   const profitRoute = await fs.readFile(path.join(SKILL_SOURCE, 'references', 'queries', 'profit-estimate.md'), 'utf8');
   assert.match(skill, /queries\/profit-estimate\.md/);

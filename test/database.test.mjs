@@ -123,6 +123,11 @@ test('read-only SQL accepts one query and rejects writes or multiple statements'
   assert.equal(validateReadOnlySql('SELECT * FROM master.sku_cost_versions WHERE shop_key=$1'),
     'SELECT * FROM master.sku_cost_versions WHERE shop_key=$1');
   assert.match(validateReadOnlySql('WITH costs AS (SELECT 1 AS n) SELECT * FROM costs'), /^WITH/);
+  assert.match(validateReadOnlySql('SELECT COUNT(*), MIN(quantity), MAX(quantity), SUM(quantity) FROM raw.wdt_order_lines'), /^SELECT/);
+  assert.match(validateReadOnlySql('SELECT COALESCE(SUM(quantity), 0) FROM raw.wdt_order_lines'), /^SELECT/);
+  assert.match(validateReadOnlySql('SELECT JSONB_AGG(JSONB_BUILD_ARRAY(erp_spec_no, quantity)) FROM raw.wdt_order_lines'), /^SELECT/);
+  assert.throws(() => validateReadOnlySql('SELECT pg_sleep(1)'), /不允许函数调用/);
+  assert.throws(() => validateReadOnlySql('SELECT public.count(*) FROM raw.wdt_order_lines'), /不允许函数调用/);
   assert.throws(() => validateReadOnlySql('DELETE FROM master.sku_cost_versions'), /只允许/);
   assert.throws(() => validateReadOnlySql('SELECT 1; SELECT 2'), /一条 SQL/);
   assert.throws(() => validateReadOnlySql('WITH removed AS (DELETE FROM t RETURNING *) SELECT * FROM removed'), /不允许 delete/i);

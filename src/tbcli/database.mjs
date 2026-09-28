@@ -1210,10 +1210,21 @@ const WRITE_STATEMENTS = new Set([
   'drop table', 'drop index', 'drop schema', 'drop sequence', 'grant', 'revoke', 'copy',
   'call', 'do', 'set', 'transaction', 'commit', 'rollback',
 ]);
+const READ_ONLY_FUNCTIONS = new Set([
+  'abs', 'array_agg', 'avg', 'bool_and', 'bool_or', 'coalesce', 'count',
+  'greatest', 'json_agg', 'jsonb_agg', 'jsonb_build_array', 'least', 'max', 'min', 'nullif',
+  'round', 'string_agg', 'sum',
+]);
 
 function walkSqlAst(value) {
   if (!value || typeof value !== 'object') return;
-  if (typeof value.type === 'string' && WRITE_STATEMENTS.has(value.type.toLowerCase())) {
+  if (value.type === 'call' && value.function) {
+    const schema = String(value.function.schema || '').toLowerCase();
+    const name = String(value.function.name || '').toLowerCase();
+    if (schema || !READ_ONLY_FUNCTIONS.has(name)) {
+      throw new Error(`只读 SQL 不允许函数调用：${schema ? `${schema}.` : ''}${name}`);
+    }
+  } else if (typeof value.type === 'string' && WRITE_STATEMENTS.has(value.type.toLowerCase())) {
     throw new Error(`只读 SQL 不允许 ${value.type}`);
   }
   if (value.type === 'table' && value.name && typeof value.name === 'object') {

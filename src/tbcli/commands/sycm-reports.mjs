@@ -582,12 +582,19 @@ export async function inspectSycmWorkbook(buffer, requestedItemIds = [], { dateT
   const returnedItemIds = new Set();
   const dates = [];
   let dataRows = 0;
+  let blankRows = 0;
+  let allNullPlaceholderRows = 0;
   for (let row = 2; row <= sheet.rowCount; row += 1) {
-    const values = sheet.getRow(row).values;
-    if (!Array.isArray(values) || values.slice(1).every((value) => {
-      const normalized = value == null ? '' : String(value).trim();
-      return normalized === '' || normalized.toUpperCase() === 'NULL';
-    })) continue;
+    const values = headers.map((_, index) => String(sheet.getCell(row, index + 1).text || '').trim());
+    if (values.every((value) => value === '')) {
+      blankRows += 1;
+      continue;
+    }
+    if (values.every((value) => value === '' || value.toUpperCase() === 'NULL')
+      && values.some((value) => value.toUpperCase() === 'NULL')) {
+      allNullPlaceholderRows += 1;
+      continue;
+    }
     dataRows += 1;
     if (itemIdColumn) {
       const itemId = String(sheet.getCell(row, itemIdColumn).text || '').trim();
@@ -600,9 +607,18 @@ export async function inspectSycmWorkbook(buffer, requestedItemIds = [], { dateT
   }
   const requested = [...new Set((requestedItemIds || []).map(String))];
   dates.sort();
+  const dataStatus = dataRows > 0
+    ? 'data'
+    : allNullPlaceholderRows > 0
+      ? 'all-null-placeholder'
+      : 'empty';
   return {
     sheet: sheet.name,
     rows: dataRows,
+    sourceRows: Math.max(0, sheet.rowCount - 1),
+    blankRows,
+    allNullPlaceholderRows,
+    dataStatus,
     columns: headers.length,
     headers,
     returnedItemIds: [...returnedItemIds],

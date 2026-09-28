@@ -347,8 +347,26 @@ test('downloaded workbook summary ignores an all-NULL platform placeholder row',
   sheet.addRow(['NULL', 'NULL', 'NULL', 'NULL']);
   const summary = await inspectSycmWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()), [], { dateType: 'day' });
   assert.equal(summary.rows, 0);
+  assert.equal(summary.sourceRows, 1);
+  assert.equal(summary.blankRows, 0);
+  assert.equal(summary.allNullPlaceholderRows, 1);
+  assert.equal(summary.dataStatus, 'all-null-placeholder');
   assert.deepEqual(summary.returnedItemIds, []);
   assert.equal(summary.dataPeriod, null);
+});
+
+test('downloaded workbook marks data available when a real row accompanies an all-NULL placeholder', async () => {
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('data');
+  sheet.addRow(['统计日期', '店铺名称', '商品ID', '成功退款金额']);
+  sheet.addRow(['NULL', 'NULL', 'NULL', 'NULL']);
+  sheet.addRow(['2026-09-21', '测试店', '123', 0]);
+  const summary = await inspectSycmWorkbook(Buffer.from(await workbook.xlsx.writeBuffer()), [], { dateType: 'day' });
+  assert.equal(summary.rows, 1);
+  assert.equal(summary.sourceRows, 2);
+  assert.equal(summary.allNullPlaceholderRows, 1);
+  assert.equal(summary.dataStatus, 'data');
+  assert.deepEqual(summary.dataPeriod, { startDate: '2026-09-21', endDate: '2026-09-21' });
 });
 
 test('downloaded workbook validation requires daily and requested product identity columns', async () => {

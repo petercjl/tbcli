@@ -53,6 +53,8 @@ tbcli maintenance run-status --run-id '<返回的runId>' --json
 - coverage：artifact 为真实 `db coverage --json` 输出文件，sha256 为该回执文件的真实散列；元命令校验文件散列以及 datasetKey、requestedPeriod、complete、expectedPeriods、coveredPeriods 与 missingPeriods。整表完成时提交目标整个检查区间的回执，不能只提交最后一个小分片。
 - failed：errorCode 使用 AUTH_REQUIRED、DATABASE_UNAVAILABLE 等标准代码，不把原始错误正文写入记录。
 
+平台已完成生成但 Excel 只有全 `NULL` 占位行时使用 `PLATFORM_DATA_PENDING`。它保留下载证据但不进入 verified/imported/coverage；调用者继续其他数据集，最后以 partial 结束，下一日重新规划该缺口。
+
 CLI 验证文件散列和回执结构，但不能证明一份手工构造 JSON 来自数据库。Agent 必须保存实际命令输出，不能编造 complete 回执。
 文件是本次用户授权的数据或 CLI 回执，禁止传入凭证文件充当 artifact。
 日期分片可以在固定目标区间内继续二分，不改 manifest；截断父片记 failed，后续子片分别验证，最后整表 coverage 闭合。

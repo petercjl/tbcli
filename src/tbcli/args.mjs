@@ -11,9 +11,13 @@ export function parseArgs(argv) {
     else if (arg === '--reimport') out.reimport = true;
     else if (arg === '--password-stdin') out.passwordStdin = true;
     else if (arg === '--ensure') out.ensure = true;
+    else if (arg === '--yes') out.yes = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
     else if (arg === '--out') out.out = argv[++index];
+    else if (arg === '--backup-out') out.backupOut = argv[++index];
+    else if (arg === '--replace-batch-id') out.replaceBatchId = argv[++index];
+    else if (arg === '--expected-old-count') out.expectedOldCount = argv[++index];
     else if (arg === '--config') out.config = argv[++index];
     else if (arg === '--state-dir') out.stateDir = argv[++index];
     else if (arg === '--run-id') out.runId = argv[++index];
@@ -21,8 +25,12 @@ export function parseArgs(argv) {
     else if (arg === '--input') out.input = argv[++index];
     else if (arg === '--carrier') out.carrier = argv[++index];
     else if (arg === '--bill-month') out.billMonth = argv[++index];
+    else if (arg === '--year') out.year = argv[++index];
     else if (arg === '--month') out.month = argv[++index];
+    else if (arg === '--months') out.months = argv[++index];
+    else if (arg === '--audit-sku') out.auditSku = argv[++index];
     else if (arg === '--policy-version') out.policyVersion = argv[++index];
+    else if (arg === '--return-resale-rate') out.returnResaleRate = argv[++index];
     else if (arg === '--tracking-no') out.trackingNo = argv[++index];
     else if (arg === '--host') out.host = argv[++index];
     else if (arg === '--provider') out.provider = argv[++index];
@@ -42,6 +50,9 @@ export function parseArgs(argv) {
     else if (arg === '--params-json') out.paramsJson = argv[++index];
     else if (arg === '--global-reader-role') out.globalReaderRole = argv[++index];
     else if (arg === '--dataset') out.dataset = argv[++index];
+    else if (arg === '--category') out.category = argv[++index];
+    else if (arg === '--start-month') out.startMonth = argv[++index];
+    else if (arg === '--end-month') out.endMonth = argv[++index];
     else if (arg === '--metrics') out.metrics = argv[++index];
     else if (arg === '--group-by') out.groupBy = argv[++index];
     else if (arg === '--order-by') out.orderBy = argv[++index];
@@ -76,6 +87,8 @@ export function parseArgs(argv) {
     else if (arg === '--keyword') out.keyword = argv[++index];
     else if (arg === '--start-date') out.startDate = argv[++index];
     else if (arg === '--end-date') out.endDate = argv[++index];
+    else if (arg === '--effective-from') out.effectiveFrom = argv[++index];
+    else if (arg === '--source-revision') out.sourceRevision = argv[++index];
     else if (arg === '--days') out.days = argv[++index];
     else if (arg === '--tid') out.tid = argv[++index];
     else if (arg === '--seller-id') out.sellerId = argv[++index];
@@ -83,6 +96,9 @@ export function parseArgs(argv) {
     else if (arg === '--shop-key') out.shopKey = argv[++index];
     else if (arg === '--shop-name') out.shopName = argv[++index];
     else if (arg === '--product-id') out.productId = argv[++index];
+    else if (arg === '--platform-sku-id') out.platformSkuId = argv[++index];
+    else if (arg === '--order-nos') out.orderNos = argv[++index];
+    else if (arg === '--sample-size') out.sampleSize = argv[++index];
     else if (arg === '--owner') out.owner = argv[++index];
     else if (arg === '--owners') out.owners = argv[++index];
     else if (arg === '--platform-fee-rate') out.platformFeeRate = argv[++index];
