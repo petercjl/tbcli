@@ -14,7 +14,12 @@ function reader({allocatedLineRevenue='101.00',missingCostLines='1',missingWeigh
     if(sql.startsWith('SELECT shop_name')) return {rows:[{shop_name:'天猫 Demo'}]};
     if(sql.includes("source_type='wdt-orders'")) return {rows:[{coverage_start:'2026-07-01',coverage_end:'2026-07-31'}]};
     if(sql.includes("source_type='wdt-refunds'")) return {rows:[{coverage_start:'2026-07-01',coverage_end:'2026-08-15'}]};
-    if(sql.includes('AS eligible_orders')) return {rows:[{eligible_orders:'2',order_lines:'3',shipments:'2',paid_amount:'100.00',allocated_line_revenue:allocatedLineRevenue}]};
+    if(sql.includes('AS eligible_orders')) return {rows:[{eligible_orders:'2',order_lines:'3',shipments:'2',paid_amount:'100.00',header_paid_amount:'90.00',header_real_amount:'90.00',header_refund_amount:'10.00',missing_real_amount_orders:'0',allocated_line_revenue:allocatedLineRevenue}]};
+    if(sql.includes('AS all_order_count')) return {rows:[{all_order_count:'3',all_order_original_payment:'120.00',cancelled_order_count:'1',cancelled_original_payment:'20.00',cancelled_settled_refund:'20.00',cancelled_positive_orders_without_settled_refund:'0',cancelled_positive_payment_without_settled_refund:'0.00'}]};
+    if(sql.includes('AS allocated_payment') && sql.includes('GROUP BY GROUPING SETS ((owner_name),(platform_product_id))')) return {rows:[
+      {level:'owner',owner_name:'甲',cancelled_order_original_payment:'20.0000',cancelled_order_settled_refund:'20.0000'},
+      {level:'product',owner_name:'甲',platform_product_id:'p1',product_name:'示例商品',cancelled_order_original_payment:'20.0000',cancelled_order_settled_refund:'20.0000'},
+    ]};
     if(sql.includes('AS settled_refunds')) return {rows:[{settled_refunds:'1',header_refund_amount:'10.00',refund_lines:'1',line_refund_amount:'10.00',unmatched_refund_headers:'0',unmapped_refund_lines:'1',unmapped_refund_amount:'2.00',unmapped_refund_details:[{wdtTradeNo:'T1',platformTradeId:'P1'}]}]};
     if(sql.includes('AS shipment_waybills')) return {rows:[{shipment_waybills:'2',matched_waybills:'1',unmatched_waybills:'1',shared_tracking_waybills:'0',multi_charge_waybills:'0',multi_carrier_waybills:'0',matched_charge_amount:'3.00',matched_bill_months:'2026-07',by_source_carrier:[]}]};
     if(sql.includes("value_state='actual'")) return {rows:[{lines:'3',actual_lines:missingCostLines==='0'?'3':'2',standard_reference_lines:'0',missing_lines:missingCostLines,missing_revenue:missingCostLines==='0'?'0.00':'5.00',covered_cost:'20.00',missing_items:missingCostLines==='0'?[]:[{erpSpecNo:'S1'}]}]};
@@ -29,9 +34,9 @@ function reader({allocatedLineRevenue='101.00',missingCostLines='1',missingWeigh
     }]};
     if(sql.includes('AS assigned_product_days')) return {rows:[{product_days:'2',assigned_product_days:'1',unassigned_product_days:'1',unassigned_products:'1',review_unassigned_products:'1',intentional_unassigned_products:'0',unassigned_product_ids:['p2'],unassigned_product_details:[{platformProductId:'p2'}]}]};
     if(sql.includes('freight_targets AS MATERIALIZED')) return {rows:[
-      {level:'shop',gross_revenue:'10.00',refund_amount:'0.00',net_sales:'10.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'10.00'},
-      {level:'owner',owner_name:'甲',gross_revenue:'10.00',refund_amount:'0.00',net_sales:'10.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'10.00'},
-      {level:'product',owner_name:'甲',platform_product_id:'p1',product_image_url:'https://img.example.com/p1.jpg',gross_revenue:'10.00',refund_amount:'0.00',net_sales:'10.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'10.00'},
+      {level:'shop',gross_revenue:'100.00',refund_amount:'10.00',net_sales:'90.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'90.00'},
+      {level:'owner',owner_name:'甲',gross_revenue:'100.00',refund_amount:'10.00',net_sales:'90.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'90.00'},
+      {level:'product',owner_name:'甲',platform_product_id:'p1',product_image_url:'https://img.example.com/p1.jpg',gross_revenue:'100.00',refund_amount:'10.00',net_sales:'90.00',goods_cost:'0.00',freight_cost:'0.00',ad_spend:'0.00',platform_fee:'0.00',tax_cost:'0.00',actual_profit:'90.00'},
     ]};
     if(sql.includes("dataset_key='wujie-subject'")) return {rows:[{covered_days:31,first_date:'2026-07-01',last_date:'2026-07-31',rows:'10',ad_spend:'8.00'}]};
     if(sql.includes('AS orders')) return {rows:[{orders:'2',lines:'3',shipments:'2'}]};
@@ -48,7 +53,8 @@ test('actual profit month produces Shanghai cutoff on next month day 15',()=>{
   assert.equal(actualProfitPeriod('2026-12').refundCutoffDate,'2027-01-15');
   assert.throws(()=>actualProfitPeriod('2026-13'),/YYYY-MM/);
   assert.throws(()=>validateActualCoverageRequest({month:'2026-07'}),/shop-key/);
-  assert.equal(validateActualCoverageRequest({shopKey:'demo',month:'2026-07'}).policyVersion,'operating-profit-v5');
+  assert.equal(validateActualCoverageRequest({shopKey:'demo',month:'2026-07'}).policyVersion,'operating-profit-v6');
+  assert.equal(validateActualCoverageRequest({shopKey:'demo',month:'2026-07',policyVersion:'operating-profit-v5'}).policyVersion,'operating-profit-v5');
   assert.equal(validateActualCoverageRequest({shopKey:'demo',month:'2026-07',policyVersion:'operating-profit-v4'}).policyVersion,'operating-profit-v4');
   assert.equal(validateActualCoverageRequest({shopKey:'demo',month:'2026-07',returnResaleRate:'0.75'}).returnResaleRate,0.75);
   assert.throws(()=>validateActualCoverageRequest({shopKey:'demo',month:'2026-07',returnResaleRate:'1.1'}),/0 到 1/);
@@ -72,6 +78,9 @@ test('actual coverage is read-only and separates blocking from advisory gaps',as
   assert.equal(result.period.refundCutoffDate,'2026-08-15');
   assert.equal(result.coverage.orderScope.line_revenue_difference,'1.00');
   assert.equal(result.coverage.orderScope.selected_revenue_amount,'100.00');
+  assert.equal(result.coverage.paymentBridge.all_order_original_payment,'120.00');
+  assert.equal(result.coverage.paymentBridge.shipped_original_payment,'100.00');
+  assert.equal(result.coverage.paymentBridge.all_to_shipped_difference,'20.00');
   assert.ok(result.advisoryGaps.some(g=>g.code==='ORDER_LINES_USED_AS_ALLOCATION_WEIGHTS'));
   assert.equal(result.coverage.freight.estimated_freight_amount,'2.00');
   assert.equal(result.coverage.freight.total_freight_amount,'5.00');
@@ -103,11 +112,11 @@ test('actual coverage is routed and advertised as a stable business capability',
   assert.equal(definition.audience,'business');
   assert.equal(definition.capability.id,'profit-actual-coverage');
   assert.match(definition.capability.commandTemplate,/--month <YYYY-MM>/);
-  assert.equal(ACTUAL_PROFIT_POLICY.version,'operating-profit-v5');
+  assert.equal(ACTUAL_PROFIT_POLICY.version,'operating-profit-v6');
   assert.equal(ACTUAL_PROFIT_POLICY.returnResaleRate,0.5);
   assert.equal(ACTUAL_PROFIT_POLICY.freightAllocationBasis,'platform_sku_gross_weight');
   assert.equal(ACTUAL_PROFIT_POLICY.ignoredPlaceholderSpecNo,'dc99999');
-  assert.equal(ACTUAL_PROFIT_POLICY.revenueBasis,'order_header_paid');
+  assert.equal(ACTUAL_PROFIT_POLICY.revenueBasis,'order_header_real_plus_refund');
   assert.deepEqual(ACTUAL_PROFIT_POLICY.nonMerchandiseProducts['641773251256'],{
     type:'price_adjustment_link',ownerRequired:false,costState:'explicit_zero',
   });
@@ -392,6 +401,8 @@ test('actual report query returns shop, owner and product sections from one read
   assert.match(sql,/\$14::numeric/);
   assert.match(buildActualProfitQuery('shop','operating-profit-v4'),/sw\.allocation_weight_kg\/ow\.order_weight_kg\/sc\.line_count/);
   assert.match(sql,/paid_amount\*allocation_weight\/order_weight/);
+  assert.match(sql,/h\.real_amount\+coalesce\(h\.refund_amount,0\) AS paid_amount/);
+  assert.match(buildActualProfitQuery('shop','operating-profit-v5'),/h\.paid_amount AS paid_amount/);
   assert.match(sql,/round\(sum\(charge_amount\),2\)/);
   assert.doesNotMatch(sql,/\b(CREATE|INSERT|UPDATE|DELETE|DROP|GRANT|REVOKE)\b/i);
   assert.equal(validateActualProfitQueryRequest({shopKey:'demo',month:'2026-07',groupBy:'report'}).groupBy,'report');
@@ -405,15 +416,37 @@ test('actual report query returns shop, owner and product sections from one read
   assert.equal(result.reconciliation.ownerToShop.passed,true);
   assert.equal(result.reconciliation.productToShop.passed,true);
   assert.equal(result.quality.freightAllocation.method,'platform_sku_gross_weight');
+  assert.equal(result.paymentFlow.all_order_original_payment,'120.00');
+  assert.equal(result.paymentFlow.cancelled_order_original_payment,'20.00');
+  assert.equal(result.paymentFlow.shipped_order_original_payment,'100.00');
+  assert.equal(result.paymentFlow.shipped_order_settled_refund,'10.00');
+  assert.equal(result.paymentFlow.net_sales,'90.00');
+  assert.equal(result.paymentFlow.cancelled_order_settled_refund,'20.00');
+  assert.equal(result.paymentFlow.cancelled_order_refund_residual,'0.00');
+  assert.equal(result.ownerPaymentFlows[0].owner_name,'甲');
+  assert.equal(result.ownerPaymentFlows[0].all_order_original_payment,'120.0000');
+  assert.equal(result.ownerPaymentFlows[0].cancelled_order_original_payment,'20.0000');
+  assert.equal(result.productPaymentFlows[0].platform_product_id,'p1');
+  assert.equal(result.productPaymentFlows[0].all_order_original_payment,'120.0000');
 });
 
-test('v5 passes the adjustable resale assumption and preserves v4 parameter contract',async()=>{
+test('v6 restores original WDT payment; v5 retains its historical paid field',async()=>{
   const current=reader({allocatedLineRevenue:'100.00',missingCostLines:'0'});
   const result=await getActualProfitQuery(current,{shopKey:'demo',month:'2026-07',returnResaleRate:'0.75'});
   const currentQuery=current.calls.find(call=>call.sql.includes('refund_cost_quantities'));
+  const currentCoverage=current.calls.find(call=>call.sql.includes('AS eligible_orders'));
   assert.equal(currentQuery.params.length,14);
   assert.equal(currentQuery.params[13],0.75);
+  assert.equal(currentCoverage.params[4],true);
+  assert.equal(result.policy.revenueBasis,'order_header_real_plus_refund');
+  assert.equal(result.policy.version,'operating-profit-v6');
   assert.equal(result.policy.returnResaleRate,0.75);
+  const v5=reader({allocatedLineRevenue:'100.00',missingCostLines:'0'});
+  const historical=await getActualProfitQuery(v5,{shopKey:'demo',month:'2026-07',policyVersion:'operating-profit-v5'});
+  assert.equal(historical.policy.revenueBasis,'order_header_paid');
+  assert.equal(historical.paymentFlow,undefined);
+  assert.equal(v5.calls.find(call=>call.sql.includes('AS eligible_orders')).params[4],false);
+  assert.equal(v5.calls.find(call=>call.sql.includes('freight_targets AS MATERIALIZED')).params.length,14);
   const previous=reader({allocatedLineRevenue:'100.00',missingCostLines:'0'});
   await getActualProfitQuery(previous,{shopKey:'demo',month:'2026-07',policyVersion:'operating-profit-v4'});
   const previousQuery=previous.calls.find(call=>call.sql.includes('freight_targets AS MATERIALIZED'));

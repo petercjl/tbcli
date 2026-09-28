@@ -56,7 +56,7 @@ Do not embed shop-specific defaults, private paths, credentials, or company-only
      --out '<临时目录>/profit-report.viewmodel.json' \
    ```
 
-7. Require `calculationPerformed:true`, exactly one shop row, owner and product sections, and passed reconciliation within the declared tolerance. If `blockingGaps` is non-empty, stop with `PROFIT_DATA_INCOMPLETE`.
+7. Require `calculationPerformed:true`, exactly one shop row, owner and product sections, and passed reconciliation within the declared tolerance. Require `operating-profit-v6`, a complete shop `paymentFlow`, `ownerPaymentFlows`, and `productPaymentFlows`. Check each owner/product bridge against its shipped-order profit row and check both dimension totals against the shop payment bridge. Include product IDs with cancelled-order payment even when their shipped-order sales are zero. If `blockingGaps` is non-empty, stop with `PROFIT_DATA_INCOMPLETE`.
    Require product-image URL coverage for the interactive product tables. Missing URLs remain `PRODUCT_IMAGE_URL_MISSING`; show an explicit placeholder and coverage note, and do not download images or invent URLs.
 8. Render and validate only through the presentation dependency:
 
@@ -69,7 +69,7 @@ Do not embed shop-specific defaults, private paths, credentials, or company-only
    ```
 
 9. For `provisional`, retain the visible estimate badge and every estimated/reference amount. For `actual/reconciled`, retain the reconciled badge.
-10. Inspect the real HTML on desktop and narrow viewport: it opens; every real owner has an independent page with a sticky owner title; exceptional non-owner groups have a separate page; owner and whole-shop product tables show linked thumbnails, keep their table header visible below the sticky top bar and current view title while scrolling vertically, place `退款后付费占比 = 推广费 ÷ 净销售额` immediately after the owner column, search by product name/ID, sort the full result before pagination, and display 50 products per page.
+10. Inspect the real HTML on desktop and narrow viewport: the overview and each owner detail page visibly bridge 全部订单原支付额 → 取消订单金额 → 已发货销售原额 → 已发货退款 → 净销售额, while cancelled-order refunds and residual remain separate audit figures. The owner comparison and non-owner grouping tables show original and cancelled payment; every real owner has an independent page with a sticky owner title; exceptional non-owner groups have a separate page. Owner and whole-shop product tables list both original and cancelled payment for each product ID, including IDs with zero shipped-order sales. Product tables show linked thumbnails, keep their table header visible below the sticky top bar and current view title while scrolling vertically, place `退款后付费占比 = 推广费 ÷ 净销售额` immediately after the owner column, search by product name/ID, sort the full result before pagination, and display 50 products per page.
 11. Return the clickable HTML path, validation result, status, whole-shop profit and margin, owner count, product count, and material quality notes.
 
 ## Analysis rules

@@ -38,6 +38,58 @@ function validatePayload(payload) {
   if (!Array.isArray(payload?.sections?.owners) || !Array.isArray(payload?.sections?.products)) throw new Error('报告数据缺少负责人或商品分区');
   if (payload.quality?.blockingGaps?.length) throw new Error(`PROFIT_DATA_INCOMPLETE: ${JSON.stringify(payload.quality.blockingGaps)}`);
   if (!payload.reconciliation?.ownerToShop?.passed || !payload.reconciliation?.productToShop?.passed) throw new Error(`RECONCILIATION_FAILED: ${JSON.stringify(payload.reconciliation)}`);
+  const flow = payload.paymentFlow;
+  if (!flow || payload.period?.policyVersion !== 'operating-profit-v6') throw new Error('报告缺少 v6 支付金额桥接');
+  const near = (left, right) => Math.abs(Number(left) - Number(right)) <= 0.01;
+  if (!near(Number(flow.all_order_original_payment) - Number(flow.cancelled_order_original_payment), flow.shipped_order_original_payment)
+      || !near(Number(flow.shipped_order_original_payment) - Number(flow.shipped_order_settled_refund), flow.net_sales)
+      || !near(flow.shipped_order_original_payment, payload.sections.shop[0].gross_revenue)
+      || !near(flow.shipped_order_settled_refund, payload.sections.shop[0].refund_amount)
+      || !near(flow.net_sales, payload.sections.shop[0].net_sales)) throw new Error('PAYMENT_RECONCILIATION_FAILED: 支付桥接与全店利润不一致');
+  if (!Array.isArray(payload.ownerPaymentFlows)) throw new Error('报告缺少负责人支付金额桥接');
+  const ownerFlows = new Map(payload.ownerPaymentFlows.map((row) => [row.owner_name, row]));
+  if (ownerFlows.size !== payload.ownerPaymentFlows.length) throw new Error('OWNER_PAYMENT_RECONCILIATION_FAILED: 负责人重复');
+  for (const row of payload.sections.owners) {
+    const ownerFlow = ownerFlows.get(row.owner_name);
+    if (!ownerFlow || !near(ownerFlow.shipped_order_original_payment, row.gross_revenue)
+        || !near(ownerFlow.shipped_order_settled_refund, row.refund_amount)
+        || !near(ownerFlow.net_sales, row.net_sales)
+        || !near(Number(ownerFlow.all_order_original_payment) - Number(ownerFlow.cancelled_order_original_payment), ownerFlow.shipped_order_original_payment)) {
+      throw new Error(`OWNER_PAYMENT_RECONCILIATION_FAILED: ${row.owner_name}`);
+    }
+  }
+  for (const field of ['all_order_original_payment', 'cancelled_order_original_payment', 'shipped_order_original_payment',
+    'shipped_order_settled_refund', 'net_sales', 'cancelled_order_settled_refund', 'cancelled_order_refund_residual']) {
+    if (!near(payload.ownerPaymentFlows.reduce((sum, row) => sum + Number(row[field]), 0), flow[field])) {
+      throw new Error(`OWNER_PAYMENT_RECONCILIATION_FAILED: ${field} 合计与全店不一致`);
+    }
+  }
+  if (!Array.isArray(payload.productPaymentFlows)) throw new Error('报告缺少商品支付金额桥接');
+  const productFlows = new Map(payload.productPaymentFlows.map((row) => [row.platform_product_id, row]));
+  if (productFlows.size !== payload.productPaymentFlows.length) throw new Error('PRODUCT_PAYMENT_RECONCILIATION_FAILED: 商品 ID 重复');
+  for (const row of payload.sections.products) {
+    const productFlow = productFlows.get(row.platform_product_id);
+    if (!productFlow || !near(productFlow.shipped_order_original_payment, row.gross_revenue)
+        || !near(productFlow.shipped_order_settled_refund, row.refund_amount)
+        || !near(productFlow.net_sales, row.net_sales)
+        || !near(Number(productFlow.all_order_original_payment) - Number(productFlow.cancelled_order_original_payment), productFlow.shipped_order_original_payment)) {
+      throw new Error(`PRODUCT_PAYMENT_RECONCILIATION_FAILED: ${row.platform_product_id}`);
+    }
+  }
+  for (const field of ['all_order_original_payment', 'cancelled_order_original_payment', 'shipped_order_original_payment',
+    'shipped_order_settled_refund', 'net_sales', 'cancelled_order_settled_refund', 'cancelled_order_refund_residual']) {
+    if (!near(payload.productPaymentFlows.reduce((sum, row) => sum + Number(row[field]), 0), flow[field])) {
+      throw new Error(`PRODUCT_PAYMENT_RECONCILIATION_FAILED: ${field} 合计与全店不一致`);
+    }
+  }
+  for (const ownerFlow of payload.ownerPaymentFlows) {
+    const products = payload.productPaymentFlows.filter((row) => row.owner_name === ownerFlow.owner_name);
+    for (const field of ['all_order_original_payment', 'cancelled_order_original_payment']) {
+      if (!near(products.reduce((sum, row) => sum + Number(row[field]), 0), ownerFlow[field])) {
+        throw new Error(`PRODUCT_OWNER_PAYMENT_ATTRIBUTION_MISMATCH: ${ownerFlow.owner_name} 的商品${field}合计与负责人不一致`);
+      }
+    }
+  }
 }
 
 const number = (value) => Number(value || 0);
@@ -57,14 +109,17 @@ function httpsImageUrl(value) {
   }
 }
 
-function product(row) {
+function product(row, flow) {
   const netSales = number(row.net_sales);
   const adSpend = number(row.ad_spend);
   return {
     id: safeProductId(row.platform_product_id),
     name: row.product_name || '未知商品',
     owner: row.owner_name || '未分配负责人',
+    cancelled_only: Boolean(flow.cancelled_only),
     image_url: httpsImageUrl(row.product_image_url),
+    all_order_original_payment: number(flow.all_order_original_payment),
+    cancelled_order_original_payment: number(flow.cancelled_order_original_payment),
     gross_revenue: number(row.gross_revenue),
     refund_amount: number(row.refund_amount),
     net_sales: netSales,
@@ -77,7 +132,13 @@ function product(row) {
   };
 }
 
-function summary(row, name, productCount) {
+function paymentFlow(row) {
+  return Object.fromEntries(['all_order_original_payment', 'cancelled_order_original_payment',
+    'shipped_order_original_payment', 'shipped_order_settled_refund', 'net_sales',
+    'cancelled_order_settled_refund', 'cancelled_order_refund_residual'].map((field) => [field, number(row[field])]));
+}
+
+function summary(row, name, productCount, flow) {
   return {
     name,
     gross_revenue: number(row.gross_revenue),
@@ -93,6 +154,7 @@ function summary(row, name, productCount) {
     actual_profit: number(row.actual_profit),
     profit_margin: nullableNumber(row.profit_margin),
     product_count: productCount,
+    ...(flow ? { payment_flow: paymentFlow(flow) } : {}),
   };
 }
 
@@ -106,13 +168,22 @@ function qualityText(item) {
 }
 
 function buildViewModel(payload) {
-  const productRows = payload.sections.products.map(product);
-  const ownerRows = payload.sections.owners.filter((row) => !NON_OWNER_GROUPS.has(row.owner_name || '未分配负责人'));
-  const unownedRows = payload.sections.owners.filter((row) => NON_OWNER_GROUPS.has(row.owner_name || '未分配负责人'));
+  const productFlows = new Map(payload.productPaymentFlows.map((row) => [row.platform_product_id, row]));
+  const shippedProductIds = new Set(payload.sections.products.map((row) => row.platform_product_id));
+  const productRows = [
+    ...payload.sections.products.map((row) => product(row, productFlows.get(row.platform_product_id))),
+    ...payload.productPaymentFlows.filter((row) => !shippedProductIds.has(row.platform_product_id)).map((row) => product(row, row)),
+  ];
+  const ownerFlows = new Map(payload.ownerPaymentFlows.map((row) => [row.owner_name, row]));
+  const shippedOwnerNames = new Set(payload.sections.owners.map((row) => row.owner_name));
+  const allOwnerRows = [...payload.sections.owners,
+    ...payload.ownerPaymentFlows.filter((row) => !shippedOwnerNames.has(row.owner_name)).map((row) => ({ owner_name: row.owner_name }))];
+  const ownerRows = allOwnerRows.filter((row) => !NON_OWNER_GROUPS.has(row.owner_name || '未分配负责人'));
+  const unownedRows = allOwnerRows.filter((row) => NON_OWNER_GROUPS.has(row.owner_name || '未分配负责人'));
   const owners = ownerRows.map((row, index) => {
     const name = row.owner_name;
     const products = productRows.filter((item) => item.owner === name);
-    return { id: slugOwner(index), name, summary: summary(row, name, products.length), products };
+    return { id: slugOwner(index), name, summary: summary(row, name, products.length, ownerFlows.get(name)), products };
   });
   const unownedNames = new Set(unownedRows.map((row) => row.owner_name || '未分配负责人'));
   const unownedProducts = productRows.filter((item) => unownedNames.has(item.owner));
@@ -132,11 +203,12 @@ function buildViewModel(payload) {
       source_payload_sha256: crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex'),
     },
     shop: summary(shopRow, '全店', productRows.length),
+    payment_flow: paymentFlow(payload.paymentFlow),
     owners,
     unowned: {
       groups: unownedRows.map((row) => {
         const name = row.owner_name || '未分配负责人';
-        return summary(row, name, productRows.filter((item) => item.owner === name).length);
+        return summary(row, name, productRows.filter((item) => item.owner === name).length, ownerFlows.get(name));
       }),
       products: unownedProducts,
     },
@@ -148,11 +220,13 @@ function buildViewModel(payload) {
         ...(missingImageCount ? [{ code: 'PRODUCT_IMAGE_URL_MISSING', count: missingImageCount, total: productRows.length }] : []),
       ].map(qualityText),
       method: [
-        '净销售额 = 订单头实付收入 − 退款。',
+        '已发货订单销售原额 = 旺店通全部订单还原支付原额 − 取消订单还原支付原额。',
+        '净销售额 = 已发货订单销售原额 − 这些订单截至退款截止日已结算的退款。',
         '实际利润 = 净销售额 − 商品成本 − 运费 − 推广费 − 平台费 − 税费。',
         `平台费率 ${(number(payload.policy.platformFeeRate) * 100).toFixed(0)}%，税率 ${(number(payload.policy.taxRate) * 100).toFixed(0)}%。`,
         `未匹配快递账单按每运单 ${number(payload.policy.missingFreightPerWaybill).toFixed(2)} 元估算。`,
-        '收入采用订单头实付；商品明细金额只作为订单内归一化分配权重。',
+        '旺店通订单头 realAmount + refundAmount 还原支付原额；商品明细金额只作为订单内归一化分配权重。取消订单的支付与退款另列审计。',
+        '取消订单支付金额按订单商品行金额权重归一化分到商品 ID，并按支付日负责人归属；商品和负责人明细分别与全店支付桥接核对。',
         '订单运费按订单内归一化收入占比分配到商品。',
         '本报告是经营利润分析，不替代法定财务报表或平台结算单。',
       ],

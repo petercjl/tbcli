@@ -3,7 +3,7 @@ import {getProfitRefundCoverage} from './profit-refunds.mjs';
 
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 export const ACTUAL_PROFIT_POLICY = Object.freeze({
-  version: 'operating-profit-v5',
+  version: 'operating-profit-v6',
   costBasis: 'current_approved_sku_cost',
   freightAllocationBasis: 'platform_sku_gross_weight',
   missingWeightFallback: 'order_revenue_share',
@@ -14,7 +14,7 @@ export const ACTUAL_PROFIT_POLICY = Object.freeze({
   missingFreightPerWaybill: 2,
   returnResaleRate: 0.5,
   refundCostRule: 'pre_shipment_full_credit_return_refund_resale_rate_credit',
-  revenueBasis: 'order_header_paid',
+  revenueBasis: 'order_header_real_plus_refund',
   ownerOptionalProducts: Object.freeze({
     '2821074747423457561': Object.freeze({type:'delisted_product',ownerRequired:false}),
     '2825068038544425323': Object.freeze({type:'delisted_product',ownerRequired:false}),
@@ -25,7 +25,9 @@ export const ACTUAL_PROFIT_POLICY = Object.freeze({
     '641773251256': Object.freeze({type:'price_adjustment_link',ownerRequired:false,costState:'explicit_zero'}),
   }),
 });
-const WEIGHT_ACTUAL_PROFIT_POLICY = Object.freeze({...ACTUAL_PROFIT_POLICY,
+const REFUND_CREDIT_ACTUAL_PROFIT_POLICY = Object.freeze({...ACTUAL_PROFIT_POLICY,
+  version:'operating-profit-v5',revenueBasis:'order_header_paid'});
+const WEIGHT_ACTUAL_PROFIT_POLICY = Object.freeze({...REFUND_CREDIT_ACTUAL_PROFIT_POLICY,
   version:'operating-profit-v4',returnResaleRate:null,refundCostRule:null});
 const REVENUE_ACTUAL_PROFIT_POLICY = Object.freeze({...ACTUAL_PROFIT_POLICY,
   version:'operating-profit-v3',freightAllocationBasis:'order_revenue_share',
@@ -40,7 +42,12 @@ function actualPolicy(version) {
   if(version===PREVIOUS_ACTUAL_PROFIT_POLICY.version) return PREVIOUS_ACTUAL_PROFIT_POLICY;
   if(version===REVENUE_ACTUAL_PROFIT_POLICY.version) return REVENUE_ACTUAL_PROFIT_POLICY;
   if(version===WEIGHT_ACTUAL_PROFIT_POLICY.version) return WEIGHT_ACTUAL_PROFIT_POLICY;
+  if(version===REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version) return REFUND_CREDIT_ACTUAL_PROFIT_POLICY;
   return ACTUAL_PROFIT_POLICY;
+}
+
+function hasReturnCostCredit(version) {
+  return [ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version].includes(version);
 }
 
 // Only an entire zero-value, single-spec placeholder order is outside the v3 profit scope.
@@ -80,8 +87,8 @@ export function validateActualCoverageRequest(args = {}) {
   if (!args.shopKey) throw new Error('缺少 --shop-key');
   const period = actualProfitPeriod(args.month);
   if (args.policyVersion != null && !String(args.policyVersion).trim()) throw new Error('--policy-version 不能为空');
-  if (args.policyVersion && ![ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version,PREVIOUS_ACTUAL_PROFIT_POLICY.version,LEGACY_ACTUAL_PROFIT_POLICY.version].includes(String(args.policyVersion).trim())) {
-    throw new Error(`--policy-version 当前仅支持 ${ACTUAL_PROFIT_POLICY.version}、${WEIGHT_ACTUAL_PROFIT_POLICY.version}、${REVENUE_ACTUAL_PROFIT_POLICY.version}、${PREVIOUS_ACTUAL_PROFIT_POLICY.version} 或 ${LEGACY_ACTUAL_PROFIT_POLICY.version}`);
+  if (args.policyVersion && ![ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version,PREVIOUS_ACTUAL_PROFIT_POLICY.version,LEGACY_ACTUAL_PROFIT_POLICY.version].includes(String(args.policyVersion).trim())) {
+    throw new Error(`--policy-version 当前仅支持 ${ACTUAL_PROFIT_POLICY.version}、${REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version}、${WEIGHT_ACTUAL_PROFIT_POLICY.version}、${REVENUE_ACTUAL_PROFIT_POLICY.version}、${PREVIOUS_ACTUAL_PROFIT_POLICY.version} 或 ${LEGACY_ACTUAL_PROFIT_POLICY.version}`);
   }
   const returnResaleRate=Number(args.returnResaleRate ?? ACTUAL_PROFIT_POLICY.returnResaleRate);
   if (!Number.isFinite(returnResaleRate) || returnResaleRate<0 || returnResaleRate>1)
@@ -91,19 +98,107 @@ export function validateActualCoverageRequest(args = {}) {
 
 const ORDER_SCOPE_SQL = `
   WITH all_scoped AS MATERIALIZED (
-    SELECT h.wdt_trade_no,h.paid_amount,(${PLACEHOLDER_ORDER_EXPR}) AS is_placeholder
+    SELECT h.wdt_trade_no,h.paid_amount,h.real_amount,h.refund_amount,
+      (${PLACEHOLDER_ORDER_EXPR}) AS is_placeholder
     FROM raw.wdt_order_headers h WHERE h.shop_key=$1 AND h.order_status_code=95
       AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
   ), scoped AS MATERIALIZED (
-    SELECT wdt_trade_no,paid_amount FROM all_scoped WHERE NOT ($4::boolean AND is_placeholder)
+    SELECT wdt_trade_no,paid_amount,real_amount,refund_amount
+    FROM all_scoped WHERE NOT ($4::boolean AND is_placeholder)
   )
   SELECT (SELECT count(*)::bigint FROM scoped) AS eligible_orders,
     (SELECT count(*)::bigint FROM all_scoped WHERE $4::boolean AND is_placeholder) AS ignored_placeholder_orders,
     (SELECT count(*)::bigint FROM raw.wdt_order_lines l JOIN scoped s USING(wdt_trade_no) WHERE l.shop_key=$1) AS order_lines,
     (SELECT count(*)::bigint FROM raw.shipments x JOIN scoped s USING(wdt_trade_no) WHERE x.shop_key=$1) AS shipments,
-    (SELECT round(coalesce(sum(paid_amount),0),2)::text FROM scoped) AS paid_amount,
+    (SELECT round(coalesce(sum(CASE WHEN $5::boolean THEN real_amount+coalesce(refund_amount,0)
+      ELSE paid_amount END),0),2)::text FROM scoped) AS paid_amount,
+    (SELECT round(coalesce(sum(paid_amount),0),2)::text FROM scoped) AS header_paid_amount,
+    (SELECT round(coalesce(sum(real_amount),0),2)::text FROM scoped) AS header_real_amount,
+    (SELECT round(coalesce(sum(coalesce(refund_amount,0)),0),2)::text FROM scoped) AS header_refund_amount,
+    (SELECT count(*)::bigint FROM scoped WHERE $5::boolean AND real_amount IS NULL) AS missing_real_amount_orders,
     (SELECT round(coalesce(sum(coalesce(l.source_share_amount,l.source_line_paid,0)),0),2)::text
        FROM raw.wdt_order_lines l JOIN scoped s USING(wdt_trade_no) WHERE l.shop_key=$1) AS allocated_line_revenue`;
+
+const PAYMENT_BRIDGE_SQL = `
+  WITH month_orders AS MATERIALIZED (
+    SELECT h.shop_key,h.wdt_trade_no,h.order_status_code,
+      h.real_amount+coalesce(h.refund_amount,0) AS original_payment
+    FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code IN (4,5,95)
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  ), cancelled AS MATERIALIZED (
+    SELECT * FROM month_orders WHERE order_status_code IN (4,5)
+  ), cancelled_refunds AS MATERIALIZED (
+    SELECT r.shop_key,r.wdt_trade_no,
+      sum(coalesce(r.actual_refund_amount,r.refunded_amount,r.return_amount,0)) AS settled_amount
+    FROM raw.wdt_refund_headers r JOIN cancelled c USING(shop_key,wdt_trade_no)
+    WHERE r.is_financially_refunded AND r.settled_at<=$4::timestamptz
+    GROUP BY 1,2
+  )
+  SELECT (SELECT count(*)::bigint FROM month_orders) AS all_order_count,
+    (SELECT round(coalesce(sum(original_payment),0),2)::text FROM month_orders) AS all_order_original_payment,
+    (SELECT count(*)::bigint FROM cancelled) AS cancelled_order_count,
+    (SELECT round(coalesce(sum(original_payment),0),2)::text FROM cancelled) AS cancelled_original_payment,
+    (SELECT round(coalesce(sum(settled_amount),0),2)::text FROM cancelled_refunds) AS cancelled_settled_refund,
+    (SELECT count(*)::bigint FROM cancelled c LEFT JOIN cancelled_refunds r USING(shop_key,wdt_trade_no)
+      WHERE r.wdt_trade_no IS NULL AND c.original_payment>0) AS cancelled_positive_orders_without_settled_refund,
+    (SELECT round(coalesce(sum(c.original_payment),0),2)::text
+      FROM cancelled c LEFT JOIN cancelled_refunds r USING(shop_key,wdt_trade_no)
+      WHERE r.wdt_trade_no IS NULL AND c.original_payment>0) AS cancelled_positive_payment_without_settled_refund`;
+
+export const OWNER_CANCELLED_PAYMENT_SQL = `
+  WITH cancelled AS MATERIALIZED (
+    SELECT h.shop_key,h.wdt_trade_no,(h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,
+      h.real_amount+coalesce(h.refund_amount,0) AS original_payment
+    FROM raw.wdt_order_headers h
+    WHERE h.shop_key=$1 AND h.order_status_code IN (4,5)
+      AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
+  ), settled AS MATERIALIZED (
+    SELECT r.shop_key,r.wdt_trade_no,
+      sum(coalesce(r.actual_refund_amount,r.refunded_amount,r.return_amount,0)) AS settled_refund
+    FROM raw.wdt_refund_headers r JOIN cancelled c USING(shop_key,wdt_trade_no)
+    WHERE r.is_financially_refunded AND r.settled_at<=$4::timestamptz
+    GROUP BY 1,2
+  ), lines AS MATERIALIZED (
+    SELECT c.wdt_trade_no,c.paid_date,c.original_payment,coalesce(s.settled_refund,0) AS settled_refund,
+      l.platform_product_id,coalesce(i.product_title,l.product_name) AS product_name,
+      i.image_url AS product_image_url,
+      coalesce(l.source_share_amount,l.source_line_paid,0) AS allocation_weight,
+      sum(coalesce(l.source_share_amount,l.source_line_paid,0)) OVER(PARTITION BY c.wdt_trade_no) AS order_weight,
+      count(*) OVER(PARTITION BY c.wdt_trade_no) AS order_line_count
+    FROM cancelled c JOIN raw.wdt_order_lines l USING(shop_key,wdt_trade_no)
+    LEFT JOIN settled s USING(shop_key,wdt_trade_no)
+    LEFT JOIN master.product_image_mappings i USING(platform_product_id)
+  ), assigned AS MATERIALIZED (
+    SELECT l.paid_date,coalesce(l.platform_product_id,'__UNMAPPED_ORDER_LINE__') AS platform_product_id,
+      l.product_name,l.product_image_url,
+      CASE WHEN l.platform_product_id IS NULL THEN '无法归属'
+      WHEN nullif(trim(o.owner_name),'') IS NOT NULL AND o.owner_name NOT IN ('未分配','未分配负责人') THEN o.owner_name
+      WHEN l.platform_product_id=ANY($5::text[]) THEN '不归属负责人'
+      WHEN l.platform_product_id=ANY($6::text[]) THEN '已下架未分配'
+      ELSE '未分配负责人' END AS owner_name,
+      l.original_payment*CASE WHEN l.order_weight<>0 THEN l.allocation_weight/l.order_weight
+        ELSE 1::numeric/l.order_line_count END AS allocated_payment,
+      l.settled_refund*CASE WHEN l.order_weight<>0 THEN l.allocation_weight/l.order_weight
+        ELSE 1::numeric/l.order_line_count END AS allocated_refund
+    FROM lines l LEFT JOIN LATERAL (
+      SELECT owner_name FROM master.product_owner_versions o WHERE o.shop_key=$1
+        AND o.platform_product_id=l.platform_product_id AND o.status='approved'
+        AND l.paid_date>=o.effective_from AND (o.effective_to IS NULL OR l.paid_date<=o.effective_to)
+      ORDER BY o.effective_from DESC LIMIT 1
+    ) o ON true
+  )
+  SELECT CASE WHEN grouping(platform_product_id)=0 THEN 'product' ELSE 'owner' END AS level,
+    CASE WHEN grouping(platform_product_id)=0 THEN (array_agg(owner_name ORDER BY paid_date DESC))[1]
+      ELSE owner_name END AS owner_name,
+    CASE WHEN grouping(platform_product_id)=0 THEN platform_product_id END AS platform_product_id,
+    CASE WHEN grouping(platform_product_id)=0 THEN (array_agg(product_name ORDER BY paid_date DESC)
+      FILTER(WHERE product_name IS NOT NULL))[1] END AS product_name,
+    CASE WHEN grouping(platform_product_id)=0 THEN max(product_image_url) END AS product_image_url,
+    round(sum(allocated_payment),4)::text AS cancelled_order_original_payment,
+    round(sum(allocated_refund),4)::text AS cancelled_order_settled_refund
+  FROM assigned GROUP BY GROUPING SETS ((owner_name),(platform_product_id))
+  ORDER BY level,owner_name,platform_product_id`;
 
 const REFUND_SQL = `
   WITH scoped_orders AS MATERIALIZED (
@@ -310,16 +405,18 @@ export async function getActualProfitCoverage(client, args = {}) {
   const ordersCoverage = await getProfitOrderCoverage(client, {shopKey: args.shopKey, startDate: period.startDate, endDate: period.endDate});
   const refundSourceCoverage = await getProfitRefundCoverage(client, {shopKey: args.shopKey, startDate: period.startDate, endDate: period.refundCutoffDate});
   const currentCostPolicy=period.policyVersion!==LEGACY_ACTUAL_PROFIT_POLICY.version;
-  const placeholderPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
-  const orderResult = await client.query(ORDER_SCOPE_SQL, [...monthParams,placeholderPolicy]);
+  const placeholderPolicy=[ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
+  const originalPaymentPolicy=period.policyVersion===ACTUAL_PROFIT_POLICY.version;
+  const orderResult = await client.query(ORDER_SCOPE_SQL, [...monthParams,placeholderPolicy,originalPaymentPolicy]);
+  const paymentBridgeResult = await client.query(PAYMENT_BRIDGE_SQL,params);
   const refundResult = await client.query(REFUND_SQL, [...params,placeholderPolicy]);
   const freightResult = await client.query(FREIGHT_SQL, [...monthParams,placeholderPolicy]);
   const costResult = await client.query(COST_SQL, [...monthParams, nonMerchandiseProductIds,currentCostPolicy,placeholderPolicy]);
   const ownerResult = await client.query(OWNER_SQL, [...monthParams, ownerOptionalProductIds, nonMerchandiseProductIds,placeholderPolicy]);
   const adsResult = await client.query(ADS_SQL, [period.startDate, period.endDate, adShopName]);
-  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
+  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(period.policyVersion);
   const weightResult=weightPolicy?await client.query(SKU_GROSS_WEIGHT_COVERAGE_SQL,[...monthParams,placeholderPolicy,nonMerchandiseProductIds,
-    ACTUAL_PROFIT_POLICY.missingFreightPerWaybill,period.refundCutoff,period.policyVersion===ACTUAL_PROFIT_POLICY.version]):null;
+    ACTUAL_PROFIT_POLICY.missingFreightPerWaybill,period.refundCutoff,hasReturnCostCredit(period.policyVersion)]):null;
   const weightRun=weightPolicy?await client.query(`SELECT run_id,method,created_at,
       changed_estimate_count,changed_inferred_count
     FROM meta.platform_sku_gross_weight_runs WHERE shop_key=$1
@@ -327,15 +424,30 @@ export async function getActualProfitCoverage(client, args = {}) {
     ORDER BY created_at DESC LIMIT 1`,[args.shopKey]):null;
   const orderScope = rowNumbers(orderResult.rows[0], ['eligible_orders','ignored_placeholder_orders','order_lines','shipments']);
   orderScope.paid_amount = decimal(orderScope.paid_amount);
+  orderScope.header_paid_amount = decimal(orderScope.header_paid_amount);
+  orderScope.header_real_amount = decimal(orderScope.header_real_amount);
+  orderScope.header_refund_amount = decimal(orderScope.header_refund_amount);
   orderScope.allocated_line_revenue = decimal(orderScope.allocated_line_revenue);
   orderScope.line_revenue_difference = (Number(orderScope.allocated_line_revenue || 0) - Number(orderScope.paid_amount || 0)).toFixed(2);
   orderScope.selected_revenue_amount = orderScope.paid_amount;
   orderScope.allocation_weight_amount = orderScope.allocated_line_revenue;
-  orderScope.allocation_rule = '订单头 paid_amount 作为收入总额；商品明细 shareAmount/paid 仅作为订单内分配权重，并按订单头实付归一化';
+  orderScope.allocation_rule = originalPaymentPolicy
+    ? '已发货订单头 real_amount + refund_amount 还原支付原额；商品明细 shareAmount/paid 作为订单内分配权重，退款单另行扣减'
+    : '订单头 paid_amount 作为收入总额；商品明细 shareAmount/paid 仅作为订单内分配权重，并按订单头实付归一化';
   orderScope.sources = {
-    headerAmount:{table:'raw.wdt_order_headers',column:'paid_amount',sourceField:'orders[].paid'},
+    headerAmount:originalPaymentPolicy
+      ? {table:'raw.wdt_order_headers',columns:['real_amount','refund_amount'],sourceFields:['orders[].realAmount','orders[].refundAmount']}
+      : {table:'raw.wdt_order_headers',column:'paid_amount',sourceField:'orders[].paid'},
     lineAmount:{table:'raw.wdt_order_lines',column:'source_share_amount',fallbackColumn:'source_line_paid',sourceFields:['orders[].items[].shareAmount','orders[].items[].paid']},
   };
+  const paymentBridge=rowNumbers(paymentBridgeResult.rows[0],
+    ['all_order_count','cancelled_order_count','cancelled_positive_orders_without_settled_refund']);
+  paymentBridge.cancelled_net_after_settled_refunds=
+    (Number(paymentBridge.cancelled_original_payment||0)-Number(paymentBridge.cancelled_settled_refund||0)).toFixed(2);
+  paymentBridge.shipped_original_payment=
+    (Number(orderScope.header_real_amount||0)+Number(orderScope.header_refund_amount||0)).toFixed(2);
+  paymentBridge.all_to_shipped_difference=
+    (Number(paymentBridge.all_order_original_payment||0)-Number(paymentBridge.shipped_original_payment||0)).toFixed(2);
   const refunds = rowNumbers(refundResult.rows[0], ['settled_refunds','refund_lines','unmatched_refund_headers','unmapped_refund_lines',
     'pre_ship_refund_lines','return_refund_lines','pending_stockin_return_lines','unmapped_cost_refund_lines']);
   const freight = rowNumbers(freightResult.rows[0], ['shipment_waybills','matched_waybills','unmatched_waybills','shared_tracking_waybills','multi_charge_waybills','multi_carrier_waybills']);
@@ -350,7 +462,7 @@ export async function getActualProfitCoverage(client, args = {}) {
   const costs = rowNumbers(costResult.rows[0], ['lines','actual_lines','standard_reference_lines','explicit_zero_lines','missing_lines']);
   costs.basis=currentCostPolicy?'master.current_sku_costs.unit_cost × raw.wdt_order_lines.quantity'
     :'raw.wdt_order_lines.source_goods_cost; fallback paid-date master.sku_cost_versions.unit_cost × quantity';
-  if(period.policyVersion===ACTUAL_PROFIT_POLICY.version) costs.basis+=`; 未发货退款数量全额冲回，退货退款数量按 ${(period.returnResaleRate*100).toFixed(0)}% 可二次销售比例冲回`;
+  if(hasReturnCostCredit(period.policyVersion)) costs.basis+=`; 未发货退款数量全额冲回，退货退款数量按 ${(period.returnResaleRate*100).toFixed(0)}% 可二次销售比例冲回`;
   if(currentCostPolicy) {
     const syncBatch=await client.query(`SELECT batch_id,source_metadata,imported_at,effective_from::text
       FROM meta.master_data_batches WHERE shop_key=$1 AND data_type='sku-cost-sync'
@@ -373,14 +485,23 @@ export async function getActualProfitCoverage(client, args = {}) {
   const advisoryGaps = [];
   addGap(blockingGaps, !ordersCoverage.complete, {code:'ORDER_SOURCE_COVERAGE_INCOMPLETE', missingPeriods:ordersCoverage.missingPeriods});
   addGap(blockingGaps, !refundSourceCoverage.complete, {code:'REFUND_SOURCE_COVERAGE_INCOMPLETE', missingPeriods:refundSourceCoverage.missingPeriods});
+  addGap(blockingGaps, originalPaymentPolicy && Number(orderScope.missing_real_amount_orders||0)>0,
+    {code:'ORDER_ORIGINAL_PAYMENT_MISSING',orders:Number(orderScope.missing_real_amount_orders)});
   addGap(advisoryGaps, Math.abs(Number(orderScope.line_revenue_difference)) > 0.01,
     {code:'ORDER_LINES_USED_AS_ALLOCATION_WEIGHTS', difference:orderScope.line_revenue_difference, selectedRevenue:orderScope.selected_revenue_amount, allocationWeightAmount:orderScope.allocation_weight_amount});
+  addGap(advisoryGaps, Number(paymentBridge.cancelled_positive_orders_without_settled_refund||0)>0 ||
+    Math.abs(Number(paymentBridge.cancelled_net_after_settled_refunds||0))>0.01,
+    {code:'CANCELLED_ORDER_PAYMENT_REFUND_REVIEW',cancelledOriginalPayment:paymentBridge.cancelled_original_payment,
+      cancelledSettledRefund:paymentBridge.cancelled_settled_refund,
+      netAfterSettledRefunds:paymentBridge.cancelled_net_after_settled_refunds,
+      positiveOrdersWithoutSettledRefund:paymentBridge.cancelled_positive_orders_without_settled_refund,
+      positivePaymentWithoutSettledRefund:paymentBridge.cancelled_positive_payment_without_settled_refund});
   addGap(blockingGaps, costs.missing_lines > 0, {code:'GOODS_COST_MISSING', count:costs.missing_lines, affectedRevenue:costs.missing_revenue});
   addGap(blockingGaps, ads.missing_days > 0, {code:'AD_DAILY_COVERAGE_INCOMPLETE', count:ads.missing_days});
   addGap(blockingGaps, Math.abs(Number(refunds.header_refund_amount || 0) - Number(refunds.line_refund_amount || 0)) > 0.01,
     {code:'REFUND_LINE_AMOUNT_MISMATCH', headerAmount:refunds.header_refund_amount, lineAmount:refunds.line_refund_amount});
   addGap(advisoryGaps, refunds.unmapped_refund_lines > 0, {code:'REFUND_LINE_UNMAPPED', count:refunds.unmapped_refund_lines, amount:refunds.unmapped_refund_amount});
-  if(period.policyVersion===ACTUAL_PROFIT_POLICY.version) {
+  if(hasReturnCostCredit(period.policyVersion)) {
     addGap(advisoryGaps, refunds.unmapped_cost_refund_lines>0,
       {code:'REFUND_COST_LINE_UNMAPPED',count:refunds.unmapped_cost_refund_lines,rule:'无法映射的退款行暂不冲回商品成本，需人工核对'});
     addGap(advisoryGaps, refunds.pending_stockin_return_lines>0,
@@ -396,7 +517,7 @@ export async function getActualProfitCoverage(client, args = {}) {
       {code:'SKU_GROSS_WEIGHT_REVENUE_FALLBACK',orders:freightWeightAllocation.missing_weight_orders,
         skuGroups:freightWeightAllocation.missing_sku_groups,
         freightAmount:freightWeightAllocation.fallback_freight_amount,
-        rule:period.policyVersion===ACTUAL_PROFIT_POLICY.version
+        rule:hasReturnCostCredit(period.policyVersion)
           ?'整单按有效发货数量加权的收入占比分摊；收入权重为零时按发货数量分摊'
           :'整单按收入比例分摊；零实付时按子件行等分',
         examples:freightWeightAllocation.missing_examples});
@@ -414,8 +535,8 @@ export async function getActualProfitCoverage(client, args = {}) {
     mode:'live-read-only', calculationPerformed:false, shopKey:args.shopKey, shopName:sourceShopName,
     period, targetState:'actual/reconciled', status:blockingGaps.length ? 'incomplete' :
       freight.estimated_waybills > 0 || weightPolicy ? 'provisional' : 'actual/reconciled',
-    coverage:{orders:ordersCoverage, refundSource:{...refundSourceCoverage,dateBasis:'退款申请日批次覆盖；退款金额另按原支付月订单与结算截止时间核对'}, orderScope, refunds, freight, costs, owners, ads,
-      policy:{...actualPolicy(period.policyVersion),returnResaleRate:period.policyVersion===ACTUAL_PROFIT_POLICY.version?period.returnResaleRate:null,status:'confirmed'}, freightWeightAllocation},
+    coverage:{orders:ordersCoverage, refundSource:{...refundSourceCoverage,dateBasis:'退款申请日批次覆盖；退款金额另按原支付月订单与结算截止时间核对'}, orderScope,paymentBridge, refunds, freight, costs, owners, ads,
+      policy:{...actualPolicy(period.policyVersion),returnResaleRate:hasReturnCostCredit(period.policyVersion)?period.returnResaleRate:null,status:'confirmed'}, freightWeightAllocation},
     blockingGaps, advisoryGaps,
   };
 }
@@ -1051,8 +1172,9 @@ export function buildActualProfitQuery(groupBy='shop',policyVersion=ACTUAL_PROFI
   if (!ACTUAL_QUERY_GROUPS.has(groupBy)) throw new Error('--group-by 仅支持 shop|owner|product|day|report');
   const group = actualProfitGroupSql(groupBy);
   const precision = groupBy==='report' ? 4 : 2;
-  const refundCostPolicy=policyVersion===ACTUAL_PROFIT_POLICY.version;
-  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(policyVersion);
+  const refundCostPolicy=hasReturnCostCredit(policyVersion);
+  const weightPolicy=[ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version].includes(policyVersion);
+  const originalPaymentPolicy=policyVersion===ACTUAL_PROFIT_POLICY.version;
   const revenueShare=`CASE WHEN l.paid_amount<>0 THEN l.line_revenue/l.paid_amount ELSE 1::numeric/l.order_line_count END`;
   const shippedRevenueWeight=`greatest(l.line_revenue,0)*l.shipped_quantity/nullif(l.quantity,0)`;
   const shippedRevenueShare=`CASE WHEN sum(${shippedRevenueWeight}) OVER(PARTITION BY l.wdt_trade_no)>0
@@ -1086,7 +1208,8 @@ export function buildActualProfitQuery(groupBy='shop',policyVersion=ACTUAL_PROFI
     FROM refund_cost_events WHERE order_line_key IS NOT NULL GROUP BY order_line_key
   )`:'';
   return `WITH scoped_orders AS MATERIALIZED (
-    SELECT h.wdt_trade_no,(h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,h.paid_amount
+    SELECT h.wdt_trade_no,(h.paid_at AT TIME ZONE 'Asia/Shanghai')::date AS paid_date,
+      ${originalPaymentPolicy?'h.real_amount+coalesce(h.refund_amount,0)':'h.paid_amount'} AS paid_amount
     FROM raw.wdt_order_headers h
     WHERE h.shop_key=$1 AND h.order_status_code=95
       AND (h.paid_at AT TIME ZONE 'Asia/Shanghai')::date BETWEEN $2::date AND $3::date
@@ -1309,8 +1432,8 @@ export async function getActualProfitQuery(client,args={}) {
     ACTUAL_PROFIT_POLICY.platformFeeRate,ACTUAL_PROFIT_POLICY.taxRate,ACTUAL_PROFIT_POLICY.missingFreightPerWaybill,
     nonMerchandiseProductIds,ownerOptionalProductIds,request.owners,
     request.policyVersion!==LEGACY_ACTUAL_PROFIT_POLICY.version,
-    [ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(request.policyVersion)];
-  if(request.policyVersion===ACTUAL_PROFIT_POLICY.version) params.push(request.returnResaleRate);
+    [ACTUAL_PROFIT_POLICY.version,REFUND_CREDIT_ACTUAL_PROFIT_POLICY.version,WEIGHT_ACTUAL_PROFIT_POLICY.version,REVENUE_ACTUAL_PROFIT_POLICY.version].includes(request.policyVersion)];
+  if(hasReturnCostCredit(request.policyVersion)) params.push(request.returnResaleRate);
   const rows = (await client.query(buildActualProfitQuery(request.groupBy,request.policyVersion),params)).rows;
   const sections = request.groupBy==='report' ? {
     shop:rows.filter(row=>row.level==='shop'),owners:rows.filter(row=>row.level==='owner'),products:rows.filter(row=>row.level==='product'),
@@ -1319,9 +1442,75 @@ export async function getActualProfitQuery(client,args={}) {
     ownerToShop:reconcileSection(sections.shop[0],sections.owners),
     productToShop:reconcileSection(sections.shop[0],sections.products),
   } : undefined;
+  const paymentBridge=coverage.coverage.paymentBridge;
+  const shippedSettledRefund=coverage.coverage.refunds.line_refund_amount;
+  const paymentFlow={
+    source:'wdt_order_and_settled_refund_facts',
+    all_order_original_payment:paymentBridge.all_order_original_payment,
+    cancelled_order_original_payment:paymentBridge.cancelled_original_payment,
+    shipped_order_original_payment:paymentBridge.shipped_original_payment,
+    shipped_order_settled_refund:shippedSettledRefund,
+    net_sales:(Number(paymentBridge.shipped_original_payment)-Number(shippedSettledRefund)).toFixed(2),
+    cancelled_order_settled_refund:paymentBridge.cancelled_settled_refund,
+    cancelled_order_refund_residual:paymentBridge.cancelled_net_after_settled_refunds,
+    formula:'全部订单还原支付原额 - 取消订单还原支付原额 = 已发货订单销售原额；已发货订单销售原额 - 对应已结算退款 = 净销售额',
+  };
+  let ownerPaymentFlows,productPaymentFlows;
+  if(sections && request.policyVersion===ACTUAL_PROFIT_POLICY.version){
+    const cancelledRows=(await client.query(OWNER_CANCELLED_PAYMENT_SQL,[
+      args.shopKey,request.startDate,request.endDate,request.refundCutoff,
+      nonMerchandiseProductIds,ownerOptionalProductIds,
+    ])).rows;
+    const cancelledByOwner=new Map(cancelledRows.filter(row=>row.level==='owner').map(row=>[row.owner_name,row]));
+    const cancelledByProduct=new Map(cancelledRows.filter(row=>row.level==='product').map(row=>[row.platform_product_id,row]));
+    const shippedByOwner=new Map(sections.owners.map(row=>[row.owner_name,row]));
+    const shippedByProduct=new Map(sections.products.map(row=>[row.platform_product_id,row]));
+    function paymentAmounts(shipped,cancelled){
+      const shippedPayment=Number(shipped?.gross_revenue||0);
+      const shippedRefund=Number(shipped?.refund_amount||0);
+      const cancelledPayment=Number(cancelled?.cancelled_order_original_payment||0);
+      const cancelledRefund=Number(cancelled?.cancelled_order_settled_refund||0);
+      return {
+        all_order_original_payment:(shippedPayment+cancelledPayment).toFixed(4),
+        cancelled_order_original_payment:cancelledPayment.toFixed(4),
+        shipped_order_original_payment:shippedPayment.toFixed(4),
+        shipped_order_settled_refund:shippedRefund.toFixed(4),
+        net_sales:(shippedPayment-shippedRefund).toFixed(4),
+        cancelled_order_settled_refund:cancelledRefund.toFixed(4),
+        cancelled_order_refund_residual:(cancelledPayment-cancelledRefund).toFixed(4),
+      };
+    }
+    ownerPaymentFlows=[...new Set([...shippedByOwner.keys(),...cancelledByOwner.keys()])].sort().map(ownerName=>{
+      return {owner_name:ownerName,...paymentAmounts(shippedByOwner.get(ownerName),cancelledByOwner.get(ownerName))};
+    });
+    productPaymentFlows=[...new Set([...shippedByProduct.keys(),...cancelledByProduct.keys()])].sort().map(productId=>{
+      const shipped=shippedByProduct.get(productId),cancelled=cancelledByProduct.get(productId);
+      return {
+        platform_product_id:productId,
+        product_name:shipped?.product_name??cancelled?.product_name??'未知商品',
+        product_image_url:shipped?.product_image_url??cancelled?.product_image_url??null,
+        owner_name:shipped?.owner_name??cancelled?.owner_name??'未分配负责人',
+        cancelled_only:Number(shipped?.gross_revenue||0)===0 && Number(cancelled?.cancelled_order_original_payment||0)>0,
+        ...paymentAmounts(shipped,cancelled),
+      };
+    });
+    for(const field of ['all_order_original_payment','cancelled_order_original_payment',
+      'shipped_order_original_payment','shipped_order_settled_refund','net_sales',
+      'cancelled_order_settled_refund','cancelled_order_refund_residual']){
+      for(const [dimension,flows] of [['负责人',ownerPaymentFlows],['商品',productPaymentFlows]]){
+        const total=flows.reduce((sum,row)=>sum+Number(row[field]),0);
+        if(Math.abs(total-Number(paymentFlow[field]))>0.01){
+          throw new Error(`${dimension}支付桥接未与全店对齐：${field}，明细合计 ${total.toFixed(4)}，全店 ${paymentFlow[field]}`);
+        }
+      }
+    }
+  }
   return {
     mode:'live-read-only',calculationPerformed:true,shopKey:args.shopKey,shopName:coverage.shopName,
     period:coverage.period,policy:coverage.coverage.policy,status:coverage.status,groupBy:request.groupBy,owners:request.owners,
+    ...(request.policyVersion===ACTUAL_PROFIT_POLICY.version?{paymentFlow}:{}),
+    ...(ownerPaymentFlows?{ownerPaymentFlows}:{}),
+    ...(productPaymentFlows?{productPaymentFlows}:{}),
     quality:{blockingGaps:coverage.blockingGaps,advisoryGaps:coverage.advisoryGaps,
       orderCoverageComplete:coverage.coverage.orders.complete,refundCoverageComplete:coverage.coverage.refundSource.complete,
       costBasis:coverage.coverage.costs.basis,costSyncBatch:coverage.coverage.costs.latestSync??null,
@@ -1334,6 +1523,7 @@ export async function getActualProfitQuery(client,args={}) {
         fallbackFreightAmount:coverage.coverage.freightWeightAllocation.fallback_freight_amount??'0.00',
         latestWeightRun:coverage.coverage.freightWeightAllocation.latestWeightRun??null},
       ignoredPlaceholderOrders:coverage.coverage.orderScope.ignored_placeholder_orders,
+      paymentBridge:coverage.coverage.paymentBridge,
       missingCostLines:coverage.coverage.costs.missing_lines,estimatedFreightAmount:coverage.coverage.freight.estimated_freight_amount,
       unmappedRefundAmount:coverage.coverage.refunds.unmapped_refund_amount,unassignedOwnerProducts:coverage.coverage.owners.review_unassigned_products},
     ...(sections?{sections,reconciliation}:{rows}),

@@ -4,7 +4,7 @@ This reference defines business content, not HTML implementation. The live selec
 
 ## Required views
 
-1. `overview`: report identity, status, authoritative whole-shop totals, executive conclusions, expense structure, and the complete shop profit statement.
+1. `overview`: report identity, status, the payment bridge from all-order original payment through cancelled orders and shipped refunds to net sales, authoritative whole-shop totals, executive conclusions, expense structure, and the complete shop profit statement.
 2. `owner-comparison`: compare only real responsible owners; exceptional ownership groups are excluded.
 3. One independent view per responsible owner: a sticky title identifies the current owner, followed by that owner's summary and complete product table.
 4. `unowned`: `无法归属`, `未分配负责人`, `已下架未分配`, `不归属负责人`, and similar non-owner groups and products.
@@ -14,12 +14,13 @@ This reference defines business content, not HTML implementation. The live selec
 ## Data mapping rules
 
 - `sections.shop[0]` is the authoritative report total.
+- `paymentFlow` supplies the shop-level payment bridge, while `ownerPaymentFlows` and `productPaymentFlows` supply the same bridge by owner and product ID. Cancellation payment is allocated by normalized order-line amount, then attributed to the payment-date owner. Each shipped-order bridge reconciles to its profit row; each dimension sums to the shop bridge. Product IDs with cancellation payment and zero shipped-order sales remain visible. The ViewModel places `payment_flow` before shop and owner profit metrics, and lists original/cancelled payment in owner comparison, non-owner, and both product tables. Label the source as 旺店通支付月口径; cancelled-order settled refunds and residual are separate audit figures.
 - `sections.owners` and `sections.products` explain attribution; their rounded display values do not replace the shop total.
 - Product detail has exactly one row per product ID. Historical title, SKU, or owner variants never create additional rows. Use the latest authoritative product-mapping title when available; otherwise use the title from the most recent transaction date.
 - Currency displays two decimals and thousands separators. Ratios display two percentage decimals.
 - Profit amount determines gain/loss ranking. Margin is supporting context.
 - Owner groups remain explicit, including unassigned, delisted, non-owner, or otherwise exceptional groups.
-- Product tables include a remote HTTPS thumbnail, owner, 退款后付费占比, product name and ID, revenue, refunds, net sales, cost, freight, advertising, profit, and margin.
+- Product tables include a remote HTTPS thumbnail, owner, 退款后付费占比, 全部订单原支付额, 取消订单金额, product name and ID, shipped sales, refunds, net sales, cost, freight, advertising, profit, and margin.
 - `退款后付费占比 = 推广费 ÷ 净销售额`，其中净销售额为实付收入减退款。净销售额为零时显示空值；其他正负结果按真实值保留。
 - 退款后付费占比紧跟在负责人列右侧，并与其他字段一样参与完整筛选结果的全局排序。
 - Every owner table contains all of that owner's products. The whole-shop table contains all products.
