@@ -119,7 +119,7 @@ test('real CLI entry routes run commands and returns machine-readable evidence',
 });
 
 test('one 21-source registry retains names and per-source daily switches', async () => {
-  const text = await fs.readFile(path.join(skill, 'references/report-maintenance.md'), 'utf8');
+  const text = (await fs.readFile(path.join(skill, 'references/report-maintenance.md'), 'utf8')).replace(/\r\n/g, '\n');
   const table = text.slice(text.indexOf('| 业务表 |'), text.indexOf('\n\n', text.indexOf('| 业务表 |')));
   const rows = table.split('\n').slice(2).map((row) => row.split('|').slice(1, -1).map((cell) => cell.trim()));
   assert.equal(rows.length, 21);

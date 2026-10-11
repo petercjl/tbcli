@@ -107,7 +107,7 @@ test('unified update upgrades npm package, refreshes stale Skill, and verifies c
   };
   const result = await performUnifiedUpdate(
     { agent: 'sealseek' },
-    { run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
+    { platform: 'darwin', run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
   );
   assert.equal(result.cli.afterVersion, '0.6.5');
   assert.equal(result.skill.action, 'updated');
@@ -132,7 +132,7 @@ test('unified update installs a missing managed Skill', async () => {
   };
   const result = await performUnifiedUpdate(
     { agent: 'sealseek' },
-    { run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
+    { platform: 'darwin', run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
   );
   assert.equal(result.skill.action, 'installed');
 });
