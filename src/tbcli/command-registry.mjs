@@ -1,4 +1,5 @@
 export const COMMAND_DEFINITIONS = Object.freeze([
+  {key:'item media',maturity:'stable',audience:'business',capability:{id:'item-media-collection',name:'采集商品视觉素材链接',description:'按商品ID采集主图、主图视频、详情图、SKU图片与商品店铺名称，保留顺序与缺失证据。',examplePrompt:'收集这个商品的主图、主图视频、详情图片和SKU图链接',requiredInputs:['商品ID','新的JSON输出路径'],optionalInputs:[],delivery:'有序媒体链接、SKU属性对应关系、店铺商品身份与覆盖状态',commandTemplate:'tbcli item media --item-id <ID> --out <NEW.json> --json'}},
   {
     key: 'yuce categories validate',
     maturity: 'stable',

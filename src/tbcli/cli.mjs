@@ -10,6 +10,7 @@ import {
 import { runBrowserOpen } from './commands/browser.mjs';
 import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
+import {runItemMedia} from './commands/item-media.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
 import { runUnifiedUpdate } from './commands/update.mjs';
@@ -87,6 +88,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'browser open': runBrowserOpen,
   'logistics get': runLogisticsGet,
   'shop products': runShopProducts,
+  'item media': runItemMedia,
   'document get': runDocumentGet,
   'document tree': runDocumentTree,
   'ai-dianjing export': runAiDianjingExport,
@@ -176,6 +178,7 @@ export const ROUTED_COMMAND_KEYS = Object.freeze(Object.keys(COMMAND_HANDLERS));
 
 export function usage() {
   console.log(`Usage:
+  tbcli item media --item-id ID --out NEW.json [--json]
   tbcli --version
   tbcli version
   tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--json]

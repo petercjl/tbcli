@@ -77,6 +77,7 @@ export function parseArgs(argv) {
     else if (arg === '--data-dimension') out.dataDimension = argv[++index];
     else if (arg === '--date-type') out.dateType = argv[++index];
     else if (arg === '--fields') out.fields = argv[++index];
+    else if (arg === '--item-id') out.itemId = argv[++index];
     else if (arg === '--item-ids') out.itemIds = argv[++index];
     else if (arg === '--device') out.device = argv[++index];
     else if (arg === '--filter') (out.filters ||= []).push(argv[++index]);

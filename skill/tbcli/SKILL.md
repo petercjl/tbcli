@@ -5,6 +5,8 @@ description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参�
 
 # tbcli
 
+只采集商品视觉素材链接时，使用 `tbcli item media --item-id ID --out NEW.json --json`，读取 [视觉素材采集](references/item-media.md)。返回主图、主图视频、详情图、SKU 图片及商品店铺名称。
+
 Use `tbcli` as the deterministic execution surface for supported ecommerce-browser work. Translate business language into commands, preflight the whole request, run the smallest stable command, and verify the delivered artifact.
 
 商品 ID 与运营负责人关系核对、缺失补充或同步使用 [商品负责人映射](references/product-owner-mapping.md)。先运行 `profit owners reconcile`；只有用户明确要求写入时才运行 `profit owners import` 或 `profit owners sync`。`import` 只补缺失关系；用户明确指定来源为准并要求保持一致时，`sync` 以历史版本接续冲突关系。
