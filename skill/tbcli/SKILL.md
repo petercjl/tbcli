@@ -479,3 +479,12 @@ Read [references/command-reference.md](references/command-reference.md) when the
 ## Evolution Rule
 
 When a realistic run exposes a recurring routing, CLI, field, date, filter, cleanup, or QA gap, extend the stable tbcli command and update this canonical Skill. Classify the failure, patch the correct main-flow or branch contract, validate files on disk, and rerun a clean-context regression when the host permits it.
+
+## 财务取数
+
+当任务涉及店铺账单、支付宝、聚合结算账户或保证金时，读取 [财务能力契约](references/finance.md)，先执行 `finance identity` 与 `finance catalog`，再调用明确范围的 `finance fetch` / `finance balances`。能力层保存平台事实及独立余额，经营分类与完整性自检由应用 Skill 决定。
+
+
+## 平台订单主账
+
+核对已卖出宝贝、平台订单全集、供应商发货或待结算订单时，读取 [平台订单主账](references/orders-list.md)，调用 `orders list --all-history`。近期与历史分区分别采集；交易状态和展示金额作为订单事实，资金发生额仍来自财务流水。

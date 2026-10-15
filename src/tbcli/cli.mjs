@@ -1,3 +1,5 @@
+import {runOrdersList} from './commands/orders.mjs';
+import {runFinanceIdentity,runFinanceCatalog,runFinanceFetch,runFinanceBalances} from './commands/finance.mjs';
 import { parseArgs } from './args.mjs';
 import { runCourierValidate,runCourierImport,runCourierQuery } from './commands/courier-bills.mjs';
 import {
@@ -73,6 +75,12 @@ import { runVersion } from './version.mjs';
 import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
+  'orders list': runOrdersList,
+  'finance identity': runFinanceIdentity,
+  'finance catalog': runFinanceCatalog,
+  'finance fetch': runFinanceFetch,
+  'finance balances': runFinanceBalances,
+
   version: runVersion,
   'profit freight validate': runCourierValidate,
   'profit freight import': runCourierImport,
@@ -275,6 +283,11 @@ export function usage() {
   tbcli skill status [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
   tbcli skill update [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
+  tbcli orders list --all-history --shop-key KEY --out NEW_DIR [--resume RUN_ID] [--json]
+  tbcli finance identity [--out NEW.json] [--json]
+  tbcli finance catalog --source taobao|aggregate|alipay|deposit [--json]
+  tbcli finance fetch --source SOURCE --dataset ID --shop-key KEY --account-id ID --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out NEW_DIR [--resume RUN_ID] [--json]
+  tbcli finance balances --source SOURCE --shop-key KEY --account-id ID --at now|ISO_MONTH_BOUNDARY --out NEW.json [--json]
   tbcli capabilities [--json] [--all]
   tbcli doctor [--agent sealseek] [--fix] [--json]
   tbcli dev pages [--json]

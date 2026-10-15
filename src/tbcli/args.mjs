@@ -14,6 +14,10 @@ export function parseArgs(argv) {
     else if (arg === '--yes') out.yes = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
+    else if (arg === '--source') out.source = argv[++index];
+    else if (arg === '--account-id') out.accountId = argv[++index];
+    else if (arg === '--at') out.at = argv[++index];
+    else if (arg === '--resume') out.resume = argv[++index];
     else if (arg === '--out') out.out = argv[++index];
     else if (arg === '--backup-out') out.backupOut = argv[++index];
     else if (arg === '--replace-batch-id') out.replaceBatchId = argv[++index];

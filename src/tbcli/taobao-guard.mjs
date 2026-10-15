@@ -23,11 +23,12 @@ export async function assertPageNotVerifying(page) {
       url: location.href,
       title: document.title,
       text: (document.body?.innerText || '').slice(0, 2000),
+      frames: Array.from(document.querySelectorAll('iframe')).map(f=>{try{const u=new URL(f.src,location.href);return u.origin+u.pathname;}catch{return '';}}).join('\n'),
     }));
   } catch (error) {
     throw createVerificationError(`页面状态无法读取：${error?.message || error}`);
   }
-  if (isVerificationSignal(`${state.url}\n${state.title}\n${state.text}`)) {
+  if (isVerificationSignal(`${state.url}\n${state.title}\n${state.text}\n${state.frames??''}`)) {
     throw createVerificationError(`${state.title || state.url}`);
   }
 }
