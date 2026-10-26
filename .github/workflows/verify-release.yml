@@ -1,0 +1,33 @@
+name: Verify published npm release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact published version
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Install exact version and verify entry point
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+          TBCLI_UPDATE_CHECK: '0'
+        run: |
+          node -e 'if(!/^\d+\.\d+\.\d+$/.test(process.env.RELEASE_VERSION))process.exit(1)'
+          for attempt in $(seq 1 20); do
+            if npm install --prefix .release-check --ignore-scripts --no-audit --no-fund "@petercjl/tbcli@$RELEASE_VERSION"; then
+              node .release-check/node_modules/@petercjl/tbcli/scripts/tbcli.mjs --version
+              node .release-check/node_modules/@petercjl/tbcli/scripts/tbcli.mjs capabilities --json
+              exit 0
+            fi
+            sleep 15
+          done
+          exit 1
