@@ -18,7 +18,7 @@ test('all front-page operations route to a separate buyer endpoint/profile witho
     const target = resolve({_:command.split(' ')});
     assert.equal(target.browserRole,'buyer'); assert.equal(target.port,9224);
     assert.equal(target.cdpUrl,'http://127.0.0.1:9224');
-    assert.equal(target.profileDir,'/test-home/.taobao-user-chrome-profile');
+    assert.equal(target.profileDir,path.resolve('/test-home/.taobao-user-chrome-profile'));
     assert.equal(target.theme,'orange');
   }
   for (const command of ['dmp snapshot','dmp item-info','sycm market-rank','orders list','logistics query','finance export','ai-dianjing report','document get']) {
@@ -33,7 +33,7 @@ test('merchant environment configuration never supplies buyer defaults and buyer
   assert.equal(resolve({},env).port,9555);
   const both={...env,TBCLI_BUYER_CDP_URL:'http://127.0.0.1:9666',TBCLI_BUYER_CHROME_PROFILE:'/buyer'};
   assert.equal(resolve({browserRole:'buyer'},both).port,9666);
-  assert.equal(resolve({browserRole:'buyer'},both).profileDir,'/buyer');
+  assert.equal(resolve({browserRole:'buyer'},both).profileDir,path.resolve('/buyer'));
   assert.throws(()=>resolve({browserRole:'buyer',cdpUrl:'http://localhost:9555'},env),{code:'BROWSER_TARGET_CONFLICT'});
   assert.throws(()=>resolve({cdpUrl:'http://localhost:9666'},both),{code:'BROWSER_TARGET_CONFLICT'});
 });
@@ -44,7 +44,7 @@ test('opposite role endpoints, Profiles, symlink aliases, role conflicts and inv
   assert.throws(()=>resolve({port:9555,cdpUrl:'http://127.0.0.1:9556'}),{code:'INVALID_BROWSER_PORT'});
   assert.throws(()=>parseArgs(['auth','status','--browser-role']),{code:'INVALID_BROWSER_ROLE'});
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'tbcli-role-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
-  const home=path.join(dir,'home');fs.mkdirSync(home);fs.mkdirSync(path.join(home,'.dianshang-chrome-profile'));fs.symlinkSync(path.join(home,'.dianshang-chrome-profile'),path.join(home,'alias'));
+  const home=path.join(dir,'home');fs.mkdirSync(home);fs.mkdirSync(path.join(home,'.dianshang-chrome-profile'));fs.symlinkSync(path.join(home,'.dianshang-chrome-profile'),path.join(home,'alias'),process.platform==='win32'?'junction':'dir');
   assert.throws(()=>resolveBrowserTarget({browserRole:'buyer',profileDir:path.join(home,'alias')},{env:{},home}),{code:'BROWSER_TARGET_CONFLICT'});
   let invoked=false;
   await assert.rejects(withBrowserSession({browserRole:'buyer',cdpUrl:'http://127.0.0.1:9223'},()=>{invoked=true;}),{code:'BROWSER_TARGET_CONFLICT'});
