@@ -5,7 +5,9 @@ description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经�
 
 # tbcli
 
-淘宝前台采集与商家取数使用独立浏览器：`item media`、`item detail`、`search products`、`shop products` 自动使用普通用户会话（橙色，9224）；DMP及其他浏览器取数沿用商家会话（蓝色，9223）。浏览器或登录相关操作先读 [角色与账号隔离](references/browser-roles.md)，登录、诊断和开发辅助命令显式指定对应的 `--browser-role`。
+商品链接、前五张主图、店铺、已售件数、入口价格及用户评价数：读取 [商品页面概要](references/item-summary.md)，使用 `tbcli item summary`。这是淘宝买家浏览器的页面概要；DMP经营统计继续使用商家浏览器。
+
+淘宝前台采集与商家取数使用独立浏览器：`item summary`、`item media`、`item detail`、`search products`、`shop products` 自动使用淘宝买家会话（橙色，9224）；DMP及其他浏览器取数沿用商家会话（蓝色，9223）。浏览器或登录相关操作先读 [角色与账号隔离](references/browser-roles.md)，登录、诊断和开发辅助命令显式指定对应的 `--browser-role`。
 
 DMP店铺会话中的商品名称、主图与链接：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp item-info`。指定竞品时沿用用户已选本店锚点；精确核对返回ID，资料不可用时保留状态。此入口不打开商品前台或切换买家账号。
 

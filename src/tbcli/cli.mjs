@@ -1,3 +1,4 @@
+import {runItemSummary} from './commands/item-summary.mjs';
 import {runDmpSnapshot} from './commands/dmp-snapshot.mjs';
 import {runOrdersList} from './commands/orders.mjs';
 import {runDmpCatalog, runDmpItems, runDmpReport, runDmpItemInfo} from './commands/dmp.mjs';
@@ -101,6 +102,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'maintenance run-status': runMaintenanceStatus,
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
+  'item summary': runItemSummary,
   'browser open': runBrowserOpen,
   'browser theme': runBrowserTheme,
   'logistics get': runLogisticsGet,
@@ -203,6 +205,7 @@ export function usage() {
   tbcli dmp catalog [--out NEW.json] [--json]
   tbcli dmp items [--page 1] [--page-size 20] [--out NEW.json] [--json]
   tbcli dmp report (--item-id ID | --item-ids ID,ID) [--modules all|costs|metrics] [--anchor-id OWNED_ID] [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--timeout-ms 30000] [--json]
+  tbcli item summary --item-id ID --out NEW.json [--json]
   tbcli item media --item-id ID --out NEW.json [--json]
   tbcli item detail --item-id ID --out NEW.json [--review-pages N | --review-limit N] [--questions first|all] [--json]
   tbcli search products --image FILE [--image FILE] --keyword TEXT [--keyword TEXT] [--max-pages 1] --out products.json [--json]
@@ -330,7 +333,7 @@ Notes:
   - Agent 应先运行 tbcli capabilities --json，按能力清单调用稳定命令。
   - First use: run tbcli auth login and complete login in the opened Chrome.
   - Merchant: blue, CDP 9223, ~/.dianshang-chrome-profile. Buyer: orange, CDP 9224, ~/.taobao-user-chrome-profile.
-  - item media/detail, search products and shop products automatically use the buyer browser.
+  - item summary/media/detail, search products and shop products automatically use the buyer browser.
   - Auto mode can reuse an already running legacy CDP browser; browser open remains a compatibility/debugging command.
   - tbcli never exports cookies or tokens; authentication stays in the dedicated Chrome profile.
 `);

@@ -3,11 +3,11 @@
 输入商品 ID，通过 `item detail` 读取当前登录可见的商品资料，输出新的 JSON。CLI 负责采集与结构化，竞品选择、分析、HTML 核查、确认及台账由调用 Skill 负责。
 
 ```bash
-tbcli auth status --json
+tbcli auth status --browser-role buyer --json
 tbcli item detail --item-id '<商品ID>' --out '<新文件.json>' [--review-pages N | --review-limit N] [--questions first|all] --json
 ```
 
-先做登录检查和输出路径预检。使用现有电商浏览器商品标签页；每个页面操作通过共享延迟与验证检查。遇到登录、风控、接口错误停止，不自动刷新重试；已完成模块保留在输出文件。
+先做登录检查和输出路径预检。使用现有淘宝买家浏览器商品标签页；每个页面操作通过共享延迟与验证检查。遇到登录、风控、接口错误停止，不自动刷新重试；已完成模块保留在输出文件。
 
 ## 字段与来源
 

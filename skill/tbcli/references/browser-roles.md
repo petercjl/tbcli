@@ -6,14 +6,14 @@ The CLI selects a browser role from the operation. A role binds its own CDP endp
 
 | Role | Operations | Default CDP | Default Profile | Theme |
 | --- | --- | --- | --- | --- |
-| `buyer` | `item media`, `item detail` (including reviews/questions), `search products`, `shop products` | `http://127.0.0.1:9224` | `~/.taobao-user-chrome-profile` | Orange |
+| `buyer` | `item summary`, `item media`, `item detail` (including reviews/questions), `search products`, `shop products` | `http://127.0.0.1:9224` | `~/.taobao-user-chrome-profile` | Orange (淘宝买家浏览器) |
 | `merchant` | DMP (including competitor metadata), SYCM, AI点睛/advertising, seller orders/logistics, finance and other existing browser consumers | `http://127.0.0.1:9223` | `~/.dianshang-chrome-profile` | Blue |
 
 Database, local-file and delegated provider commands keep their existing independent contracts. Public product data may require buyer login. DMP product metadata remains a merchant operation even when the target is a competitor.
 
 ## Execution
 
-1. Classify the requested operation using the table; the four buyer commands select `buyer` automatically. Every other business browser operation defaults to `merchant`.
+1. Classify the requested operation using the table; the five buyer commands select `buyer` automatically. Every other business browser operation defaults to `merchant`.
 2. For authentication/diagnostics/development helpers specify `--browser-role buyer` or `--browser-role merchant`. For example, `tbcli auth status --browser-role buyer --json`, followed by `tbcli auth login --browser-role buyer` only when needed. The user completes login in the selected window. Never switch the merchant browser to a buyer account to unblock a front-page query.
 3. Run the stable data command normally. Buyer auto mode reuses or opens the dedicated CDP browser; explicit managed mode retains its own Profile and sandbox. Merchant auto mode preserves compatibility with the existing CDP/managed behavior. Explicit CDP/profile arguments must match the intended role; role conflicts stop before connection. Local CDP connections verify the Chrome process port/Profile pair.
 4. Verify the output and return to the calling Skill's main flow. If login, CAPTCHA or access checks stop execution, preserve completed data and ask the user to handle the selected browser. Never copy cookies, profiles or credentials between roles, and never fall back to the other endpoint.

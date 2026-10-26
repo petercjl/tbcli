@@ -429,9 +429,9 @@ Taobao public-page collection uses an independent buyer account. Merchant and ot
 | Role | Commands | Port | Profile | Theme |
 | --- | --- | --- | --- | --- |
 | Merchant (default) | DMP, SYCM, advertising, seller orders/logistics, finance and other existing browser consumers | 9223 | `~/.dianshang-chrome-profile` | Blue |
-| Buyer | `item media`, `item detail`, `search products`, `shop products` | 9224 | `~/.taobao-user-chrome-profile` | Orange |
+| Buyer | `item summary`, `item media`, `item detail`, `search products`, `shop products` | 9224 | `~/.taobao-user-chrome-profile` | Orange |
 
-The four buyer commands select their role automatically. Helpers select it explicitly:
+The five buyer commands select their role automatically. Helpers select it explicitly:
 
 ```bash
 tbcli auth status --browser-role merchant --json
@@ -608,3 +608,5 @@ verification signal stops capture immediately.
 `dmp snapshot` 提供指定商品、锚点和单周期的七项经营、推广场景、目标关键词、人群区间及人群数值证据。周期选择、图表与业务分析由应用包 `@petercjl/dmp-product-report` 编排。
 
 当前Agent安装或更新时先读取INSTALL.md/UPDATE.md，解析自己的Skill目录，使用显式目标同步实体副本并验证SHA-256；仅同步选定目标。普通任务检查新版后默认通知，安装更新另需授权。
+
+`tbcli item summary --item-id ID --out NEW.json --json` reads product identity, the first five main images, shop, displayed sales, entry price and review count from the orange Taobao buyer browser (淘宝买家浏览器). Merchant DMP metrics keep their own session and period scope.

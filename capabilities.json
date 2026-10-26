@@ -527,6 +527,43 @@
       },
       "sideEffects": "local-write",
       "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
+    },
+    "item summary": {
+      "options": {
+        "--item-id": {
+          "type": "string",
+          "required": true
+        },
+        "--out": {
+          "type": "string",
+          "required": true
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "buyer"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Read buyer-page product summary, preserve display qualifiers, write a new JSON evidence file."
     }
   },
   "maintenanceContract": {
@@ -734,10 +771,12 @@
         "port": 9224,
         "profileBasename": ".taobao-user-chrome-profile",
         "theme": "orange",
-        "environmentPrefix": "TBCLI_BUYER_"
+        "environmentPrefix": "TBCLI_BUYER_",
+        "displayName": "淘宝买家浏览器"
       }
     },
     "buyerCommands": [
+      "item summary",
       "item media",
       "item detail",
       "search products",
@@ -748,5 +787,20 @@
     "roleProof": "intended session; cookie presence does not attest account privileges",
     "crossRoleFallback": false,
     "localProcessVerification": true
+  },
+  "itemSummary": {
+    "version": 1,
+    "command": "item summary",
+    "browserRole": "buyer",
+    "maxMainImages": 5,
+    "fields": [
+      "itemUrl",
+      "title",
+      "mainImages",
+      "shop",
+      "soldCount",
+      "entryPrice",
+      "reviewCount"
+    ]
   }
 }

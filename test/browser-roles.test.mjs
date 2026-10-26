@@ -13,7 +13,7 @@ import {runSearchProducts} from '../src/tbcli/commands/search-products.mjs';
 import {runShopProducts} from '../src/tbcli/commands/shop-products.mjs';
 const resolve = (opts={},env={}) => resolveBrowserTarget(opts,{env,home:'/test-home'});
 
-test('all four front-page operations route to a separate buyer endpoint/profile without selecting an account implicitly', () => {
+test('all front-page operations route to a separate buyer endpoint/profile without selecting an account implicitly', () => {
   for (const command of BUYER_COMMANDS) {
     const target = resolve({_:command.split(' ')});
     assert.equal(target.browserRole,'buyer'); assert.equal(target.port,9224);

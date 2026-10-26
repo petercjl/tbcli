@@ -14,7 +14,7 @@ tbcli doctor --agent sealseek [--fix] [--json]
 tbcli capabilities [--json] [--all]
 ```
 
-Use the operation's role from [browser roles](browser-roles.md). The four public-page operations (`item media`, `item detail`, `search products`, `shop products`) select the buyer Profile and CDP 9224 automatically. Other browser data operations retain the merchant Profile and CDP 9223. Specify the same role on `auth status`, `auth login` and diagnostics. Merchant auto mode retains CDP/managed compatibility; buyer auto mode opens/reuses its separate CDP browser. Preserve any explicit compatible Profile/session options throughout preflight and execution. Local port/Profile mismatches stop without changing either session. `browser theme` applies the persistent role color: merchant blue, buyer orange.
+Use the operation's role from [browser roles](browser-roles.md). The five public-page operations (`item summary`, `item media`, `item detail`, `search products`, `shop products`) select the buyer Profile and CDP 9224 automatically. Other browser data operations retain the merchant Profile and CDP 9223. Specify the same role on `auth status`, `auth login` and diagnostics. Merchant auto mode retains CDP/managed compatibility; buyer auto mode opens/reuses its separate CDP browser. Preserve any explicit compatible Profile/session options throughout preflight and execution. Local port/Profile mismatches stop without changing either session. `browser theme` applies the persistent role color: merchant blue, buyer orange.
 
 Managed Chrome must run with its security sandbox enabled. If Chrome shows an
 unsupported `--no-sandbox` warning, stop authentication, upgrade tbcli, close

@@ -2,7 +2,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 
-export const BUYER_COMMANDS = Object.freeze(['item media', 'item detail', 'search products', 'shop products']);
+export const BUYER_COMMANDS = Object.freeze(['item summary', 'item media', 'item detail', 'search products', 'shop products']);
 const HELPERS = new Set(['browser', 'auth', 'dev', 'doctor']);
 function fail(code, message) { return Object.assign(new Error(message), {code}); }
 export function forBrowserRole(opts = {}, role) {
@@ -37,5 +37,5 @@ export function resolveBrowserTarget(opts = {}, {env = process.env, home = os.ho
   const otherEndpointPort = otherUrl && localHosts.includes(otherUrl.hostname) ? Number(otherUrl.port || (otherUrl.protocol === 'https:' ? 443 : 80)) : otherPort;
   const canonical = p => { try { return fs.realpathSync(p); } catch { return p; } };
   if (canonical(profileDir) === canonical(otherProfile) || cdpUrl.replace(/\/$/, '') === otherCdp.replace(/\/$/, '') || (local && [otherPort, otherEndpointPort, buyer ? 9223 : 9224].includes(port))) throw fail('BROWSER_TARGET_CONFLICT', `${browserRole} 浏览器不能使用另一角色的端口或 Profile；请保留独立登录状态。`);
-  return {browserRole, cdpUrl: cdpUrl.replace(/\/$/, ''), port, profileDir, theme: buyer ? 'orange' : 'blue', label: buyer ? '淘宝普通用户' : '电商商家', local};
+  return {browserRole, cdpUrl: cdpUrl.replace(/\/$/, ''), port, profileDir, theme: buyer ? 'orange' : 'blue', label: buyer ? '淘宝买家' : '电商商家', local};
 }

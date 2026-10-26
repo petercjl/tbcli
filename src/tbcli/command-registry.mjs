@@ -1,4 +1,5 @@
 export const COMMAND_DEFINITIONS = Object.freeze([
+  {key:"item summary",maturity:"stable",audience:"business",capability:{id:"taobao-item-summary",name:"获取商品页面概要",description:"从淘宝买家浏览器读取商品名称、链接、前五张主图、店铺、页面已售文案、入口价格及用户评价数。",examplePrompt:"获取这个商品的5张主图、店铺、已售件数、入口价格和评价数",requiredInputs:["商品ID","新的JSON输出路径"],optionalInputs:[],delivery:"带来源及缺失状态的商品概要JSON，保留已售和价格的页面展示口径",commandTemplate:"tbcli item summary --item-id <ID> --out <NEW.json> --json"}},
   {key: 'dmp catalog', maturity: 'stable', audience: 'business', capability: {id: 'dmp-data-catalog', name: '查看达摩盘取数范围', description: '查看商品经营与推广数据的输入、字段、日期规则和已知限制。', examplePrompt: '查看达摩盘可以获取哪些商品数据以及需要哪些输入', requiredInputs: ['已安装 tbcli'], optionalInputs: ['新的 JSON 输出路径'], delivery: '商品取数字段与使用条件', commandTemplate: 'tbcli dmp catalog --json'}},
   {key: 'dmp items', maturity: 'stable', audience: 'business', capability: {id: 'dmp-owned-items', name: '查找达摩盘本店锚点商品', description: '分页读取本店商品名称、编号和类目，供调用者选择用于推广查询的锚点。', examplePrompt: '列出达摩盘本店商品，选择同类目锚点', requiredInputs: ['已登录的达摩盘账户'], optionalInputs: ['页码', '每页条数', '新的 JSON 输出路径'], delivery: '一页本店商品、类目和分页信息', commandTemplate: 'tbcli dmp items [--page 1] [--page-size 20] --json'}},
   {key:'dmp item-info',maturity:'stable',audience:'business',capability:{id:'dmp-item-info',name:'读取DMP商品资料',description:'使用店铺DMP会话获取指定商品名称、主图、商品链接及可得店铺信息。',examplePrompt:'读取这个商品在达摩盘中的名称、主图和店铺信息',requiredInputs:['商品ID','新的JSON输出路径'],optionalInputs:['用户指定的本店锚点商品ID'],delivery:'新的商品资料JSON文件，保留信息来源、可用状态和缺失字段',commandTemplate:'tbcli dmp item-info --item-id <ID> --out <NEW.json> --json'}},
@@ -447,13 +448,13 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     key: 'browser theme',
     maturity: 'stable',
     audience: 'internal',
-    description: '使用 Chrome 个人资料设置应用角色主题色：商家蓝色，普通用户橙色',
+    description: '使用 Chrome 个人资料设置应用角色主题色：商家蓝色，淘宝买家橙色',
   },
   {
     key: 'browser open',
     maturity: 'stable',
     audience: 'internal',
-    description: '打开指定角色的独立浏览器（默认商家；普通用户为 buyer）',
+    description: '打开指定角色的独立浏览器（默认商家；淘宝买家为 buyer）',
   },
   {
     key: 'shop products',
