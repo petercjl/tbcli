@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import {readFileSync} from 'node:fs';
+const discovery=JSON.parse(readFileSync(new URL('../../skill/tbcli/adapters/sealseek.json',import.meta.url))).runtimeDiscovery;
 import os from 'node:os';
 import path from 'node:path';
 
@@ -31,13 +33,13 @@ export function resolveSealseekWindowsPaths({
   systemRoot = process.env.SystemRoot || process.env.SYSTEMROOT || 'C:\\Windows',
 } = {}) {
   if (platform !== 'win32') throw new Error('此命令仅适用于 Windows SealSeek');
-  const root = path.win32.join(homeDir, '.sealseek');
+  const root = path.win32.join(homeDir, discovery.profileDirectory);
   return {
     homeDir,
     root,
     configPath: path.win32.join(root, 'sealseek.json'),
     runtimeInfoPath: path.win32.join(root, 'binaries', 'runtime-info.json'),
-    skillRoot: path.win32.join(root, 'skill_pool'),
+    skillRoot: path.win32.join(root, discovery.skillDirectory),
     system32: path.win32.join(systemRoot, 'System32'),
     powershellDir: path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0'),
   };

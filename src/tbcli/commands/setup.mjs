@@ -40,7 +40,7 @@ export async function finalizeSealseekSetup(opts = {}, dependencies = {}) {
   const inspect = dependencies.inspect || inspectSealseekWindows;
 
   const config = await configure({ environment });
-  const skill = await ensure({ agent: 'sealseek', mode: 'copy' });
+  const skill = await ensure({ agent: 'sealseek', targetDir: opts.targetDir || environment.skillRoot, mode: 'copy' });
   const disabledShims = await disableShims(environment);
   const diagnosis = await inspect({ environment });
   // Config writes do not prove that a running host needs restarting. npm can
