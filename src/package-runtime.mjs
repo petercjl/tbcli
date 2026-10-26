@@ -1,6 +1,6 @@
 // Generic package maintenance runtime. Vendored consumers pin this source by SHA-256.
 import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';
-import {spawnSync} from 'node:child_process';
+import {spawnSync} from 'node:child_process';import {createRequire} from 'node:module';
 const fail=(code,message)=>{throw Object.assign(Error(message??code),{code});};
 const exists=p=>{try{fs.lstatSync(p);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -21,7 +21,11 @@ function target(c,o){
  if(destination===path.parse(destination).root||destination===c.root||destination.startsWith(c.root+path.sep))fail('UNSAFE_TARGET');
  return{agent,skill,destination,parent:path.dirname(destination)};
 }
-function runtimeFiles(c){const out={};for(const item of c.runtimeItems){const p=path.join(c.root,item);if(!exists(p))continue;if(fs.statSync(p).isDirectory())Object.assign(out,Object.fromEntries(Object.entries(files(p)).map(([n,h])=>[item+'/'+n,h])));else out[item]=hash(fs.readFileSync(p));}return out;}
+function dependencyPlan(c){const pkg=JSON.parse(fs.readFileSync(path.join(c.root,'package.json')));if(!Object.keys(pkg.dependencies??{}).length)return null;const plan=new Map();function locate(from,name){const req=createRequire(path.join(from,'package.json'));let at;try{at=path.dirname(req.resolve(name+'/package.json'));}catch{try{at=path.dirname(req.resolve(name));}catch{fail('DEPENDENCY_MISSING',name);}}while(true){try{if(JSON.parse(fs.readFileSync(path.join(at,'package.json'))).name===name)return fs.realpathSync(at);}catch{}const next=path.dirname(at);if(next===at)fail('DEPENDENCY_PACKAGE_ROOT_MISSING',name);at=next;}}
+ function visit(from,rel){const meta=JSON.parse(fs.readFileSync(path.join(from,'package.json')));const required={...meta.dependencies,...meta.optionalDependencies};for(const name of Object.keys(required).sort()){let src;try{src=locate(from,name);}catch(e){if(name in (meta.optionalDependencies??{}))continue;throw e;}let ancestor=rel,found;while(true){const key=path.posix.join(ancestor,'node_modules',name);if(plan.has(key)){found=plan.get(key);break;}if(!ancestor)break;ancestor=path.posix.dirname(ancestor);if(ancestor==='.')ancestor='';}if(found===src)continue;const top=path.posix.join('node_modules',name),dest=found||plan.has(top)?path.posix.join(rel,'node_modules',name):top;if(plan.get(dest)===src)continue;if(plan.has(dest))fail('DEPENDENCY_LAYOUT_CONFLICT',name);plan.set(dest,src);visit(src,dest);}}
+ visit(c.root,'');return plan;}
+function copyPackage(src,dest){fs.mkdirSync(dest,{recursive:true});for(const name of fs.readdirSync(src))if(name!=='node_modules')copyTree(path.join(src,name),path.join(dest,name));}
+function runtimeFiles(c){const out={},deps=dependencyPlan(c);for(const item of c.runtimeItems){if(item==='node_modules'&&deps)continue;const p=path.join(c.root,item);if(!exists(p))continue;if(fs.statSync(p).isDirectory())Object.assign(out,Object.fromEntries(Object.entries(files(p)).map(([n,h])=>[item+'/'+n,h])));else out[item]=hash(fs.readFileSync(p));}if(deps)for(const[dest,src]of deps)Object.assign(out,Object.fromEntries(Object.entries(files(src,'',new Set(['node_modules']))).map(([n,h])=>[dest+'/'+n,h])));return out;}
 function ownFiles(c,skill){return files(source(c,skill),'',new Set(['agents/openai.yaml']));}
 const receiptName=c=>'.'+c.tool+'-managed.json';
 function contract(c){try{return JSON.parse(fs.readFileSync(path.join(c.root,'capabilities.json')));}catch{return{};}}
@@ -50,7 +54,7 @@ export function syncSkill(c,o){
  try{
   if(before.installed){const backups=c.backupRoot??path.join(os.homedir(),'.local','state',c.tool,'skill-backups');fs.mkdirSync(backups,{recursive:true});backup=path.join(backups,t.skill+'-'+Date.now()+'-'+crypto.randomUUID().slice(0,6));if(before.mode==='link')copyTree(fs.realpathSync(t.destination),backup,{recursive:true,dereference:true,errorOnExist:true,force:false});else copyTree(t.destination,backup,{recursive:true,dereference:true,errorOnExist:true,force:false});}
   copyTree(source(c,t.skill),stage,{recursive:true,dereference:true,errorOnExist:true,force:false});const runtime=path.join(stage,'.runtime');fs.mkdirSync(runtime);
-  for(const item of c.runtimeItems){const p=path.join(c.root,item);if(exists(p))copyTree(p,path.join(runtime,item),{recursive:true,dereference:true,errorOnExist:true,force:false});}
+  const deps=dependencyPlan(c);for(const item of c.runtimeItems){if(item==='node_modules'&&deps)continue;const p=path.join(c.root,item);if(exists(p))copyTree(p,path.join(runtime,item),{recursive:true,dereference:true,errorOnExist:true,force:false});}if(deps)for(const[dest,src]of deps)copyPackage(src,path.join(runtime,dest));
   if(before.installed&&before.mode!=='link'){const ui=path.join(t.destination,'agents/openai.yaml');if(exists(ui))fs.copyFileSync(ui,path.join(stage,'agents/openai.yaml'));}
   const fileHashes=files(stage,'',new Set(['agents/openai.yaml'])),receipt={package:c.name,skill:t.skill,version:c.version,sourceDigest:maintenanceSource(c,t.skill).sourceDigest,runtimeDigest:digest(runtimeFiles(c)),fileHashes,installedAt:new Date().toISOString(),hostDiscovery:'pending'};
   fs.writeFileSync(path.join(stage,receiptName(c)),JSON.stringify(receipt,null,2),{flag:'wx',mode:0o600});
