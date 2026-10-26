@@ -1,7 +1,7 @@
 import {lstat, open} from 'node:fs/promises';
 import path from 'node:path';
 import {withAuthenticatedTaobaoSession} from '../browser-session.mjs';
-import {DMP_CATALOG, dmpError, prepareDmpReport, prepareDmpItems, createDmpClient, collectDmpReport, normalizeDmpItems} from '../dmp.mjs';
+import {DMP_CATALOG, dmpError, prepareDmpReport, prepareDmpItems, createDmpClient, collectDmpReport, normalizeDmpItems, normalizeDmpItemInfo, dmpPeriod, scrubDmpRaw} from '../dmp.mjs';
 
 function validateOptions(opts, own) {
   const allowed = new Set(['_', 'json', 'out', 'cdpUrl', 'profileDir', 'chromePath', 'sessionMode', ...own]);
@@ -65,4 +65,27 @@ export async function runDmpReport(opts = {}, {session = withAuthenticatedTaobao
     report.status = 'stopped'; report.finishedAt = new Date().toISOString(); report.error = {code: error.code ?? 'DMP_COLLECTION_FAILED'};
     await save(file, report); emitError(error, opts, opts.out); return report;
   } finally { await file.close(); }
+}
+
+export async function runDmpItemInfo(opts = {}, {session = withAuthenticatedTaobaoSession, clientFactory = createDmpClient} = {}) {
+ validateOptions(opts,['itemId','anchorId','timeoutMs','delayMs','minDelayMs','maxDelayMs']);
+ const itemId=String(opts.itemId??'');if(!/^[1-9]\d{0,29}$/.test(itemId))throw dmpError('DMP_INVALID_INPUT','提供目标商品ID。');
+ const plan=prepareDmpItems(opts),file=await outputFile(opts.out,true);
+ try {
+  const result=await session(opts,async({context})=>{const client=await clientFactory(context,plan);try{
+  let response,request,original;
+  if(opts.anchorId&&String(opts.anchorId)!==itemId){
+   const anchorId=String(opts.anchorId);if(!/^[1-9]\d{0,29}$/.test(anchorId))throw dmpError('DMP_INVALID_INPUT','本店锚点ID无效。');
+   const anchor=await client.request('itemInfo',{itemId:anchorId});
+   if(anchor.body?.info?.ok!==true||String(anchor.body?.data?.id)!==anchorId)throw dmpError('DMP_ANCHOR_INFO_UNAVAILABLE','本店锚点资料不可用。');
+   const day=await client.request('latestDay',{sceneCode:'goodsGrowPathSuccItemList'});
+   const returned=typeof day.body?.data==='string'?day.body.data.trim().replaceAll('-',''):'';const latest=/^\d{8}$/.test(returned)?returned:dmpPeriod({days:1}).endDate.replaceAll('-','');
+   const query={itemId:anchorId,keyword:itemId,page:'1',pageSize:'10',thedate:latest};
+   response=await client.request('successItems',query);original=response;request={method:'GET',path:'/api/goods/grow/define/success/item/list',query};
+   if(response.body?.info?.ok===true){const row=response.body?.data?.list?.find(x=>String(x.itemId??x.id)===itemId);response={...response,body:{...response.body,data:row??null}};}
+  }else{response=await client.request('itemInfo',{itemId});request={method:'GET',path:'/api/goods/item/info',query:{itemId}};}
+  const r=normalizeDmpItemInfo(response,itemId);r.account=client.account;r.source.request=request;if(original)r.source.raw=scrubDmpRaw(original.body);return r;
+  }finally{await client.dispose();}});
+  await save(file,result);console.log(JSON.stringify({ok:result.status==='available',status:result.status,itemId,out:path.resolve(opts.out)}));if(result.status!=='available')process.exitCode=2;return result;
+ }catch(error){await save(file,{schemaVersion:1,command:'dmp item-info',itemId,status:'stopped',error:{code:error.code??'DMP_COLLECTION_FAILED'}});emitError(error,opts,opts.out);}finally{await file.close();}
 }

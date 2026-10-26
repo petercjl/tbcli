@@ -1,6 +1,6 @@
 import {runDmpSnapshot} from './commands/dmp-snapshot.mjs';
 import {runOrdersList} from './commands/orders.mjs';
-import {runDmpCatalog, runDmpItems, runDmpReport} from './commands/dmp.mjs';
+import {runDmpCatalog, runDmpItems, runDmpReport, runDmpItemInfo} from './commands/dmp.mjs';
 import {runFinanceIdentity,runFinanceCatalog,runFinanceFetch,runFinanceBalances} from './commands/finance.mjs';
 import { parseArgs } from './args.mjs';
 import { runCourierValidate,runCourierImport,runCourierQuery } from './commands/courier-bills.mjs';
@@ -83,6 +83,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'dmp items': runDmpItems,
   'dmp report': runDmpReport,
   'dmp snapshot': runDmpSnapshot,
+  'dmp item-info': runDmpItemInfo,
   'orders list': runOrdersList,
   'finance identity': runFinanceIdentity,
   'finance catalog': runFinanceCatalog,

@@ -11,7 +11,7 @@ async function dispatch(){
   const {parseArgs}=await import('../src/tbcli/args.mjs'),opts=parseArgs(argv);
   if(opts._[1]!=='catalog'){const {maybeAutoUpdate}=await import('../src/tbcli/update.mjs');const r=await maybeAutoUpdate(opts);if(r.updateAvailable)console.error('tbcli update available; use an explicit selected-target update.');}
   if(opts._[1]==='snapshot'){const {runDmpSnapshot}=await import('../src/tbcli/commands/dmp-snapshot.mjs');return runDmpSnapshot(opts);}
-  const m=await import('../src/tbcli/commands/dmp.mjs'),fn={catalog:m.runDmpCatalog,items:m.runDmpItems,report:m.runDmpReport}[opts._[1]];if(fn)return fn(opts);
+  const m=await import('../src/tbcli/commands/dmp.mjs'),fn={catalog:m.runDmpCatalog,items:m.runDmpItems,'item-info':m.runDmpItemInfo,report:m.runDmpReport}[opts._[1]];if(fn)return fn(opts);
  }
  const {main}=await import('../src/tbcli/cli.mjs');return main(argv);
 }

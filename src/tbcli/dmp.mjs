@@ -5,6 +5,9 @@ export const dmpError = (code, message) => Object.assign(new Error(message), {co
 export const DMP_PATHS = Object.freeze({
   login: '/api_2/login/loginuserinfo',
   items: '/api/goods/item/list',
+  itemInfo: '/api/goods/item/info',
+  successItems: '/api/goods/grow/define/success/item/list',
+  latestDay: '/api/latestDay',
   costs: '/api/goods/grow/define/line/data',
   metrics: '/dataplatform/dataset/report/query.json',
   scenes: '/api/goods/grow/comparison/scene',
@@ -19,13 +22,14 @@ export const METRIC_FIELDS = Object.freeze({
   transactionCount: 6986, avgOrderValue: 6895, ipv: 6813, paidClicks: 8291, freeClicks: 8290,
 });
 export const DMP_CATALOG = Object.freeze({
-  schemaVersion: 1, commands: ['dmp catalog', 'dmp items', 'dmp report', 'dmp snapshot'],
+  schemaVersion: 1, commands: ['dmp catalog', 'dmp items', 'dmp report', 'dmp snapshot', 'dmp item-info'],
   authentication: 'Dedicated Chrome session; login check and DMP identity; credentials stay in browser memory.',
   endpoints: {
     items: {method: 'GET', path: DMP_PATHS.items, inputs: {page: 'positive integer', pageSize: '1–100 (CLI bound)'}, output: 'data.list + data.pager; one page only'},
     costs: {method: 'GET', path: DMP_PATHS.costs, inputs: {itemId: 'owned anchor ID', successItemId: 'one target ID', startDate: 'YYYY-MM-DD, inclusive', endDate: 'YYYY-MM-DD, inclusive'}, output: 'data.lineInfo + data.stages', fields: COST_FIELDS, unit: 'unverified; CNY is the supplied method’s assumption, not independently confirmed'},
     metrics: {method: 'POST', path: DMP_PATHS.metrics, inputs: {datasetId: 156, type: 'INDEX_CARD', conf: 'JSON string: columnList, conditionList, indexList, rowList, userPageSize', filterCondition: 'JSON string: date field 6794 and item field 6797'}, fields: METRIC_FIELDS, output: 'data.INDEX_CARD.fields + values; data.rangeDesc'},
   },
+  itemInfo: {command:'dmp item-info', version:1, input:'one target itemId; selected owned anchorId for competitor lookup; new JSON output', output:'DMP product identity, main image, item/shop links when available; no retail-page fallback'},
   snapshot: {command: 'dmp snapshot', version: 1, input: 'one itemId, explicit anchorId, paired dates or days, new out.json', modules: ['metrics7', 'scenes', 'keywords', 'crowdRanges', 'crowdTable'], metricFields: [6986,6895,6813,8291,8290,6896,6897], crowdDataset: 175, output: 'request and scrubbed response per module; empty/provider failure remains explicit; no retries'},
   commonQuery: {bizCode: 'dmp', _tb_token_: 'browser cookie', _csrf: 'loginuserinfo.data.csrfId', csrfId: 'same csrfId'},
   reportInputs: {itemIds: '1–20 distinct numeric strings (CLI batch bound); one request per item/module', anchorId: 'required for costs/all; omitted for metrics', modules: 'all (default), costs, metrics', dates: 'paired start/end or days 1–366; default last 30 completed Asia/Shanghai days; bounds are CLI limits, not promised platform retention', out: 'new .json file; never overwrite'},
@@ -98,7 +102,7 @@ export async function guardedDmpRequest(page, range, perform, {wait = waitBefore
 
 // This function runs only in Chrome. Tokens are never serialized to the CLI.
 async function browserDmpRequest(state, spec) {
-  const paths = {login: '/api_2/login/loginuserinfo', items: '/api/goods/item/list', costs: '/api/goods/grow/define/line/data', metrics: '/dataplatform/dataset/report/query.json', scenes: '/api/goods/grow/comparison/scene', keywords: '/api/goods/grow/comparison/scene/keyword', crowd: '/api/goods/grow/comparison/crowd'};
+  const paths = {login: '/api_2/login/loginuserinfo', items: '/api/goods/item/list', itemInfo: '/api/goods/item/info', successItems: '/api/goods/grow/define/success/item/list', latestDay: '/api/latestDay', costs: '/api/goods/grow/define/line/data', metrics: '/dataplatform/dataset/report/query.json', scenes: '/api/goods/grow/comparison/scene', keywords: '/api/goods/grow/comparison/scene/keyword', crowd: '/api/goods/grow/comparison/crowd'};
   const token = (document.cookie.match(/_tb_token_=([^;]+)/) ?? [])[1] ?? '';
   const query = new URLSearchParams({bizCode: 'dmp', _tb_token_: token, ...(spec.kind === 'login' ? {} : {_csrf: state.csrf, csrfId: state.csrf}), ...spec.query});
   const origin = spec.kind === 'login' ? 'https://dmp.taobao.com' : 'https://dmp.advgateway.taobao.com';
@@ -228,4 +232,17 @@ export function normalizeDmpItems(response, plan) {
     return {itemId: id(row.id, '返回商品 ID'), title: row.name ?? null, cateId: row.cateId ?? null, cateName: row.cateName ?? null, gmv: number(row.gmv)};
   });
   return {schemaVersion: 1, command: 'dmp items', page: plan.page, pageSize: plan.pageSize, items, pager: data.pager, scope: 'one-page-only; no global ranking or automatic anchor selection', source: evidence(response)};
+}
+
+export function normalizeDmpItemInfo(response, itemId) {
+ const source=evidence(response),error=failure(response);
+ if(error)return {schemaVersion:1,command:'dmp item-info',itemId,status:'unavailable',error,product:null,source};
+ const d=response.body.data;
+ if(!d||typeof d!=='object'||Array.isArray(d))return {schemaVersion:1,command:'dmp item-info',itemId,status:'unavailable',error:'DMP_ITEM_INFO_EMPTY',product:null,source};
+ if(String(d.id??d.itemId)!==itemId)throw dmpError('DMP_ITEM_ID_MISMATCH','达摩盘商品资料返回ID与请求不符，已停止。');
+ const url=(v,images=false)=>{try{const u=new URL(v,'https://dmp.taobao.com');if(typeof v!=='string'||!v||u.protocol!=='https:'||u.username||u.password||!/(^|\.)(taobao\.com|tmall\.com|alicdn\.com|taobaocdn\.com|tbcdn\.cn)$/.test(u.hostname))return null;return u.href;}catch{return null;}};
+ const shopId=d.shopId!=null&&/^[1-9]\d*$/.test(String(d.shopId))?String(d.shopId):null;
+ const shopUrl=url(d.shopUrl)??(shopId?'https://shop'+shopId+'.taobao.com':null);
+ const product={itemId,title:typeof (d.name??d.itemTitle)==='string'?(d.name??d.itemTitle):null,mainImageUrl:url(d.pictUrl??d.itemPictUrl,true),itemUrl:url(d.detailUrl)??("https://item.taobao.com/item.htm?id="+itemId),category:typeof d.cateName==='string'?d.cateName:null,shop:{shopId,shopName:typeof d.shopName==='string'?d.shopName:null,url:shopUrl,urlSource:d.shopUrl?'returned':shopUrl?'constructed-from-shopId':null}};
+ return {schemaVersion:1,command:'dmp item-info',itemId,status:product.title&&product.mainImageUrl&&product.itemUrl?'available':'partial',product,source};
 }

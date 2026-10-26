@@ -5,6 +5,8 @@ description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经�
 
 # tbcli
 
+DMP店铺会话中的商品名称、主图与链接：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp item-info`。指定竞品时沿用用户已选本店锚点；精确核对返回ID，资料不可用时保留状态。此入口不打开商品前台或切换买家账号。
+
 达摩盘指定商品经营指标、推广数值或打爆路径：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp catalog`、`dmp items` 和 `dmp report`。推广查询由调用者明确选择本店锚点；仅经营数据使用 `--modules metrics`。核对各模块的日期覆盖与原始业务状态，推广字段单位保留核验状态。
 
 只采集商品视觉素材链接时，使用 `tbcli item media --item-id ID --out NEW.json --json`，读取 [视觉素材采集](references/item-media.md)。返回主图、主图视频、详情图、SKU 图片及商品店铺名称；不采集评价与问答。

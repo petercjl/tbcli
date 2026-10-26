@@ -136,3 +136,7 @@ POST `/dataplatform/dataset/report/query.json`，`Content-Type: application/json
 `tbcli dmp snapshot --item-id ID --anchor-id OWNED_ID --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out NEW.json --json` 保存一个指定周期的5个来源：七项经营指标（额外6896支付转化率、6897加购率）、推广场景、目标关键词、人群区间、人群数值dataset175。周期选取和报告分析由应用决定。输出snapshotVersion=1，按模块保留脱敏request/response、状态与来源时间。业务失败和空数据分别保留；每个模块完成后保存检查点，验证码或权限访问限制停止全部后续请求。退出码2表示存在模块业务失败，可读取已保存的其他模块。
 
 场景、关键词、人群区间参数为itemId本店锚点、succItemIds目标、startDate/endDate。人群数值表dataset175/type=TABLE，日期7463、商品7460、分组7459、指标7469/7468/7465/7464；按字段ID解析，合计行与分类分别保留。日期未回显时不声称覆盖已核实。人群数值与经营dataset156保持独立，不以区间中点替代精确值。
+
+## 商品资料
+
+`tbcli dmp item-info --item-id ID --out NEW.json --json` 使用当前DMP店铺会话，调用 `/api/goods/item/info`。不需要本店锚点或日期。输出目标ID、名称、主图URL、商品链接和可得的店铺ID/名称/链接；严格核对响应ID，缺失保留未知。店铺标准链接仅在已返回shopId时构造并标注来源。此命令不打开商品前台、不切换普通买家账号；资料不可用时保留业务状态，不转商品前台补采。
