@@ -5,21 +5,16 @@ Read only the section relevant to the current request. Always confirm live synta
 ## Ecommerce browser and health
 
 ```bash
-tbcli auth login [--timeout-ms 300000] [--json]
-tbcli auth status [--json]
-tbcli browser open [--url '<URL>']
-tbcli doctor [--json]
+tbcli auth login [--browser-role merchant|buyer] [--timeout-ms 300000] [--json]
+tbcli auth status [--browser-role merchant|buyer] [--json]
+tbcli browser open [--browser-role merchant|buyer] [--url '<URL>']
+tbcli browser theme [--browser-role merchant|buyer]
+tbcli doctor [--browser-role merchant|buyer] [--json]
 tbcli doctor --agent sealseek [--fix] [--json]
 tbcli capabilities [--json] [--all]
 ```
 
-Use the fixed persistent tbcli Profile. Start with `auth status`; if logged out,
-run `auth login` and wait while the user completes the visible login flow. Normal
-commands use a managed browser without requiring port 9223. `browser open` is a
-legacy compatibility/debugging command. If another ordinary Chrome owns the
-Profile, ask the user to close it; never copy the Profile or export cookies. If
-the caller supplies `--profile-dir` or `--session-mode`, keep the same values on
-the status, login, status-confirmation, and business commands.
+Use the operation's role from [browser roles](browser-roles.md). The four public-page operations (`item media`, `item detail`, `search products`, `shop products`) select the buyer Profile and CDP 9224 automatically. Other browser data operations retain the merchant Profile and CDP 9223. Specify the same role on `auth status`, `auth login` and diagnostics. Merchant auto mode retains CDP/managed compatibility; buyer auto mode opens/reuses its separate CDP browser. Preserve any explicit compatible Profile/session options throughout preflight and execution. Local port/Profile mismatches stop without changing either session. `browser theme` applies the persistent role color: merchant blue, buyer orange.
 
 Managed Chrome must run with its security sandbox enabled. If Chrome shows an
 unsupported `--no-sandbox` warning, stop authentication, upgrade tbcli, close

@@ -1,3 +1,4 @@
+import {resolveBrowserTarget} from '../browser-target.mjs';
 import {packageConfig} from '../package-config.mjs';
 import fs from 'node:fs';
 
@@ -49,13 +50,17 @@ export async function runDoctor(opts = {}) {
     if (!result.ok) process.exitCode = 1;
     return;
   }
+  const target = resolveBrowserTarget(opts);
   const result = {
+    browserRole: target.browserRole,
+    cdpUrl: target.cdpUrl,
+    theme: target.theme,
     version: TBCLI_VERSION,
     node: process.version,
     platform: process.platform,
     chromePath: DEFAULT_CHROME_PATH,
     chromeExists: Boolean(DEFAULT_CHROME_PATH && fs.existsSync(DEFAULT_CHROME_PATH)),
-    profileDir: DEFAULT_PROFILE_DIR,
+    profileDir: target.profileDir,
     sessionMode: '',
     browserReady: false,
     taobaoLoggedIn: false,

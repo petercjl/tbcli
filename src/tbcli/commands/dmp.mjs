@@ -4,7 +4,7 @@ import {withAuthenticatedTaobaoSession} from '../browser-session.mjs';
 import {DMP_CATALOG, dmpError, prepareDmpReport, prepareDmpItems, createDmpClient, collectDmpReport, normalizeDmpItems, normalizeDmpItemInfo, dmpPeriod, scrubDmpRaw} from '../dmp.mjs';
 
 function validateOptions(opts, own) {
-  const allowed = new Set(['_', 'json', 'out', 'cdpUrl', 'profileDir', 'chromePath', 'sessionMode', ...own]);
+  const allowed = new Set(['_', 'json', 'out', 'browserRole', 'cdpUrl', 'profileDir', 'chromePath', 'sessionMode', ...own]);
   if ((opts._ && opts._.length !== 2) || Object.keys(opts).some(k => !allowed.has(k))) throw dmpError('DMP_INVALID_INPUT', 'DMP 命令包含未知或不适用的参数；请查阅 dmp catalog 和命令帮助。');
 }
 

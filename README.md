@@ -1,7 +1,8 @@
 # tbcli
 
-Local CLI for Taobao/Qianniu seller backend workflows. It shares the same
-“ecommerce browser”（电商浏览器）with the other ecommerce CLIs.
+Local CLI for Taobao/Qianniu workflows. Merchant operations share the
+“ecommerce browser”（电商浏览器）with other ecommerce CLIs; Taobao public-page
+collection uses a separate buyer browser and account.
 
 ## Install
 
@@ -421,44 +422,32 @@ For example, a user can say: `帮我获取【店铺首页链接】的商品列�
 Use `tbcli capabilities --all` only when internal browser and development tools
 also need to be shown.
 
-## Authentication and browser session
+## Authentication and browser sessions
 
-On first use, start the interactive login flow:
+Taobao public-page collection uses an independent buyer account. Merchant and other existing platform operations retain the ecommerce browser.
+
+| Role | Commands | Port | Profile | Theme |
+| --- | --- | --- | --- | --- |
+| Merchant (default) | DMP, SYCM, advertising, seller orders/logistics, finance and other existing browser consumers | 9223 | `~/.dianshang-chrome-profile` | Blue |
+| Buyer | `item media`, `item detail`, `search products`, `shop products` | 9224 | `~/.taobao-user-chrome-profile` | Orange |
+
+The four buyer commands select their role automatically. Helpers select it explicitly:
 
 ```bash
-tbcli auth login
+tbcli auth status --browser-role merchant --json
+tbcli auth login --browser-role buyer
+tbcli browser open --browser-role buyer --json
+tbcli browser theme --browser-role merchant
+tbcli browser theme --browser-role buyer
 ```
 
-`tbcli` opens Chrome with its fixed persistent profile and waits until the user
-has completed Taobao/Tmall login. Check it at any time with:
+Chrome persists the selected theme in each Profile. `browser theme` uses Chrome's own profile settings and verifies the selected color. Existing Profile themes are retained when opening a browser. Login remains manual in each role's window; no cookies or profile data are copied. The buyer Profile starts with its own login state.
 
-```bash
-tbcli auth status --json
-```
+Merchant configuration retains `TBCLI_CDP_URL`, `TBCLI_CHROME_PROFILE` and `TBCLI_REMOTE_DEBUGGING_PORT`. Buyer configuration uses `TBCLI_BUYER_CDP_URL`, `TBCLI_BUYER_CHROME_PROFILE` and `TBCLI_BUYER_REMOTE_DEBUGGING_PORT`. Existing merchant environment variables never override buyer defaults. Known opposite-role endpoints/Profiles are rejected; local CDP reuse verifies Chrome's port and Profile flags.
 
-Default browser settings:
+Buyer auto mode opens/reuses CDP 9224. Merchant auto mode retains CDP reuse or managed-session compatibility. Explicit `--session-mode managed` uses the selected persistent Profile with the sandbox enabled. Chrome is detected on macOS and Windows, with `TBCLI_CHROME_PATH`/`--chrome-path` available for explicit configuration. Windows live verification remains pending for the new role isolation.
 
-- Chrome profile: `~/.dianshang-chrome-profile` on macOS, `%USERPROFILE%\.dianshang-chrome-profile` on Windows
-- macOS Chrome: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-- Windows Chrome: automatically detected under `%LOCALAPPDATA%`, `%PROGRAMFILES%`, or `%PROGRAMFILES(X86)%`
-- Session mode: `auto`; reuse an existing legacy CDP browser when available,
-  otherwise launch a managed persistent browser without opening TCP port `9223`
-- Chrome security sandbox: explicitly enabled; tbcli never falls back to
-  `--no-sandbox`
-
-These can be overridden with `TBCLI_SESSION_MODE`, `TBCLI_CDP_URL`,
-`TBCLI_CHROME_PROFILE`, `TBCLI_REMOTE_DEBUGGING_PORT`, or `TBCLI_CHROME_PATH`.
-
-Normal data commands start and close their own managed browser session while
-reusing the same profile. Port `9223` is no longer a requirement. The legacy
-`tbcli browser open` command remains available for compatibility and debugging.
-If another ordinary Chrome already owns the fixed profile without a debuggable
-connection, close that Chrome first so tbcli can safely open the profile.
-
-The CLI checks only whether the required login-cookie names exist. It never
-prints, exports, or maintains a separate cookie/token file; authentication stays
-inside the dedicated Chrome profile. npm installs `playwright-core`
-automatically; Chrome and Node.js remain system prerequisites.
+The CLI checks login-cookie presence without exporting values. This does not prove account privileges; each service remains authoritative. Database/file commands and delegated providers keep their existing contracts. Browser-only requests use the independent browser launcher; its default remains the merchant ecommerce browser.
 
 If Chrome displays an unsupported `--no-sandbox` command-line warning, upgrade
 tbcli to the latest version, close the Chrome using the fixed Profile, and run

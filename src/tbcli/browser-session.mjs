@@ -8,25 +8,28 @@ import {
   DEFAULT_SESSION_MODE,
 } from './config.mjs';
 import { ensureBrowserOpen, isCdpReachable } from './commands/browser.mjs';
+import { resolveBrowserTarget } from './browser-target.mjs';
 import { createVerificationError } from './taobao-guard.mjs';
 
 const LOGIN_COOKIE_NAMES = new Set(['_nk_', 'lgc', 'tracknick', 'sn']);
 
 export async function withBrowserSession(opts = {}, callback) {
+  const target = resolveBrowserTarget(opts);
   const sessionMode = await resolveSessionMode(opts);
+  opts = {...opts, ...target};
   if (sessionMode === 'cdp') return withCdpSession(opts, callback);
   return withManagedSession(opts, callback);
 }
 
 async function withCdpSession(opts, callback) {
   const cdpUrl = opts.cdpUrl || DEFAULT_CDP;
-  if (!await isCdpReachable(cdpUrl)) await ensureBrowserOpen({ ...opts, cdpUrl });
+  await ensureBrowserOpen({ ...opts, cdpUrl });
   const browser = await chromium.connectOverCDP(cdpUrl);
   try {
     const context = browser.contexts()[0];
     if (!context) throw new Error('没有可用的浏览器上下文');
     await ensureStartPage(context, opts.startUrl || opts.url);
-    return await callback({ browser, context, sessionMode: 'cdp' });
+    return await callback({ browser, context, sessionMode: 'cdp', browserTarget: resolveBrowserTarget(opts) });
   } finally {
     await browser.close();
   }
@@ -57,6 +60,7 @@ async function withManagedSession(opts, callback) {
       browser: context.browser(),
       context,
       sessionMode: 'managed',
+      browserTarget: resolveBrowserTarget(opts),
     });
   } finally {
     await context.close();
@@ -79,7 +83,7 @@ export function managedChromeLaunchOptions(chromePath) {
 
 export async function withAuthenticatedTaobaoSession(opts, callback) {
   return withBrowserSession({ ...opts, startUrl: 'about:blank', url: '' }, async (session) => {
-    await assertTaobaoLoggedIn(session.context);
+    await assertTaobaoLoggedIn(session.context, session.browserTarget?.browserRole);
     return callback(session);
   });
 }
@@ -91,9 +95,11 @@ export async function resolveSessionMode(opts = {}, {
   if (!['auto', 'managed', 'cdp'].includes(requested)) {
     throw new Error('--session-mode / TBCLI_SESSION_MODE 只能是 auto、managed 或 cdp');
   }
+  const target = resolveBrowserTarget(opts);
   if (opts.cdpUrl || requested === 'cdp') return 'cdp';
   if (requested === 'managed') return 'managed';
-  return await cdpReachable(DEFAULT_CDP) ? 'cdp' : 'managed';
+  if (target.browserRole === 'buyer') return 'cdp';
+  return await cdpReachable(target.cdpUrl) ? 'cdp' : 'managed';
 }
 
 export async function ensureStartPage(context, targetUrl = '') {
@@ -128,10 +134,10 @@ export function hasTaobaoLoginCookies(cookies) {
   return names.has('cookie2') && [...LOGIN_COOKIE_NAMES].some((name) => names.has(name));
 }
 
-export async function assertTaobaoLoggedIn(context) {
+export async function assertTaobaoLoggedIn(context, role = 'merchant') {
   const cookies = await context.cookies(['https://www.taobao.com', 'https://www.tmall.com']);
   if (!hasTaobaoLoginCookies(cookies)) {
-    throw createVerificationError('未检测到淘宝/天猫登录状态；请先运行 tbcli auth login');
+    throw createVerificationError(`未检测到淘宝/天猫登录状态；请先运行 tbcli auth login --browser-role ${role}`);
   }
 }
 

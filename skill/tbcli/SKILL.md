@@ -5,6 +5,8 @@ description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经�
 
 # tbcli
 
+淘宝前台采集与商家取数使用独立浏览器：`item media`、`item detail`、`search products`、`shop products` 自动使用普通用户会话（橙色，9224）；DMP及其他浏览器取数沿用商家会话（蓝色，9223）。浏览器或登录相关操作先读 [角色与账号隔离](references/browser-roles.md)，登录、诊断和开发辅助命令显式指定对应的 `--browser-role`。
+
 DMP店铺会话中的商品名称、主图与链接：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp item-info`。指定竞品时沿用用户已选本店锚点；精确核对返回ID，资料不可用时保留状态。此入口不打开商品前台或切换买家账号。
 
 达摩盘指定商品经营指标、推广数值或打爆路径：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp catalog`、`dmp items` 和 `dmp report`。推广查询由调用者明确选择本店锚点；仅经营数据使用 `--modules metrics`。核对各模块的日期覆盖与原始业务状态，推广字段单位保留核验状态。
@@ -48,7 +50,7 @@ Ordinary business entry checks for updates with bounded timeout and a six-hour c
 - **Input:** a supported business task plus identifiers, URLs, report paths, dates, fields, filters, and output preference when applicable.
 - **Strategy:** discover the live CLI, normalize the intent, preflight dependencies and all targets, execute stable commands, then verify outputs.
 - **Output:** requested business data or a new file, with paths, covered period, command outcome, and limitations.
-- **Dependencies:** a discoverable `tbcli` entry (or the Windows SealSeek adapter's managed-runtime entry); a supported Chrome; the fixed tbcli browser Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
+- **Dependencies:** a discoverable `tbcli` entry (or the Windows SealSeek adapter's managed-runtime entry); a supported Chrome; the operation-selected merchant or buyer Chrome Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
 - **Permissions:** use only the current user's authorized account and visible data. Never extract or persist cookies, tokens, or session headers.
 - **Success:** every requested target completes, every output is new and readable, its scope matches the request, and temporary SYCM reports are cleaned.
 
@@ -61,7 +63,7 @@ tbcli workflow with raw HTTP, browser scripting, or an ad-hoc script.
 1. Discover the live CLI, then run `tbcli --help` and `tbcli capabilities --json`. On POSIX use `command -v tbcli`; on Windows SealSeek use its adapter and invoke `tbcli.cmd`. Use live syntax rather than recalled syntax.
 2. Parse the user's intent into one or more targets. Identify required URLs/IDs, platform, data type, dimension, date granularity, period, fields, filters, and delivery directory.
 3. Resolve relative dates using the user's local date. For completed daily data fetched from the platform, interpret “最近 N 天” as the N completed calendar days ending yesterday, inclusive. Thus start = end minus `N-1` days. Warehouse questions instead use the selected dataset's latest available date as defined in **Company Warehouse Flow**. State the resolved dates.
-4. Preflight every target before creating any output. Check authentication with `tbcli auth status --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For市场-商品排行的连续四周价格带数据, follow **SYCM Market Ranking Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
+4. Preflight every target before creating any output. Resolve the browser role using [browser roles](references/browser-roles.md). Check authentication with `tbcli auth status --browser-role ROLE --json` when browser/login state is uncertain. If it reports logged out, run `tbcli auth login --browser-role ROLE`, let the user complete the visible login/verification, confirm success, and return to this step. When a custom `--profile-dir` or `--session-mode` is used, preserve the same values across `auth status` → `auth login` → `auth status` and the later business command. For取数报表, follow **SYCM Report Flow**. For市场-商品排行的连续四周价格带数据, follow **SYCM Market Ranking Flow**. For questions over already imported company data, follow **Company Warehouse Flow**; that path does not need a browser login.
 5. Choose a new output path. Read-only check every explicit path first. Never overwrite an existing file; use a clear new filename or ask when naming materially matters.
 6. Execute targets sequentially so request pacing and partial failures remain understandable. Use `--json` when structured verification is useful.
 7. Verify each output: existence, nonzero size, expected file type, requested date coverage, key headers, and target identity. For Excel, inspect the workbook rather than trusting only the exit code.
@@ -437,7 +439,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 
 ## Failure Branches
 
-- **Browser unavailable:** verify Chrome installation and the fixed Profile configuration with `tbcli doctor`; normal commands launch a managed persistent browser without requiring port 9223. Return to Main Flow Step 4 after resolving the dependency.
+- **Browser unavailable:** verify Chrome installation and the selected role with `tbcli doctor --browser-role ROLE`; buyer auto mode uses its dedicated CDP session, while merchant auto mode retains CDP/managed compatibility. Return to Main Flow Step 4 after resolving the dependency.
 - **Profile already open:** an ordinary Chrome without an attachable session cannot be taken over safely. Ask the user to close the Chrome using the fixed Profile, then return to Main Flow Step 4. Never copy the Profile or extract Cookie databases.
 - **Unsupported `--no-sandbox` banner:** treat this as an unsafe or outdated tbcli browser launch. Stop the login attempt. For an npm installation, run `tbcli update --target-dir <当前Agent的Skill父目录> --agent <当前Agent> --json`, require the unified CLI-and-Skill verification contract above, close that browser, and rerun `tbcli auth login`. If the legacy CLI lacks the unified command, bootstrap `@latest` once and immediately return to it. For a source checkout, use its repository update workflow instead of replacing it with npm. Never advise repeated slider attempts or disabling the Chrome sandbox.
 - **Sandbox unavailable:** stop with the CLI error and ask the user to repair Chrome/operating-system sandbox support. Never add or recommend `--no-sandbox` as a fallback.

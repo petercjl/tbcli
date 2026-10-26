@@ -63,6 +63,11 @@ export function parseArgs(argv) {
     else if (arg === '--limit') out.limit = argv[++index];
     else if (arg === '--asc') out.orderDesc = false;
     else if (arg === '--cache-path') out.cachePath = argv[++index];
+    else if (arg === '--browser-role') {
+      const role = argv[++index];
+      if (!['buyer', 'merchant'].includes(role)) throw Object.assign(new Error('--browser-role 只能是 buyer 或 merchant'), {code:'INVALID_BROWSER_ROLE'});
+      out.browserRole = role;
+    }
     else if (arg === '--cdp-url') out.cdpUrl = argv[++index];
     else if (arg === '--profile-dir') out.profileDir = argv[++index];
     else if (arg === '--chrome-path') out.chromePath = argv[++index];

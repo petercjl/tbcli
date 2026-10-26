@@ -11,7 +11,7 @@ import {
   DEFAULT_PROFILE_DIR,
   DEFAULT_SESSION_MODE,
 } from './config.mjs';
-import { runBrowserOpen } from './commands/browser.mjs';
+import { runBrowserOpen, runBrowserTheme } from './commands/browser.mjs';
 import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
@@ -102,6 +102,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'auth login': runAuthLogin,
   'auth status': runAuthStatus,
   'browser open': runBrowserOpen,
+  'browser theme': runBrowserTheme,
   'logistics get': runLogisticsGet,
   'shop products': runShopProducts,
   'search products': runSearchProducts,
@@ -212,9 +213,10 @@ export function usage() {
   tbcli maintenance run-record --run-id ID --input EVENT.json [--state-dir DIR] [--json]
   tbcli maintenance run-finish --run-id ID --status success|partial|blocked|cancelled [--state-dir DIR] [--json]
   tbcli maintenance run-status [--run-id ID] [--state-dir DIR] [--json]
-  tbcli auth login [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
-  tbcli auth status [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
-  tbcli browser open [--url URL] [--profile-dir DIR] [--port PORT]
+  tbcli auth login [--browser-role merchant|buyer] [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
+  tbcli auth status [--browser-role merchant|buyer] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
+  tbcli browser theme [--browser-role merchant|buyer]
+  tbcli browser open [--browser-role merchant|buyer] [--json] [--url URL] [--profile-dir DIR] [--port PORT]
   tbcli logistics get --trade-id ID [--seller-id ID] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json] [--out file.json]
   tbcli shop products --url SHOP_URL [--page N | --max-pages N] [--min-delay-ms 3000] [--max-delay-ms 5000] [--cache-path checkpoint.json] [--out products.xlsx|products.json|products.csv] [--json]
   tbcli document get --url DINGTALK_DOC_URL [--out DIR] [--no-images] [--close-tab] [--timeout-ms 30000] [--json]
@@ -327,7 +329,8 @@ Notes:
   - 不知道 tbcli 能做什么？可直接问 Agent：“这个 tbcli 有哪些能力？”
   - Agent 应先运行 tbcli capabilities --json，按能力清单调用稳定命令。
   - First use: run tbcli auth login and complete login in the opened Chrome.
-  - Normal commands use the persistent profile at ~/.dianshang-chrome-profile without requiring port 9223.
+  - Merchant: blue, CDP 9223, ~/.dianshang-chrome-profile. Buyer: orange, CDP 9224, ~/.taobao-user-chrome-profile.
+  - item media/detail, search products and shop products automatically use the buyer browser.
   - Auto mode can reuse an already running legacy CDP browser; browser open remains a compatibility/debugging command.
   - tbcli never exports cookies or tokens; authentication stays in the dedicated Chrome profile.
 `);

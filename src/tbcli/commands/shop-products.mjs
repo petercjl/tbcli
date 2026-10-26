@@ -1,3 +1,4 @@
+import {forBrowserRole} from '../browser-target.mjs';
 import path from 'node:path';
 import { withAuthenticatedTaobaoSession } from '../browser-session.mjs';
 import {
@@ -23,6 +24,7 @@ const CSV_COLUMNS = [
 ];
 
 export async function runShopProducts(opts) {
+  opts = forBrowserRole(opts, 'buyer');
   const shopUrl = String(opts.url || '').trim();
   if (!shopUrl) throw new Error('缺少 --url；店铺商品分页必须从真实店铺页面开始');
 

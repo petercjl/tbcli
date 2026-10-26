@@ -29,7 +29,7 @@ export async function collectSnapshot(client,plan,out,checkpoint=async()=>{}){
  return out;
 }
 export async function runDmpSnapshot(opts={},deps={}){
- const allowed=new Set(['_','json','out','itemId','anchorId','startDate','endDate','days','timeoutMs','delayMs','minDelayMs','maxDelayMs','cdpUrl','profileDir','chromePath','sessionMode']);
+ const allowed=new Set(['_','json','out','itemId','anchorId','startDate','endDate','days','timeoutMs','delayMs','minDelayMs','maxDelayMs','browserRole', 'cdpUrl','profileDir','chromePath','sessionMode']);
  if(Object.keys(opts).some(k=>!allowed.has(k))||(opts._&&opts._.length!==2))throw dmpError('DMP_INVALID_INPUT','快照参数不支持。');
  const plan=prepareDmpReport({...opts,modules:'all'});
  if(plan.itemIds.length!==1)throw dmpError('DMP_INVALID_INPUT','快照每次查询一个商品。');

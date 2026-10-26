@@ -377,6 +377,156 @@
         }
       },
       "sideEffects": "none"
+    },
+    "browser open": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--url": {
+          "type": "string"
+        },
+        "--port": {
+          "type": "string",
+          "semantics": "decimal integer validated by the runtime"
+        },
+        "--chrome-path": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
+    },
+    "browser theme": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
+    },
+    "auth login": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--timeout-ms": {
+          "type": "string",
+          "semantics": "decimal integer validated by the runtime"
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
+    },
+    "auth status": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
+    },
+    "doctor": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        }
+      },
+      "sideEffects": "local-write",
+      "description": "Select the independent browser role; theme is blue for merchant and orange for buyer."
     }
   },
   "maintenanceContract": {
@@ -569,5 +719,34 @@
         "--json"
       ]
     }
+  },
+  "browserContract": {
+    "schemaVersion": 1,
+    "defaultRole": "merchant",
+    "roles": {
+      "merchant": {
+        "port": 9223,
+        "profileBasename": ".dianshang-chrome-profile",
+        "theme": "blue",
+        "environmentPrefix": "TBCLI_"
+      },
+      "buyer": {
+        "port": 9224,
+        "profileBasename": ".taobao-user-chrome-profile",
+        "theme": "orange",
+        "environmentPrefix": "TBCLI_BUYER_"
+      }
+    },
+    "buyerCommands": [
+      "item media",
+      "item detail",
+      "search products",
+      "shop products"
+    ],
+    "otherBrowserCommandsRole": "merchant",
+    "helperRoleOption": "--browser-role",
+    "roleProof": "intended session; cookie presence does not attest account privileges",
+    "crossRoleFallback": false,
+    "localProcessVerification": true
   }
 }

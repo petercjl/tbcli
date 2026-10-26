@@ -1,9 +1,11 @@
+import {forBrowserRole} from '../browser-target.mjs';
 import {lstat,open} from 'node:fs/promises';
 import path from 'node:path';
 import {withAuthenticatedTaobaoSession} from '../browser-session.mjs';
 import {collectItemMedia,mediaCoverage} from '../item-media.mjs';
 import {prepareDetail,detailError} from '../item-detail.mjs';
 export async function runItemMedia(opts,{session=withAuthenticatedTaobaoSession,collect=collectItemMedia}={}){
+  opts=forBrowserRole(opts,'buyer');
   prepareDetail(opts);
   if(!opts.out||path.extname(opts.out).toLowerCase()!=='.json')throw detailError('INVALID_OUTPUT','需要新的 --out FILE.json。');
   try{await lstat(opts.out);throw detailError('OUTPUT_EXISTS','输出已存在，请使用新文件。');}catch(e){if(e.code!=='ENOENT')throw e;}

@@ -1,9 +1,11 @@
+import {forBrowserRole} from '../browser-target.mjs';
 import { lstat, open } from 'node:fs/promises';
 import path from 'node:path';
 import { withAuthenticatedTaobaoSession } from '../browser-session.mjs';
 import { collectSearchProducts, prepareSearch, searchError } from '../search-products.mjs';
 
 export async function runSearchProducts(opts) {
+  opts = forBrowserRole(opts, 'buyer');
   if (!opts.out || path.extname(opts.out).toLowerCase() !== '.json') throw searchError('INVALID_OUTPUT', '请指定新的 --out products.json。');
   try { await lstat(opts.out); throw searchError('OUTPUT_EXISTS', '输出已存在，请选择新文件。'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const plan = await prepareSearch(opts);

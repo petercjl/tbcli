@@ -1,3 +1,4 @@
+import {resolveBrowserTarget} from '../browser-target.mjs';
 import {
   DEFAULT_CHROME_PATH,
   DEFAULT_PROFILE_DIR,
@@ -54,10 +55,14 @@ export async function waitForTaobaoLogin(context, {
 }
 
 function authResult(taobaoLoggedIn, sessionMode, opts) {
+  const target = resolveBrowserTarget(opts);
   return {
     taobaoLoggedIn,
+    browserRole: target.browserRole,
+    cdpUrl: sessionMode === 'cdp' ? target.cdpUrl : null,
+    theme: target.theme,
     sessionMode,
-    profileDir: opts.profileDir || DEFAULT_PROFILE_DIR,
+    profileDir: target.profileDir,
     chromePath: opts.chromePath || DEFAULT_CHROME_PATH,
     checkedAt: new Date().toISOString(),
   };
@@ -68,10 +73,11 @@ function printAuthResult(result, opts) {
     console.log(JSON.stringify(result, null, 2));
     return;
   }
+  console.log(`浏览器角色：${result.browserRole}`);
   console.log(`淘宝登录状态：${result.taobaoLoggedIn ? '已登录' : '未登录'}`);
   console.log(`会话模式：${result.sessionMode}`);
   console.log(`profile: ${result.profileDir}`);
-  if (!result.taobaoLoggedIn) console.log('请运行：tbcli auth login');
+  if (!result.taobaoLoggedIn) console.log(`请运行：tbcli auth login --browser-role ${result.browserRole}`);
 }
 
 function boundedInteger(value, fallback, min, max, option) {
