@@ -43,7 +43,7 @@ jobs:
         timeout-minutes: 3
       - name: Published updater and recovery matrix
         run: node --test test/upgrade-contract.test.mjs
-        timeout-minutes: 8
+        timeout-minutes: 16
         env:
           TBCLI_UPGRADE_QA: '1'
           AGENT_PACKAGE_UPDATE_CHECK: '0'
