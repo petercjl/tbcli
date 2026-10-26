@@ -1,0 +1,44 @@
+{
+  "schema": "portable-skill-capabilities",
+  "schema_version": "1.0.0",
+  "skill": "ecommerce-monthly-profit-report",
+  "capabilities": [
+    {
+      "id": "business.execute",
+      "purpose": "Execute explicit package business commands and inspect outputs",
+      "required": true,
+      "required_features": [
+        "argv-execution",
+        "json-results",
+        "read-files",
+        "create-new-files"
+      ],
+      "input_fields": [
+        "argv"
+      ],
+      "output_fields": [
+        "ok",
+        "artifacts",
+        "metadata",
+        "warnings"
+      ],
+      "side_effects": {
+        "external_mutation": true,
+        "may_cost_money": false,
+        "authorization": "Preserve current user task authorization and account permissions."
+      },
+      "errors": [
+        "CAPABILITY_UNAVAILABLE",
+        "AUTH_REQUIRED",
+        "OUTPUT_CONTRACT_FAILED"
+      ]
+    }
+  ],
+  "target_platforms": [
+    "generic"
+  ],
+  "host_resolution": {
+    "fallback_adapter": "generic",
+    "directory": "explicit host-resolved destination"
+  }
+}

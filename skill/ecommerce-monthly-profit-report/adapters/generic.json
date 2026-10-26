@@ -1,0 +1,24 @@
+{
+  "schema": "portable-skill-adapter",
+  "platform": "generic",
+  "mappings": [
+    {
+      "capability_id": "business.execute",
+      "status": "implemented",
+      "features": [
+        "argv-execution",
+        "json-results",
+        "read-files",
+        "create-new-files"
+      ],
+      "implementation": {
+        "type": "cli",
+        "command": "tbcli",
+        "discovery": [
+          "capabilities --json",
+          "version"
+        ]
+      }
+    }
+  ]
+}

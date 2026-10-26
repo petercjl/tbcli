@@ -1,6 +1,6 @@
 {
   "name": "@petercjl/tbcli",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "description": "CLI for Taobao and Qianniu seller backend workflows",
   "type": "module",
   "bin": {
@@ -10,7 +10,11 @@
     "scripts",
     "src",
     "skill",
-    "README.md"
+    "README.md",
+    "INSTALL.md",
+    "UPDATE.md",
+    "capabilities.json",
+    "suite-manifest.json"
   ],
   "engines": {
     "node": ">=20"
@@ -39,6 +43,8 @@
     "saxes": "^6.0.0"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test --test-concurrency=4",
+    "postinstall": "node scripts/install-notice.mjs",
+    "prepack": "node scripts/verify-package.mjs"
   }
 }

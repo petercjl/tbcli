@@ -1,0 +1,284 @@
+{
+  "package": "@petercjl/tbcli",
+  "version": "0.11.0",
+  "tool": "tbcli",
+  "entry": "scripts/tbcli.mjs",
+  "commandContracts": {
+    "skill source": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "none"
+    },
+    "skill status": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "none"
+    },
+    "skill install": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write"
+    },
+    "skill update": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write"
+    },
+    "update check": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "none"
+    },
+    "update install": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "package-and-skill-update"
+    },
+    "update recover": {
+      "options": {
+        "--agent": {
+          "type": "string"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string"
+        },
+        "--mode": {
+          "type": "string"
+        },
+        "--version": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "package-and-skill-update"
+    }
+  },
+  "maintenanceContract": {
+    "schemaVersion": 1,
+    "source": {
+      "name": {
+        "field": "skill",
+        "type": "string"
+      },
+      "package": {
+        "field": "package",
+        "type": "string"
+      },
+      "version": {
+        "field": "version",
+        "type": "string"
+      },
+      "path": {
+        "field": "source",
+        "type": "string"
+      }
+    },
+    "status": {
+      "name": {
+        "field": "skill",
+        "type": "string"
+      },
+      "package": {
+        "field": "package",
+        "type": "string"
+      },
+      "version": {
+        "field": "version",
+        "type": "string"
+      },
+      "target": {
+        "field": "destination",
+        "type": "string"
+      },
+      "installed": {
+        "field": "installed",
+        "type": "boolean"
+      },
+      "managed": {
+        "field": "managed",
+        "type": "boolean"
+      },
+      "current": {
+        "field": "current",
+        "type": "boolean"
+      },
+      "edited": {
+        "field": "edited",
+        "type": "string[]"
+      },
+      "verification": {
+        "field": "verification",
+        "type": "object"
+      },
+      "recovery": {
+        "field": "recovery",
+        "type": "object"
+      }
+    },
+    "targetOptions": {
+      "--target-dir": {
+        "kind": "skill-parent"
+      },
+      "--skill-directory": {
+        "kind": "skill-directory"
+      }
+    },
+    "agentEligibility": "valid-name-with-generic-fallback",
+    "hostDiscoveryAuthority": "host"
+  },
+  "installationLifecycle": {
+    "agentNeutral": true,
+    "targetRequired": true,
+    "hostRegistrationRequired": true,
+    "installationMode": "copy",
+    "isolatedRuntimeRequired": true,
+    "sharedLinksAllowed": false,
+    "skillRequired": true,
+    "updateRequiresSkillSync": true,
+    "required_components": [
+      "cli",
+      "skill"
+    ],
+    "install": "resolve current host target, discover skill source, install physical runtime and verify receipt",
+    "update": "resolve selected target before npm replacement, preserve edits and backup, reconcile same-version Skill",
+    "verification": "matching CLI and Skill versions, SHA-256 integrity, explicit host discovery verification",
+    "installGuide": "INSTALL.md",
+    "updateGuide": "UPDATE.md"
+  },
+  "automaticUpdates": {
+    "enabledByDefault": true,
+    "intervalHours": 6,
+    "timeoutMs": 1800,
+    "trigger": "ordinary business task entry, source and owned runtimes use their owner",
+    "configuration": "selected target via explicit option or per-package target environment",
+    "disable": "AGENT_PACKAGE_UPDATE_CHECK=0 or TBCLI_UPDATE_CHECK=0 for tbcli",
+    "recovery": "preserve current package offline; partial update operation record requires inspection",
+    "defaultMode": "notify"
+  },
+  "skills": [
+    "tbcli",
+    "ecommerce-monthly-profit-report"
+  ],
+  "serviceDependencies": [
+    "Node >=20",
+    "Chrome and authorized platform sessions"
+  ],
+  "compatibility": {
+    "eligibility": "any Agent with required command/file capabilities",
+    "macos": "locally tested after completion",
+    "windows": "implementation and CI only; native host execution unverified"
+  }
+}

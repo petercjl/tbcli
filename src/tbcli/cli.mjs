@@ -1,3 +1,7 @@
+import {runDmpSnapshot} from './commands/dmp-snapshot.mjs';
+import {runOrdersList} from './commands/orders.mjs';
+import {runDmpCatalog, runDmpItems, runDmpReport} from './commands/dmp.mjs';
+import {runFinanceIdentity,runFinanceCatalog,runFinanceFetch,runFinanceBalances} from './commands/finance.mjs';
 import { parseArgs } from './args.mjs';
 import { runCourierValidate,runCourierImport,runCourierQuery } from './commands/courier-bills.mjs';
 import {
@@ -11,6 +15,9 @@ import { runBrowserOpen } from './commands/browser.mjs';
 import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
+import { runItemMedia } from './commands/item-media.mjs';
+import { runItemDetail } from './commands/item-detail.mjs';
+import { runSearchProducts } from './commands/search-products.mjs';
 import { runCapabilities, runDoctor } from './commands/system.mjs';
 import { runUnifiedUpdate } from './commands/update.mjs';
 import { runSealseekSetup } from './commands/setup.mjs';
@@ -59,7 +66,7 @@ import {
 import { runProfitRefundsCoverage,runProfitRefundsImport,runProfitRefundsInit,runProfitRefundsValidate } from './commands/profit-refunds.mjs';
 import { runProfitEstimateExport,runProfitEstimateQuery } from './commands/profit-estimate.mjs';
 import { runProfitOwnersImport, runProfitOwnersReconcile, runProfitOwnersSync } from './commands/profit-owners.mjs';
-import { runProfitCostsFetch, runProfitCostsReconcile, runProfitCostsSync } from './commands/profit-costs.mjs';
+import { runProfitCostsApproveZero, runProfitCostsFetch, runProfitCostsReconcile, runProfitCostsSync } from './commands/profit-costs.mjs';
 import { runProfitComponentsFetch, runProfitComponentsReconcile, runProfitComponentsSync } from './commands/profit-components.mjs';
 import {runProfitWeightsInfer,runProfitWeightsStage} from './commands/profit-weights.mjs';
 import { runSkuGrossInit, runSkuGrossUpdate, runSkuGrossManualImport } from './commands/platform-sku-gross-weights.mjs';
@@ -72,6 +79,15 @@ import { runVersion } from './version.mjs';
 import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
+  'dmp catalog': runDmpCatalog,
+  'dmp items': runDmpItems,
+  'dmp report': runDmpReport,
+  'dmp snapshot': runDmpSnapshot,
+  'orders list': runOrdersList,
+  'finance identity': runFinanceIdentity,
+  'finance catalog': runFinanceCatalog,
+  'finance fetch': runFinanceFetch,
+  'finance balances': runFinanceBalances,
   version: runVersion,
   'profit freight validate': runCourierValidate,
   'profit freight import': runCourierImport,
@@ -87,6 +103,9 @@ const COMMAND_HANDLERS = Object.freeze({
   'browser open': runBrowserOpen,
   'logistics get': runLogisticsGet,
   'shop products': runShopProducts,
+  'search products': runSearchProducts,
+  'item detail': runItemDetail,
+  'item media': runItemMedia,
   'document get': runDocumentGet,
   'document tree': runDocumentTree,
   'ai-dianjing export': runAiDianjingExport,
@@ -139,6 +158,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'profit costs fetch': runProfitCostsFetch,
   'profit costs reconcile': runProfitCostsReconcile,
   'profit costs sync': runProfitCostsSync,
+  'profit costs approve-zero': runProfitCostsApproveZero,
   'profit components fetch': runProfitComponentsFetch,
   'profit components reconcile': runProfitComponentsReconcile,
   'profit components sync': runProfitComponentsSync,
@@ -177,6 +197,13 @@ export const ROUTED_COMMAND_KEYS = Object.freeze(Object.keys(COMMAND_HANDLERS));
 export function usage() {
   console.log(`Usage:
   tbcli --version
+  tbcli dmp snapshot --item-id ID --anchor-id OWNED_ID [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--json]
+  tbcli dmp catalog [--out NEW.json] [--json]
+  tbcli dmp items [--page 1] [--page-size 20] [--out NEW.json] [--json]
+  tbcli dmp report (--item-id ID | --item-ids ID,ID) [--modules all|costs|metrics] [--anchor-id OWNED_ID] [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--timeout-ms 30000] [--json]
+  tbcli item media --item-id ID --out NEW.json [--json]
+  tbcli item detail --item-id ID --out NEW.json [--review-pages N | --review-limit N] [--questions first|all] [--json]
+  tbcli search products --image FILE [--image FILE] --keyword TEXT [--keyword TEXT] [--max-pages 1] --out products.json [--json]
   tbcli version
   tbcli update (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--json]
   tbcli setup sealseek [--json]
@@ -248,6 +275,7 @@ export function usage() {
   tbcli profit costs fetch --out NEW_WDT_COSTS.json [--json]
   tbcli profit costs reconcile --input WDT_COSTS.json --shop-key KEY --effective-from YYYY-MM-DD [--config FILE] [--json]
   tbcli profit costs sync --input WDT_COSTS.json --shop-key KEY --effective-from YYYY-MM-DD [--config FILE] [--json]
+  tbcli profit costs approve-zero --input CONFIRMED_ZEROS.json --shop-key KEY --effective-from YYYY-MM-DD [--yes] [--json]
   tbcli profit components fetch --shop-key KEY --shop-id ID --replace-batch-id UUID --out NEW_SNAPSHOT.json [--json]
   tbcli profit components reconcile --input SNAPSHOT.json --shop-key KEY --effective-from YYYY-MM-DD --replace-batch-id UUID [--out NEW_REPORT.json] [--json]
   tbcli profit components sync --input SNAPSHOT.json --shop-key KEY --effective-from YYYY-MM-DD --replace-batch-id UUID --expected-old-count N --backup-out NEW_BACKUP.json --yes [--json]
@@ -272,6 +300,11 @@ export function usage() {
   tbcli skill status [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
   tbcli skill install [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR) [--mode auto|link|copy]
   tbcli skill update [--skill tbcli|ecommerce-monthly-profit-report] (--agent codex|agents|openclaw|sealseek | --target-dir DIR)
+  tbcli orders list --all-history --shop-key KEY --out NEW_DIR [--resume RUN_ID] [--json]
+  tbcli finance identity [--out NEW.json] [--json]
+  tbcli finance catalog --source taobao|aggregate|alipay|deposit [--json]
+  tbcli finance fetch --source SOURCE --dataset ID --shop-key KEY --account-id ID --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out NEW_DIR [--resume RUN_ID] [--json]
+  tbcli finance balances --source SOURCE --shop-key KEY --account-id ID --at now|ISO_MONTH_BOUNDARY --out NEW.json [--json]
   tbcli capabilities [--json] [--all]
   tbcli doctor [--agent sealseek] [--fix] [--json]
   tbcli dev pages [--json]

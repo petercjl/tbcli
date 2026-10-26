@@ -14,6 +14,10 @@ export function parseArgs(argv) {
     else if (arg === '--yes') out.yes = true;
     else if (arg === '--no-images') out.images = false;
     else if (arg === '--close-tab') out.closeTab = true;
+    else if (arg === '--source') out.source = argv[++index];
+    else if (arg === '--account-id') out.accountId = argv[++index];
+    else if (arg === '--at') out.at = argv[++index];
+    else if (arg === '--resume') out.resume = argv[++index];
     else if (arg === '--out') out.out = argv[++index];
     else if (arg === '--backup-out') out.backupOut = argv[++index];
     else if (arg === '--replace-batch-id') out.replaceBatchId = argv[++index];
@@ -77,14 +81,21 @@ export function parseArgs(argv) {
     else if (arg === '--data-dimension') out.dataDimension = argv[++index];
     else if (arg === '--date-type') out.dateType = argv[++index];
     else if (arg === '--fields') out.fields = argv[++index];
+    else if (arg === '--review-pages') out.reviewPages = argv[++index] ?? '';
+    else if (arg === '--review-limit') out.reviewLimit = argv[++index] ?? '';
+    else if (arg === '--questions') out.questions = argv[++index] ?? '';
+    else if (arg === '--item-id') out.itemId = argv[++index];
     else if (arg === '--item-ids') out.itemIds = argv[++index];
+    else if (arg === '--anchor-id') out.anchorId = argv[++index] ?? '';
+    else if (arg === '--modules') out.modules = argv[++index] ?? '';
     else if (arg === '--device') out.device = argv[++index];
     else if (arg === '--filter') (out.filters ||= []).push(argv[++index]);
     else if (arg === '--agent') out.agent = argv[++index];
     else if (arg === '--skill') out.skill = argv[++index];
     else if (arg === '--target-dir') out.targetDir = argv[++index];
     else if (arg === '--mode') out.mode = argv[++index];
-    else if (arg === '--keyword') out.keyword = argv[++index];
+    else if (arg === '--image') (out.searchImages ||= []).push(argv[++index]);
+    else if (arg === '--keyword') { out.keyword = argv[++index]; (out.searchKeywords ||= []).push(out.keyword); }
     else if (arg === '--start-date') out.startDate = argv[++index];
     else if (arg === '--end-date') out.endDate = argv[++index];
     else if (arg === '--effective-from') out.effectiveFrom = argv[++index];

@@ -297,6 +297,7 @@ const COST_SQL = `
   ), classified AS (
     SELECT l.*,CASE WHEN $5::boolean THEN c.unit_cost ELSE m.unit_cost END AS unit_cost,
       CASE WHEN l.platform_product_id=ANY($4::text[]) THEN 'explicit_zero'
+           WHEN $5::boolean AND c.cost_status='explicit_zero' AND c.unit_cost=0 THEN 'explicit_zero'
            WHEN $5::boolean AND c.cost_status='available' AND c.unit_cost>0 THEN 'standard_reference'
            WHEN $5::boolean THEN 'missing'
            WHEN l.source_goods_cost IS NOT NULL THEN 'actual'
@@ -1233,22 +1234,27 @@ export function buildActualProfitQuery(groupBy='shop',policyVersion=ACTUAL_PROFI
       ${refundCostPolicy?`least(l.quantity,coalesce(r.pre_ship_qty,0))`:'0::numeric'} AS pre_ship_refund_quantity,
       ${refundCostPolicy?`least(greatest(0,l.quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0))`:'0::numeric'} AS returned_refund_quantity,
       ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='explicit_zero' AND current_cost.unit_cost=0 THEN 0
         WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
         THEN current_cost.unit_cost*quantity END`:'NULL::numeric'} AS gross_goods_cost,
       ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='explicit_zero' AND current_cost.unit_cost=0 THEN 0
         WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
         THEN current_cost.unit_cost*least(quantity,coalesce(r.pre_ship_qty,0)) END`:'NULL::numeric'} AS pre_ship_cost_credit,
       ${refundCostPolicy?`CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
+        WHEN current_cost.cost_status='explicit_zero' AND current_cost.unit_cost=0 THEN 0
         WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
         THEN current_cost.unit_cost*$14::numeric*least(greatest(0,quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0)) END`:'NULL::numeric'} AS return_cost_credit,
       CASE WHEN order_weight<>0 THEN paid_amount*allocation_weight/order_weight ELSE paid_amount/order_line_count END AS line_revenue,
       CASE WHEN platform_product_id=ANY($9::text[]) THEN 0
-           WHEN $12::boolean THEN CASE WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
+           WHEN $12::boolean THEN CASE WHEN current_cost.cost_status='explicit_zero' AND current_cost.unit_cost=0 THEN 0
+             WHEN current_cost.cost_status='available' AND current_cost.unit_cost>0
              THEN current_cost.unit_cost*(${refundCostPolicy?`quantity-least(quantity,coalesce(r.pre_ship_qty,0))
                -$14::numeric*least(greatest(0,quantity-coalesce(r.pre_ship_qty,0)),coalesce(r.returned_qty,0))`:'quantity'}) END
            WHEN source_goods_cost IS NOT NULL THEN source_goods_cost
            WHEN c.unit_cost IS NOT NULL THEN c.unit_cost*quantity END AS goods_cost,
       CASE WHEN platform_product_id=ANY($9::text[]) THEN 'explicit_zero'
+           WHEN $12::boolean AND current_cost.cost_status='explicit_zero' AND current_cost.unit_cost=0 THEN 'explicit_zero'
            WHEN $12::boolean AND current_cost.cost_status='available' AND current_cost.unit_cost>0 THEN 'standard_reference'
            WHEN $12::boolean THEN 'missing'
            WHEN source_goods_cost IS NOT NULL THEN 'actual'

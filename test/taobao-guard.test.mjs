@@ -16,3 +16,6 @@ test('verification errors carry a stable stop code and user instruction', () => 
   assert.match(error.message, /立即停止所有请求/);
   assert.match(error.message, /手动完成验证/);
 });
+
+
+test('verification iframe is detected even when main page text looks normal',async()=>{const {assertPageNotVerifying}=await import('../src/tbcli/taobao-guard.mjs');await assert.rejects(()=>assertPageNotVerifying({evaluate:async()=>({url:'https://myseller.taobao.com/',title:'已卖出宝贝',text:'正常订单列表',frames:'https://trade.taobao.com/_____tmd_____/punish'})}),{code:'TAOBAO_VERIFICATION_REQUIRED'});});

@@ -1,9 +1,17 @@
 ---
 name: tbcli
-description: Operate the stable tbcli CLI for Taobao, Tmall, Qianniu, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, platform SKU gross-weight initialization and incremental updates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, SKU毛重初始化, 新快递账单更新SKU重量, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
+description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经营与推广数据, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, platform SKU gross-weight initialization and incremental updates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, SKU毛重初始化, 新快递账单更新SKU重量, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
 ---
 
 # tbcli
+
+达摩盘指定商品经营指标、推广数值或打爆路径：读取 [达摩盘取数合同](references/dmp.md)，使用 `dmp catalog`、`dmp items` 和 `dmp report`。推广查询由调用者明确选择本店锚点；仅经营数据使用 `--modules metrics`。核对各模块的日期覆盖与原始业务状态，推广字段单位保留核验状态。
+
+只采集商品视觉素材链接时，使用 `tbcli item media --item-id ID --out NEW.json --json`，读取 [视觉素材采集](references/item-media.md)。返回主图、主图视频、详情图、SKU 图片及商品店铺名称；不采集评价与问答。
+
+按指定商品 ID 获取主图、SKU 图、详情图、SKU 名称价格、评价与问大家：读取 [单商品资料采集](references/item-detail.md)，运行 `item detail`。默认保留首批行为；可用 `--review-pages N` 或 `--review-limit N` 指定评价范围，`--questions all` 获取全部可访问问题及逐问题回答。数量指原始记录，业务有效性由调用者判断；分页、隐藏范围和停止原因随结果交付。
+
+图片与搜索词发现竞品候选、以图搜同款、搜索商品列表：读取 [竞品候选召回](references/search-products.md)，运行 `search products`。按调用者指定的图片、搜索词和页数执行搜索，按批次返回原始记录并保留重复商品。搜索规划、去重和款式核对交由调用者。
 
 Use `tbcli` as the deterministic execution surface for supported ecommerce-browser work. Translate business language into commands, preflight the whole request, run the smallest stable command, and verify the delivered artifact.
 
@@ -17,15 +25,7 @@ available for explicit compatibility use; it is not a dependency of other CLIs.
 
 This Skill is distributed with the `tbcli` CLI. Treat the path returned by `tbcli skill source --json` as the only editable source. Agent Skill directories contain CLI-managed links or copies; never maintain an independent fork.
 
-Discover or install it with:
-
-```bash
-tbcli skill source --json
-tbcli skill status --agent codex
-tbcli skill install --agent codex
-```
-
-Use `--agent agents`, `openclaw`, or `sealseek`, or `--target-dir <agent-skill-root>`. Linked installs update immediately; use `tbcli skill update` only for a managed copy. Refresh the host Skill catalog if it snapshots metadata.
+Discover the owning package with `tbcli skill source --json`. The current Agent resolves its own Skill directory and passes `tbcli skill install --target-dir <parent> --agent <current-agent> --json`. Installation uses physical copies, including a target-owned `.runtime` entry and dependencies. Use that installation’s `.runtime/scripts/tbcli.mjs` for independent execution; the global CLI is the bootstrap surface. Verify `skill status` reports current with SHA-256 verification and then refresh the current host’s discovery. Existing managed links migrate with a verified backup; local edits and unmanaged targets are protected. Generic Agent names are supported and do not select another host’s directory.
 
 When the host is Windows SealSeek, read
 [references/windows-sealseek.md](references/windows-sealseek.md) completely
@@ -35,35 +35,9 @@ passes, return to this Skill's main flow.
 
 ### Unified update contract
 
-When the user explicitly asks to update or upgrade tbcli, run exactly one
-unified command for the current Agent:
+Use `tbcli update --target-dir <current-agent-skill-parent> --agent <current-agent> --json`. Resolve the selected target before package mutation. Git-owned source checkouts update through their repository workflow. Installation completion includes the CLI and the selected Skill with matching package versions and file hashes; same-version maintenance repairs stale or missing managed resources. Fully current copies take a read-only no-op path. Host discovery is verified by the host.
 
-```bash
-tbcli update --agent '<codex|agents|openclaw|sealseek>' --json
-```
-
-This command upgrades the npm CLI first, then uses the newly installed CLI to
-install an absent companion Skill or refresh a stale managed copy, and finally
-verifies both. Do not replace it with separate routine `npm install` and `skill
-update` commands. Require `updated: true`, a nonempty `cli.afterVersion`, and
-`skill.state: current` with `skill.current: true`. If the Skill target is
-unmanaged, a foreign link, or a broken link, stop at the CLI's protection error
-and ask the administrator to inspect it; never overwrite it.
-
-Packaged npm installations automatically check for a newer release at most once
-every six hours. When one exists, tbcli upgrades the global package, refreshes
-all installed managed copies of its bundled Skills, and relaunches the original
-command once with the new version. Linked installs already follow the package.
-Network or update failures only emit a warning and the loaded version continues
-the business command. `TBCLI_UPDATE_CHECK=0` disables automatic checks. Source
-checkouts never self-update and use their repository workflow.
-
-The explicit unified command remains the forced-update and repair path.
-If a legacy CLI does not recognize `tbcli update`, bootstrap it once with `npm
-install -g @petercjl/tbcli@latest`, then return to the unified command. On
-Windows SealSeek, use the adapter's runtime-info bootstrap instead of relying on
-bare `npm`, `node`, or `tbcli`. A source checkout follows its repository update
-workflow instead of global npm update.
+Ordinary business entry checks for updates with bounded timeout and a six-hour cache. Default behavior only notifies. Automatic installation requires explicit standing authorization and a resolved selected target. `TBCLI_UPDATE_CHECK=0` disables checking. Maintenance, version and help are read-only and avoid update checks. Other Agents’ installations are outside the selected operation.
 
 ## Runtime Contract
 
@@ -477,3 +451,13 @@ Read [references/command-reference.md](references/command-reference.md) when the
 ## Evolution Rule
 
 When a realistic run exposes a recurring routing, CLI, field, date, filter, cleanup, or QA gap, extend the stable tbcli command and update this canonical Skill. Classify the failure, patch the correct main-flow or branch contract, validate files on disk, and rerun a clean-context regression when the host permits it.
+
+
+## 财务取数
+
+当任务涉及店铺账单、支付宝、聚合结算账户或保证金时，读取 [财务能力契约](references/finance.md)，先执行 `finance identity` 与 `finance catalog`，再调用明确范围的 `finance fetch` / `finance balances`。能力层保存平台事实及独立余额，经营分类与完整性自检由应用 Skill 决定。
+
+
+## 平台订单主账
+
+核对已卖出宝贝、平台订单全集、供应商发货或待结算订单时，读取 [平台订单主账](references/orders-list.md)，调用 `orders list --all-history`。近期与历史分区分别采集；交易状态和展示金额作为订单事实，资金发生额仍来自财务流水。

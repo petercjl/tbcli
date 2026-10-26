@@ -1,3 +1,4 @@
+import {packageConfig} from '../package-config.mjs';
 import fs from 'node:fs';
 
 import { withBrowserSession, assertTaobaoLoggedIn } from '../browser-session.mjs';
@@ -10,6 +11,7 @@ import { finalizeSealseekSetup } from './setup.mjs';
 export function runCapabilities(opts = {}) {
   const capabilities = businessCapabilities();
   const result = {
+    ...JSON.parse(fs.readFileSync(new URL('../../../capabilities.json',import.meta.url),'utf8')),
     tool: 'tbcli',
     audience: 'ecommerce-operator',
     usageHint: '用户可直接按 examplePrompt 的句式向 Agent 提出需求；Agent 应据此调用 commandTemplate。',

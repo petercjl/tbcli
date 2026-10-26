@@ -1,0 +1,25 @@
+{
+  "schema": "portable-skill-adapter",
+  "platform": "generic",
+  "mappings": [
+    {
+      "capability_id": "maintenance.execute",
+      "status": "implemented",
+      "features": [
+        "argv-execution",
+        "exit-and-json-capture",
+        "read-files",
+        "create-new-files",
+        "sha256"
+      ],
+      "implementation": {
+        "type": "cli",
+        "command": "tbcli",
+        "discovery": [
+          "capabilities --json",
+          "version"
+        ]
+      }
+    }
+  ]
+}

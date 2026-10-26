@@ -13,9 +13,9 @@ const REPORT_SKILL_SOURCE = fileURLToPath(new URL('../skill/ecommerce-monthly-pr
 test('companion Skill target requires exactly one explicit root selector', () => {
   const target = resolveTargetRoot({ targetDir: './test-target' });
   assert.equal(target, path.resolve('./test-target'));
-  assert.throws(() => resolveTargetRoot({}), /必须且只能提供/);
-  assert.throws(() => resolveTargetRoot({ agent: 'codex', targetDir: './x' }), /必须且只能提供/);
-  assert.throws(() => resolveTargetRoot({ agent: 'unknown' }), /--agent 必须是/);
+  assert.throws(() => resolveTargetRoot({}), {code:'TARGET_REQUIRED'});
+  assert.equal(resolveTargetRoot({agent:'arbitrary-agent',targetDir:'./x'}),path.resolve('./x'));
+  assert.throws(() => resolveTargetRoot({agent:'unknown'}),{code:'TARGET_REQUIRED'});
 });
 
 test('companion Skill status recognizes absent and canonical linked installs', async () => {
@@ -25,7 +25,7 @@ test('companion Skill status recognizes absent and canonical linked installs', a
     assert.equal(absent.state, 'absent');
     await fs.symlink(SKILL_SOURCE, path.join(root, 'tbcli'), 'dir');
     const current = await getSkillStatus(root);
-    assert.equal(current.state, 'current');
+    assert.equal(current.state, 'legacy-link');
     assert.equal(current.mode, 'link');
     assert.equal(current.managed, true);
   } finally {
@@ -36,12 +36,12 @@ test('companion Skill status recognizes absent and canonical linked installs', a
 test('plugin manages the application report Skill from the same npm source tree', async () => {
   assert.equal(resolveSkillName({}),'tbcli');
   assert.equal(resolveSkillName({skill:'ecommerce-monthly-profit-report'}),'ecommerce-monthly-profit-report');
-  assert.throws(()=>resolveSkillName({skill:'unknown'}),/--skill 必须是/);
+  assert.throws(()=>resolveSkillName({skill:'unknown'}),/UNKNOWN_SKILL/);
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-report-skill-test-'));
   try {
     await fs.symlink(REPORT_SKILL_SOURCE,path.join(root,'ecommerce-monthly-profit-report'),'dir');
     const current=await getSkillStatus(root,'ecommerce-monthly-profit-report');
-    assert.equal(current.state,'current');
+    assert.equal(current.state,'legacy-link');
     assert.equal(current.managed,true);
   } finally { await fs.rm(root,{recursive:true,force:true}); }
 });
@@ -151,17 +151,9 @@ test('bundled Skill keeps database credentials outside managed install directori
   assert.match(skill, /Never distribute a\s+maintainer credential/);
 });
 
-test('bundled Skill documents automatic and explicit unified updates', async () => {
-  const skill = await fs.readFile(path.join(SKILL_SOURCE, 'SKILL.md'), 'utf8');
-  assert.match(skill, /tbcli update --agent/);
-  assert.match(skill, /cli\.afterVersion/);
-  assert.match(skill, /skill\.state: current/);
-  assert.match(skill, /skill\.current: true/);
-  assert.match(skill, /automatically check for a newer release at most once/);
-  assert.match(skill, /refreshes\s+all installed managed copies/);
-  assert.match(skill, /relaunches the original\s+command once/);
-  assert.match(skill, /TBCLI_UPDATE_CHECK=0/);
-  assert.match(skill, /Source\s+checkouts never self-update/);
+test('bundled Skill documents explicit targets, owned runtime, verification and notification-only checking', async () => {
+ const skill=await fs.readFile(path.join(SKILL_SOURCE,'SKILL.md'),'utf8');
+ assert.match(skill,/tbcli update --target-dir/);assert.match(skill,/SHA-256/);assert.match(skill,/physical copies/);assert.match(skill,/only notifies/);assert.match(skill,/TBCLI_UPDATE_CHECK=0/);assert.match(skill,/Other Agents’ installations are outside/);
 });
 
 test('bundled Skill has a portable Windows SealSeek adapter', async () => {

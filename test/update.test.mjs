@@ -41,6 +41,7 @@ test('automatic update runs only for packaged installs and fetches a newer relea
   let updates = 0;
   const result = await maybeAutoUpdate({ _: ['doctor'] }, {
     isPackagedInstall: () => true,
+    environment:{TBCLI_AUTO_INSTALL:'1'},
     currentVersion: '0.9.0', cacheFile: path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-auto-update-')), 'update.json'),
     now: 1000,
     fetchImpl: async () => ({ ok: true, async json() { return { version: '0.10.0' }; } }),
@@ -53,6 +54,7 @@ test('automatic update runs only for packaged installs and fetches a newer relea
 test('automatic update failure is non-blocking and re-exec is guarded', async () => {
   const failed = await maybeAutoUpdate({ _: ['doctor'] }, {
     isPackagedInstall: () => true,
+    environment:{TBCLI_AUTO_INSTALL:'1'},
     currentVersion: '0.9.0', cacheFile: path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'tbcli-auto-fail-')), 'update.json'),
     now: 1000,
     fetchImpl: async () => ({ ok: true, async json() { return { version: '0.10.0' }; } }),
@@ -89,107 +91,5 @@ test('uses the managed Node runtime to launch npm on Windows without relying on 
   assert.deepEqual(result, { command: nodePath, prefixArgs: [npmCli], shell: false });
 });
 
-test('unified update upgrades npm package, refreshes stale Skill, and verifies current state', async () => {
-  const calls = [];
-  let statusChecks = 0;
-  const run = async (command, args) => {
-    calls.push({ command, args });
-    if (command === '/npm') return { stdout: '', stderr: '' };
-    if (args[1] === '--version') return { stdout: '0.6.5\n', stderr: '' };
-    if (args.includes('status')) {
-      statusChecks += 1;
-      return { stdout: JSON.stringify(statusChecks === 1
-        ? { state: 'stale', current: false, targetRoot: '/skills', destination: '/skills/tbcli' }
-        : { state: 'current', current: true, targetRoot: '/skills', destination: '/skills/tbcli' }) };
-    }
-    if (args.includes('update')) return { stdout: JSON.stringify({ state: 'current', current: true, targetRoot: '/skills' }) };
-    throw new Error(`unexpected command: ${command} ${args.join(' ')}`);
-  };
-  const result = await performUnifiedUpdate(
-    { agent: 'sealseek' },
-    { run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
-  );
-  assert.equal(result.cli.afterVersion, '0.6.5');
-  assert.equal(result.skill.action, 'updated');
-  assert.equal(result.skill.current, true);
-  assert.deepEqual(calls[0].args, ['install', '-g', '@petercjl/tbcli@latest']);
-  assert.ok(calls.some((call) => call.args.join(' ').includes('skill update --agent sealseek')));
-});
-
-test('unified update installs a missing managed Skill', async () => {
-  let statusChecks = 0;
-  const run = async (command, args) => {
-    if (command === '/npm') return { stdout: '', stderr: '' };
-    if (args[1] === '--version') return { stdout: '0.6.5\n', stderr: '' };
-    if (args.includes('status')) {
-      statusChecks += 1;
-      return { stdout: JSON.stringify(statusChecks === 1
-        ? { state: 'absent', current: false, targetRoot: '/skills', destination: '/skills/tbcli' }
-        : { state: 'current', current: true, targetRoot: '/skills', destination: '/skills/tbcli' }) };
-    }
-    if (args.includes('install')) return { stdout: JSON.stringify({ state: 'current', current: true, targetRoot: '/skills' }) };
-    throw new Error('unexpected command');
-  };
-  const result = await performUnifiedUpdate(
-    { agent: 'sealseek' },
-    { run, npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs' },
-  );
-  assert.equal(result.skill.action, 'installed');
-});
-
-test('automatic package update refreshes every installed managed Skill copy', async () => {
-  const updated = [];
-  const result = await performAutomaticUpdate({
-    platform: 'darwin', npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs',
-    agents: ['codex'], skills: ['tbcli', 'ecommerce-monthly-profit-report'],
-    resolveRoot: () => '/skills',
-    getStatus: async (_root, skill) => skill === 'tbcli'
-      ? { skill, state: 'stale', managed: true, current: false }
-      : { skill, state: 'current', managed: true, current: true },
-    updateInstalledSkill: async (opts) => { updated.push(opts); return { skill: opts.skill, state: 'current', managed: true, current: true, action: 'updated' }; },
-    run: async (command, args) => {
-      if (command === '/npm') return { stdout: '', stderr: '' };
-      if (args.includes('--version')) return { stdout: '0.10.0\n', stderr: '' };
-      throw new Error('unexpected command');
-    },
-  });
-  assert.deepEqual(updated, [{ agent: 'codex', skill: 'tbcli' }]);
-  assert.equal(result.cli.afterVersion, '0.10.0');
-  assert.equal(result.skills.length, 2);
-});
-
-test('automatic package update keeps going when one managed Skill refresh fails', async () => {
-  const result = await performAutomaticUpdate({
-    platform: 'darwin', npm: { command: '/npm', prefixArgs: [], shell: false }, node: '/node', cliEntry: '/tbcli.mjs',
-    agents: ['codex'], skills: ['tbcli'], resolveRoot: () => '/skills',
-    getStatus: async () => ({ skill: 'tbcli', state: 'stale', managed: true, current: false }),
-    updateInstalledSkill: async () => { throw new Error('read only destination'); },
-    run: async (command, args) => {
-      if (command === '/npm') return { stdout: '', stderr: '' };
-      if (args.includes('--version')) return { stdout: '0.10.0\n', stderr: '' };
-      throw new Error('unexpected command');
-    },
-  });
-  assert.equal(result.updated, true);
-  assert.equal(result.skills[0].action, 'warning');
-  assert.match(result.skills[0].warning, /read only destination/);
-});
-
-test('Windows SealSeek update uses the canonical prefix and newly installed entry', async () => {
-  const environment = {
-    nodePath: 'C:\\Managed\\node.exe', npmCli: 'C:\\Managed\\npm-cli.js', npmGlobalDir: 'C:\\Global',
-    canonicalEntry: 'C:\\Global\\node_modules\\@petercjl\\tbcli\\scripts\\tbcli.mjs', canonicalCmd: 'C:\\Global\\tbcli.cmd',
-  };
-  const calls = [];
-  const run = async (command, args) => {
-    calls.push({ command, args });
-    if (args.includes('--finalize')) return { stdout: JSON.stringify({ ok: true, restartRequired: false, skill: { action: 'updated', state: 'current', current: true, destination: 'C:\\Skills\\tbcli' } }) };
-    if (args.includes('--version')) return { stdout: '0.7.0\n' };
-    return { stdout: '' };
-  };
-  const result = await performUnifiedUpdate({ agent: 'sealseek' }, { platform: 'win32', environment, run });
-  assert.deepEqual(calls[0].args, [environment.npmCli, 'install', '--global', '--prefix', environment.npmGlobalDir, '@petercjl/tbcli@latest']);
-  assert.deepEqual(calls[1].args, [environment.canonicalEntry, 'setup', 'sealseek', '--finalize', '--json']);
-  assert.equal(result.cli.afterVersion, '0.7.0');
-  assert.equal(result.skill.current, true);
-});
+test('automatic installation requires a selected target and never sweeps Agents',async()=>{let called=false;const r=await performAutomaticUpdate({agents:['codex','arbitrary-host'],run:async()=>{called=true;}});assert.equal(r.updated,false);assert.equal(r.reason,'selected-target-required');assert.equal(called,false);});
+test('package update refuses an unresolved target before acquisition',async()=>{await assert.rejects(performUnifiedUpdate({agent:'arbitrary-host'}),{code:'TARGET_REQUIRED'});});

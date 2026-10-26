@@ -1,5 +1,5 @@
 import { assertMaintainerAccess, connectDatabase, loadDatabaseConfig } from '../database.mjs';
-import { reconcileWdtCosts, syncWdtCosts, validateWdtCostExport } from '../profit-costs.mjs';
+import { approveExplicitZeroCosts, reconcileExplicitZeroCosts, reconcileWdtCosts, syncWdtCosts, validateExplicitZeroInput, validateWdtCostExport } from '../profit-costs.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
@@ -47,6 +47,21 @@ export async function runProfitCostsSync(args) {
     const result={source:{file:validation.file,fileSha256:validation.fileSha256,
       fetchedAt:validation.fetchedAt,goodsCount:validation.goodsCount,specCount:validation.specCount},
       synced:await syncWdtCosts(client,validation)};
+    console.log(JSON.stringify(result,null,2));
+    return result;
+  } finally { await client.end(); }
+}
+
+export async function runProfitCostsApproveZero(args) {
+  const validation=await validateExplicitZeroInput(args.input,args);
+  const config=await loadDatabaseConfig(args.config);
+  if(args.yes) assertMaintainerAccess(config);
+  const client=await connectDatabase(config,args.yes?'ingest':'reader');
+  try {
+    const result={source:{file:validation.file,fileSha256:validation.fileSha256,
+      rowCount:validation.rows.length},
+      ...(args.yes?{approved:await approveExplicitZeroCosts(client,validation)}
+        :{preview:await reconcileExplicitZeroCosts(client,validation)})};
     console.log(JSON.stringify(result,null,2));
     return result;
   } finally { await client.end(); }

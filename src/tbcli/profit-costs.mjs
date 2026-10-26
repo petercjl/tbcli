@@ -163,3 +163,102 @@ export async function syncWdtCosts(client,validation) {
       reconciliation:before};
   } catch(error) { await client.query('ROLLBACK'); throw error; }
 }
+
+export async function validateExplicitZeroInput(input,{shopKey,effectiveFrom}={}) {
+  if(!input || !shopKey || !DATE.test(String(effectiveFrom??'')))
+    throw new Error('需要 --input、--shop-key 和 YYYY-MM-DD 格式的 --effective-from');
+  const file=path.resolve(input), bytes=await fs.readFile(file);
+  let source;
+  try { source=JSON.parse(bytes.toString('utf8')); }
+  catch { throw new Error('零成本确认文件不是有效 JSON'); }
+  if(!Array.isArray(source?.rows) || !source.rows.length) throw new Error('零成本确认文件需要非空 rows');
+  const seen=new Set(),rows=source.rows.map((raw,index)=>{
+    const erpSpecNo=String(raw.erpSpecNo??'').trim();
+    const platformSkuId=String(raw.platformSkuId??'').trim();
+    const platformProductId=String(raw.platformProductId??'').trim();
+    const reason=String(raw.reason??'').trim();
+    if(!erpSpecNo || !platformSkuId || !platformProductId || !reason || seen.has(erpSpecNo))
+      throw new Error(`零成本确认第 ${index+1} 行字段缺失或 ERP 规格重复`);
+    seen.add(erpSpecNo);
+    return {erpSpecNo,platformSkuId,platformProductId,reason};
+  });
+  return {file,sourceFile:path.basename(file),fileSha256:hash(bytes),shopKey,effectiveFrom,rows};
+}
+
+export async function reconcileExplicitZeroCosts(client,validation) {
+  const specNos=validation.rows.map(row=>row.erpSpecNo);
+  const observed=await client.query(`SELECT erp_spec_no,platform_sku_id,platform_product_id,count(*)::bigint AS line_count
+    FROM raw.wdt_order_lines WHERE shop_key=$1 AND erp_spec_no=ANY($2::text[])
+    GROUP BY erp_spec_no,platform_sku_id,platform_product_id`,[validation.shopKey,specNos]);
+  const current=await client.query(`SELECT version_id,erp_spec_no,unit_cost,cost_status,effective_from::text
+    FROM master.current_sku_costs WHERE shop_key=$1 AND erp_spec_no=ANY($2::text[])`,[validation.shopKey,specNos]);
+  const currentBySpec=new Map(current.rows.map(row=>[String(row.erp_spec_no),row]));
+  const changes=[],unchanged=[];
+  for(const row of validation.rows) {
+    const usages=observed.rows.filter(value=>value.erp_spec_no===row.erpSpecNo);
+    if(usages.length!==1 || String(usages[0].platform_sku_id)!==row.platformSkuId
+      || String(usages[0].platform_product_id)!==row.platformProductId)
+      throw new Error(`规格 ${row.erpSpecNo} 的订单平台 SKU/商品对应关系不唯一或与确认文件不符`);
+    const prior=currentBySpec.get(row.erpSpecNo);
+    if(prior?.cost_status==='explicit_zero' && Number(prior.unit_cost)===0) {
+      unchanged.push({erpSpecNo:row.erpSpecNo,lineCount:Number(usages[0].line_count)}); continue;
+    }
+    if(prior?.unit_cost!=null && Number(prior.unit_cost)>0)
+      throw new Error(`规格 ${row.erpSpecNo} 当前有正成本，须先单独审计后才能覆盖`);
+    if(prior?.effective_from && prior.effective_from>validation.effectiveFrom)
+      throw new Error(`规格 ${row.erpSpecNo} 已有晚于确认日期的成本版本`);
+    changes.push({...row,lineCount:Number(usages[0].line_count),priorVersionId:prior?.version_id??null,
+      priorEffectiveFrom:prior?.effective_from??null});
+  }
+  return {shopKey:validation.shopKey,effectiveFrom:validation.effectiveFrom,
+    changedCount:changes.length,unchangedCount:unchanged.length,changes,unchanged};
+}
+
+export async function approveExplicitZeroCosts(client,validation) {
+  await client.query('BEGIN');
+  try {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))',[`tbcli:profit-costs:${validation.shopKey}`]);
+    const before=await reconcileExplicitZeroCosts(client,validation);
+    if(!before.changedCount) { await client.query('COMMIT'); return {noChanges:true,reconciliation:before}; }
+    const operationDigest=hash(JSON.stringify({source:validation.fileSha256,shopKey:validation.shopKey,
+      effectiveFrom:validation.effectiveFrom,changes:before.changes.map(row=>[row.erpSpecNo,row.priorVersionId])}));
+    const batch=await client.query(`INSERT INTO meta.master_data_batches(
+      data_type,source_file,source_sha256,source_metadata,shop_key,status,row_count,
+      product_count,sku_count,mapped_sku_count,effective_from,activated_at)
+      VALUES('sku-cost-explicit-zero',$1,$2,$3::jsonb,$4,'approved',$5,$5,$5,$5,$6::date,now())
+      RETURNING batch_id,source_sha256,row_count,effective_from::text,imported_at`,[
+      validation.sourceFile,operationDigest,JSON.stringify({mode:'human-confirmed-explicit-zero',
+        sourceFileSha256:validation.fileSha256,confirmations:before.changes.map(row=>({
+          erpSpecNo:row.erpSpecNo,platformSkuId:row.platformSkuId,
+          platformProductId:row.platformProductId,reason:row.reason}))}),
+      validation.shopKey,before.changedCount,validation.effectiveFrom]);
+    for(const row of before.changes) if(row.priorVersionId) {
+      const sameDay=row.priorEffectiveFrom===validation.effectiveFrom;
+      const updated=sameDay
+        ? await client.query(`UPDATE master.sku_cost_versions SET status='retired'
+          WHERE version_id=$1 AND shop_key=$2 AND erp_spec_no=$3 AND status='approved'`,[
+          row.priorVersionId,validation.shopKey,row.erpSpecNo])
+        : await client.query(`UPDATE master.sku_cost_versions SET effective_to=$1::date-1
+          WHERE version_id=$2 AND shop_key=$3 AND erp_spec_no=$4 AND status='approved'`,[
+          validation.effectiveFrom,row.priorVersionId,validation.shopKey,row.erpSpecNo]);
+      if(updated.rowCount!==1) throw new Error(`规格 ${row.erpSpecNo} 旧版本变化，事务已回滚`);
+    }
+    await client.query(`INSERT INTO master.sku_cost_versions(
+      batch_id,shop_key,erp_spec_no,unit_cost,currency,cost_type,cost_source,cost_status,
+      effective_from,effective_to,status)
+      SELECT $1::uuid,$2,x.erp_spec_no,0,'CNY','standard','人工确认零成本',
+        'explicit_zero',$3::date,NULL,'approved'
+      FROM jsonb_to_recordset($4::jsonb) AS x(erp_spec_no text)`,[
+      batch.rows[0].batch_id,validation.shopKey,validation.effectiveFrom,
+      JSON.stringify(before.changes.map(row=>({erp_spec_no:row.erpSpecNo})))]);
+    const after=await client.query(`SELECT erp_spec_no,unit_cost,cost_status FROM master.current_sku_costs
+      WHERE shop_key=$1 AND erp_spec_no=ANY($2::text[])`,[
+      validation.shopKey,before.changes.map(row=>row.erpSpecNo)]);
+    if(after.rows.length!==before.changedCount || after.rows.some(row=>
+      row.cost_status!=='explicit_zero' || Number(row.unit_cost)!==0))
+      throw new Error('零成本写后核验失败，事务已回滚');
+    await client.query('COMMIT');
+    return {noChanges:false,batch:batch.rows[0],inserted:before.changedCount,
+      verification:{ok:true,matched:after.rows.length},reconciliation:before};
+  } catch(error) { await client.query('ROLLBACK'); throw error; }
+}

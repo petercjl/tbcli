@@ -65,6 +65,7 @@ export async function checkForUpdate({
 }
 
 export function isPackagedNpmInstall(packageRoot = PACKAGE_ROOT) {
+  if(path.basename(packageRoot)==='.runtime')return true;
   const normalized = path.resolve(packageRoot).split(path.sep).map((part) => part.toLowerCase());
   const nodeModules = normalized.lastIndexOf('node_modules');
   return nodeModules >= 0 && normalized[nodeModules + 1] === '@petercjl' && normalized[nodeModules + 2] === 'tbcli';
@@ -73,12 +74,13 @@ export function isPackagedNpmInstall(packageRoot = PACKAGE_ROOT) {
 export async function maybeAutoUpdate(args = {}, options = {}) {
   const environment = options.environment || process.env;
   if (environment.TBCLI_UPDATE_CHECK === '0' || environment.TBCLI_AUTO_UPDATE_REEXEC === '1'
-    || args._?.[0] === 'update') return { checked: false, updated: false, reason: 'disabled-or-update-command' };
+    || ['update','version','capabilities','skill'].includes(args._?.[0]) || args.version || args.help) return { checked: false, updated: false, reason: 'disabled-or-update-command' };
   const packaged = options.isPackagedInstall ? options.isPackagedInstall() : isPackagedNpmInstall(options.packageRoot);
   if (!packaged) return { checked: false, updated: false, reason: 'source-checkout' };
   try {
     const result = await checkForUpdate(options);
     if (!result.updateAvailable) return { checked: true, updated: false, ...result };
+    if(environment.TBCLI_AUTO_INSTALL!=='1')return {checked:true,updated:false,...result,notice:'update-available; explicit selected-target update required'};
     const updater = options.performUpdate || (await import('./commands/update.mjs')).performAutomaticUpdate;
     const update = await updater(options.updateDependencies || {});
     return { checked: true, updated: true, latestVersion: result.latestVersion, update };

@@ -1,18 +1,6 @@
-import { execFile } from 'node:child_process';
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { promisify } from 'node:util';
-
-import { getSkillStatus, resolveTargetRoot, updateSkill } from './skill.mjs';
-import { discoverSealseekWindows } from '../sealseek-windows.mjs';
-import { TBCLI_VERSION } from '../version.mjs';
-
-const execFileAsync = promisify(execFile);
-
-async function exists(target) {
-  try { await fs.access(target); return true; } catch { return false; }
-}
-
+import fs from 'node:fs/promises';import path from 'node:path';
+import {runMaintenance} from '../../package-runtime.mjs';import {packageConfig} from '../package-config.mjs';
+const exists=async p=>{try{await fs.access(p);return true;}catch{return false;}};
 export async function resolveNpmInvocation({
   platform = process.platform,
   nodePath = process.execPath,
@@ -38,119 +26,8 @@ export async function resolveNpmInvocation({
   return { command: platform === 'win32' ? 'npm.cmd' : 'npm', prefixArgs: [], shell: platform === 'win32' };
 }
 
-async function runCaptured(command, args, options = {}) {
-  try {
-    const result = await execFileAsync(command, args, {
-      encoding: 'utf8',
-      maxBuffer: 8 * 1024 * 1024,
-      env: { ...process.env, TBCLI_UPDATE_CHECK: '0' },
-      ...options,
-    });
-    return { stdout: result.stdout || '', stderr: result.stderr || '' };
-  } catch (error) {
-    const detail = String(error.stderr || error.stdout || error.message || '').trim().slice(-3000);
-    throw new Error(`更新命令执行失败：${detail}`);
-  }
+export async function performUnifiedUpdate(opts={}){
+ const args=['install'];for(const [k,flag]of [['targetDir','--target-dir'],['agent','--agent'],['skill','--skill']])if(opts[k])args.push(flag,opts[k]);return runMaintenance(packageConfig(),'update',args);
 }
-
-function targetArgs(opts) {
-  resolveTargetRoot(opts);
-  return opts.agent ? ['--agent', opts.agent] : ['--target-dir', opts.targetDir];
-}
-
-function parseJsonOutput(output, label) {
-  try { return JSON.parse(String(output).trim()); } catch {
-    throw new Error(`${label} 未返回有效 JSON`);
-  }
-}
-
-export async function performUnifiedUpdate(opts = {}, dependencies = {}) {
-  const run = dependencies.run || runCaptured;
-  const platform = dependencies.platform || process.platform;
-  if (platform === 'win32' && opts.agent === 'sealseek') {
-    const environment = dependencies.environment || await (dependencies.discover || discoverSealseekWindows)();
-    await run(environment.nodePath, [environment.npmCli, 'install', '--global', '--prefix', environment.npmGlobalDir, '@petercjl/tbcli@latest']);
-    const setup = parseJsonOutput((await run(environment.nodePath, [environment.canonicalEntry, 'setup', 'sealseek', '--finalize', '--json'])).stdout, 'SealSeek 环境与 Skill 更新');
-    const versionResult = await run(environment.nodePath, [environment.canonicalEntry, '--version']);
-    const afterVersion = versionResult.stdout.trim().split(/\r?\n/).at(-1);
-    if (!afterVersion) throw new Error('CLI 升级后无法读取 canonical 版本');
-    if (!setup.ok || !setup.skill?.current) throw new Error(`CLI 已升级到 ${afterVersion}，但 Windows SealSeek 环境或 Skill 最终验证失败`);
-    return {
-      updated: true,
-      cli: { beforeVersion: TBCLI_VERSION, afterVersion, entry: environment.canonicalEntry, command: environment.canonicalCmd },
-      skill: { agent: 'sealseek', targetDir: setup.skill.destination, action: setup.skill.action, state: setup.skill.state, current: setup.skill.current },
-      sealseek: { restartRequired: setup.restartRequired, nextStep: setup.nextStep },
-    };
-  }
-  const npm = dependencies.npm || await resolveNpmInvocation();
-  const cliEntry = dependencies.cliEntry || process.argv[1];
-  const node = dependencies.node || process.execPath;
-  const selector = targetArgs(opts);
-
-  await run(npm.command, [...npm.prefixArgs, 'install', '-g', '@petercjl/tbcli@latest'], { shell: npm.shell });
-  const versionResult = await run(node, [cliEntry, '--version']);
-  const afterVersion = versionResult.stdout.trim().split(/\r?\n/).at(-1);
-  if (!afterVersion) throw new Error('CLI 升级后无法读取版本');
-
-  let status = parseJsonOutput((await run(node, [cliEntry, 'skill', 'status', ...selector])).stdout, 'Skill 状态检查');
-  let skillAction = 'unchanged';
-  if (status.state === 'absent') {
-    status = parseJsonOutput((await run(node, [cliEntry, 'skill', 'install', ...selector])).stdout, 'Skill 安装');
-    skillAction = 'installed';
-  } else if (status.state === 'stale') {
-    status = parseJsonOutput((await run(node, [cliEntry, 'skill', 'update', ...selector])).stdout, 'Skill 更新');
-    skillAction = 'updated';
-  } else if (status.state !== 'current') {
-    throw new Error(`CLI 已升级到 ${afterVersion}，但 Skill 状态为 ${status.state}，为保护非受管目录已停止；请让管理员检查 ${status.destination}`);
-  }
-
-  const verified = parseJsonOutput((await run(node, [cliEntry, 'skill', 'status', ...selector])).stdout, 'Skill 最终验证');
-  if (verified.state !== 'current' || !verified.current) {
-    throw new Error(`CLI 已升级到 ${afterVersion}，但 Skill 最终状态不是 current`);
-  }
-  return {
-    updated: true,
-    cli: { beforeVersion: TBCLI_VERSION, afterVersion },
-    skill: { agent: opts.agent || null, targetDir: verified.targetRoot, action: skillAction, state: verified.state, current: verified.current },
-  };
-}
-
-export async function performAutomaticUpdate(dependencies = {}) {
-  const run = dependencies.run || runCaptured;
-  const platform = dependencies.platform || process.platform;
-  if (platform === 'win32') return performUnifiedUpdate({ agent: 'sealseek' }, dependencies);
-
-  const npm = dependencies.npm || await resolveNpmInvocation();
-  const cliEntry = dependencies.cliEntry || process.argv[1];
-  const node = dependencies.node || process.execPath;
-  await run(npm.command, [...npm.prefixArgs, 'install', '-g', '@petercjl/tbcli@latest'], { shell: npm.shell });
-  const versionResult = await run(node, [cliEntry, '--version']);
-  const afterVersion = versionResult.stdout.trim().split(/\r?\n/).at(-1);
-  if (!afterVersion) throw new Error('CLI 自动升级后无法读取版本');
-
-  const skills = [];
-  const getStatus = dependencies.getStatus || getSkillStatus;
-  const updateInstalledSkill = dependencies.updateInstalledSkill || updateSkill;
-  const resolveRoot = dependencies.resolveRoot || resolveTargetRoot;
-  for (const agent of dependencies.agents || ['codex', 'agents', 'openclaw', 'sealseek']) {
-    const root = resolveRoot({ agent });
-    for (const skill of dependencies.skills || ['tbcli', 'ecommerce-monthly-profit-report']) {
-      try {
-        const status = await getStatus(root, skill);
-        if (status.state === 'stale' && status.managed) {
-          skills.push({ agent, ...await updateInstalledSkill({ agent, skill }) });
-        } else if (status.state !== 'absent') {
-          skills.push({ agent, ...status, action: 'unchanged' });
-        }
-      } catch (error) {
-        skills.push({ agent, skill, action: 'warning', warning: String(error.message || error) });
-      }
-    }
-  }
-  return { updated: true, cli: { beforeVersion: TBCLI_VERSION, afterVersion }, skills };
-}
-
-export async function runUnifiedUpdate(opts = {}) {
-  const result = await performUnifiedUpdate(opts);
-  console.log(JSON.stringify(result, null, 2));
-}
+export async function performAutomaticUpdate(deps={}){const target=deps.targetDir||process.env.TBCLI_SKILL_TARGET;if(!target)return{updated:false,reason:'selected-target-required'};return performUnifiedUpdate({targetDir:target});}
+export async function runUnifiedUpdate(opts={}){const action=opts._?.[1]??'install';if(action==='install')return performUnifiedUpdate(opts);return runMaintenance(packageConfig(),'update',[action,'--json']);}

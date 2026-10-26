@@ -1,0 +1,2 @@
+import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
+export function packageConfig(){const root=fileURLToPath(new URL('../../',import.meta.url)),p=JSON.parse(fs.readFileSync(path.join(root,'package.json')));return{root,name:p.name,version:p.version,tool:'tbcli',skills:['tbcli','ecommerce-monthly-profit-report'],entry:'scripts/tbcli.mjs',targetEnvironment:'TBCLI_SKILL_TARGET',runtimeItems:['package.json','src','scripts','skill','node_modules','capabilities.json','INSTALL.md','UPDATE.md','README.md','suite-manifest.json']};}

@@ -13,6 +13,6 @@
 ## 边界
 
 - `master.current_sku_costs.unit_cost` 是当前已批准 SKU 成本；底层版本表是 `master.sku_cost_versions`。同步只更新目标店铺用到的 ERP 规格，不把整个旺店通货品库错误归给目标店铺。
-- 旺店通来源成本为零或空、货品/规格身份歧义、编码无法匹配时不覆盖已有正成本，也不凭订单 `goodsCost` 推断成本。输出逐项待核查清单。明确确认的零成本业务对象由利润政策单独登记为 `explicit_zero`。
+- 旺店通来源成本为零或空、货品/规格身份歧义、编码无法匹配时不覆盖已有正成本，也不凭订单 `goodsCost` 推断成本。输出逐项待核查清单。人工确认的零成本以 ERP 规格、平台 SKU、平台商品 ID 和确认原因写入 JSON 的 `rows` 数组，经 `tbcli profit costs approve-zero --input <FILE.json> --shop-key <KEY> --effective-from <YYYY-MM-DD> --json` 预览映射与现有成本；用户确认后加 `--yes` 写入版本化主数据。命令拒绝覆盖正成本或一对多映射，写后复核 `explicit_zero` 与零值。当前成本政策会用这项确认结果重新计算既往月份。
 - 采集依赖已配置的 `wdtcli`；凭据留在其受保护的用户环境，不进入 npm 包或 Skill。采集不可用时返回依赖错误，不改仓库。
 - 同步成本主数据需要数据库维护权限和明确用户授权；查询、核对与利润计算保持只读。

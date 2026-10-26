@@ -1,0 +1,97 @@
+// Generic package maintenance runtime. Vendored consumers pin this source by SHA-256.
+import fs from 'node:fs';import path from 'node:path';import os from 'node:os';import crypto from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+const fail=(code,message)=>{throw Object.assign(Error(message??code),{code});};
+const exists=p=>{try{fs.lstatSync(p);return true;}catch(e){if(e.code==='ENOENT')return false;throw e;}};
+const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+function files(root,prefix='',skip=new Set()){
+ const out={};if(!exists(root))return out;
+ for(const e of fs.readdirSync(root,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){const name=prefix+e.name;if(skip.has(name)||e.name==='__pycache__'||e.name==='.DS_Store')continue;const p=path.join(root,e.name);if(e.isSymbolicLink()){const real=fs.realpathSync(p);if(fs.statSync(real).isDirectory())Object.assign(out,files(real,name+'/',skip));else out[name]=hash(fs.readFileSync(real));}else if(e.isDirectory())Object.assign(out,files(p,name+'/',skip));else if(e.isFile())out[name]=hash(fs.readFileSync(p));}return out;
+}
+function compare(a,b){const x=a.split('-')[0].split('.').map(Number),y=b.split('-')[0].split('.').map(Number);for(let i=0;i<3;i++)if(x[i]!==y[i])return x[i]-y[i];return 0;}
+const digest=v=>hash(JSON.stringify(Object.entries(v).sort(([a],[b])=>a.localeCompare(b))));
+function source(c,skill){if(!c.skills.includes(skill))fail('UNKNOWN_SKILL');return path.join(c.root,'skill',skill);}
+function target(c,o){
+ const agent=o.agent??'generic';if(!/^[a-z][a-z0-9-]{0,63}$/.test(agent))fail('INVALID_AGENT');
+ if(o.targetDir&&o.skillDirectory)fail('CONFLICTING_TARGET');
+ const parent=o.targetDir??process.env[c.targetEnvironment];if(!parent&&!o.skillDirectory)fail('TARGET_REQUIRED','Current Agent must resolve its own Skill directory and provide --target-dir PARENT or --skill-directory EXACT.');
+ const skill=o.skill??c.skills[0],destination=o.skillDirectory?path.resolve(o.skillDirectory):path.join(path.resolve(parent),skill);
+ if(path.basename(destination)!==skill)fail('TARGET_NAME_MISMATCH');
+ if(destination===path.parse(destination).root||destination===c.root||destination.startsWith(c.root+path.sep))fail('UNSAFE_TARGET');
+ return{agent,skill,destination,parent:path.dirname(destination)};
+}
+function runtimeFiles(c){const out={};for(const item of c.runtimeItems){const p=path.join(c.root,item);if(!exists(p))continue;if(fs.statSync(p).isDirectory())Object.assign(out,Object.fromEntries(Object.entries(files(p)).map(([n,h])=>[item+'/'+n,h])));else out[item]=hash(fs.readFileSync(p));}return out;}
+function ownFiles(c,skill){return files(source(c,skill),'',new Set(['agents/openai.yaml']));}
+const receiptName=c=>'.'+c.tool+'-managed.json';
+function contract(c){try{return JSON.parse(fs.readFileSync(path.join(c.root,'capabilities.json')));}catch{return{};}}
+export function maintenanceSource(c,skill=c.skills[0]){return{...contract(c),ok:true,skill,name:skill,package:c.name,version:c.version,source:source(c,skill),sourceDigest:digest(ownFiles(c,skill)),installHint:c.tool+' skill install --target-dir <CURRENT_AGENT_SKILL_PARENT> --agent <CURRENT_AGENT> --json'};}
+export function maintenanceStatus(c,o){
+ const t=target(c,o),s=maintenanceSource(c,t.skill),base={...s,targetRoot:t.parent,destination:t.destination,target:t.destination,agent:t.agent,adapter:'generic',installed:exists(t.destination),managed:false,current:false,edited:[],verification:{verified:false,algorithm:'sha256'},recovery:{required:false},hostDiscovery:'host-verification-required'};
+ if(!base.installed)return{...base,state:'absent'};
+ const st=fs.lstatSync(t.destination);
+ if(st.isSymbolicLink()){let real;try{real=fs.realpathSync(t.destination);}catch{return{...base,state:'broken-link',mode:'link'};}let owner={};try{owner=JSON.parse(fs.readFileSync(path.join(real,'package.json')));}catch{}const managed=real===fs.realpathSync(source(c,t.skill))||(owner.ownerPackage===c.name&&digest(files(real,'',new Set(['agents/openai.yaml'])))===s.sourceDigest);return{...base,managed,state:managed?'legacy-link':'foreign-link',mode:'link',resolved:real};}
+ let receipt;try{receipt=JSON.parse(fs.readFileSync(path.join(t.destination,receiptName(c))));}catch{return{...base,state:'unmanaged',mode:'copy'};}
+ if(receipt.managedBy===c.tool&&receipt.skill===t.skill&&receipt.sourceDigest&&!receipt.fileHashes){
+  const h=crypto.createHash('sha256'),inventory=files(t.destination,'',new Set([receiptName(c)]));for(const name of Object.keys(inventory).sort()){h.update(name);h.update('\0');h.update(fs.readFileSync(path.join(t.destination,name)));h.update('\0');}const verified=h.digest('hex')===receipt.sourceDigest;
+  return{...base,managed:true,mode:'copy',state:verified?'legacy-copy':'edited',edited:verified?[]:['legacy-content-diff'],verification:{verified,algorithm:'sha256',scope:'legacy sourceDigest; original bytes'},legacyManifest:true};
+ }
+ if(receipt.package!==c.name||receipt.skill!==t.skill||!receipt.fileHashes)return{...base,state:'unmanaged',mode:'copy'};
+ const actual=files(t.destination,'',new Set([receiptName(c),'agents/openai.yaml'])),edited=[...new Set([...Object.keys(actual),...Object.keys(receipt.fileHashes)])].filter(k=>actual[k]!==receipt.fileHashes[k]);
+ const current=!edited.length&&receipt.version===c.version&&receipt.sourceDigest===s.sourceDigest&&receipt.runtimeDigest===digest(runtimeFiles(c));
+ return{...base,managed:true,installedVersion:receipt.version,mode:'copy',current,edited,state:edited.length?'edited':current?'current':'stale',verification:{verified:!edited.length,algorithm:'sha256',scope:'skill-and-owned-runtime; host UI metadata excluded'},runtimeEntry:path.join(t.destination,'.runtime',c.entry)};
+}
+export function syncSkill(c,o){
+ const t=target(c,o),before=maintenanceStatus(c,o);if(before.state==='current')return{...before,action:'unchanged',changed:false};
+ if(before.installed&&!['stale','legacy-link','legacy-copy'].includes(before.state))fail('TARGET_PROTECTED',before.state+': '+t.destination);
+ if(o.mode&&!['auto','copy','link'].includes(o.mode))fail('INVALID_MODE');
+ fs.mkdirSync(t.parent,{recursive:true});const lock=t.destination+'.install-lock';try{fs.mkdirSync(lock);}catch{fail('INSTALL_LOCKED');}
+ let backup=null,mutating=false;const stage=t.destination+'.stage-'+crypto.randomUUID();
+ try{
+  if(before.installed){const backups=c.backupRoot??path.join(os.homedir(),'.local','state',c.tool,'skill-backups');fs.mkdirSync(backups,{recursive:true});backup=path.join(backups,t.skill+'-'+Date.now()+'-'+crypto.randomUUID().slice(0,6));if(before.mode==='link')fs.cpSync(fs.realpathSync(t.destination),backup,{recursive:true,dereference:true,errorOnExist:true,force:false});else fs.cpSync(t.destination,backup,{recursive:true,dereference:true,errorOnExist:true,force:false});}
+  fs.cpSync(source(c,t.skill),stage,{recursive:true,dereference:true,errorOnExist:true,force:false});const runtime=path.join(stage,'.runtime');fs.mkdirSync(runtime);
+  for(const item of c.runtimeItems){const p=path.join(c.root,item);if(exists(p))fs.cpSync(p,path.join(runtime,item),{recursive:true,dereference:true,errorOnExist:true,force:false});}
+  if(before.installed&&before.mode!=='link'){const ui=path.join(t.destination,'agents/openai.yaml');if(exists(ui))fs.copyFileSync(ui,path.join(stage,'agents/openai.yaml'));}
+  const fileHashes=files(stage,'',new Set(['agents/openai.yaml'])),receipt={package:c.name,skill:t.skill,version:c.version,sourceDigest:maintenanceSource(c,t.skill).sourceDigest,runtimeDigest:digest(runtimeFiles(c)),fileHashes,installedAt:new Date().toISOString(),hostDiscovery:'pending'};
+  fs.writeFileSync(path.join(stage,receiptName(c)),JSON.stringify(receipt,null,2),{flag:'wx',mode:0o600});
+  if(before.installed){const fresh=maintenanceStatus(c,o);if(fresh.edited.length)fail('CONCURRENT_LOCAL_EDIT');mutating=true;if(before.mode==='link')fs.unlinkSync(t.destination);else{const moved=t.destination+'.replaced-'+crypto.randomUUID();try{fs.renameSync(t.destination,moved);}catch(e){if(!['EPERM','EBUSY','EACCES'].includes(e.code))throw e;fs.rmSync(t.destination,{recursive:true});}if(exists(moved))fs.rmSync(moved,{recursive:true});}}
+  fs.renameSync(stage,t.destination);const result=maintenanceStatus(c,o);if(!result.current)fail('SKILL_VERIFICATION_FAILED');return{...result,action:before.installed?'updated':'installed',changed:true,backup,physicalCopy:true,legacyModeTranslated:o.mode==='link'};
+ }catch(e){if(backup&&(mutating||!exists(t.destination))){if(exists(t.destination)&&!fs.lstatSync(t.destination).isSymbolicLink())fs.cpSync(backup,t.destination,{recursive:true,dereference:true,force:true});else if(!exists(t.destination))fs.cpSync(backup,t.destination,{recursive:true,dereference:true});}throw e;}finally{if(exists(stage))fs.rmSync(stage,{recursive:true,force:true});fs.rmdirSync(lock);}
+}
+function parse(argv){const o={};for(let i=0;i<argv.length;i++){const a=argv[i];if(a==='--json')continue;if(!['--agent','--target-dir','--skill-directory','--skill','--mode','--version'].includes(a)||!argv[i+1]||argv[i+1].startsWith('--'))fail('INVALID_ARGUMENT',a);const k=a.slice(2).replace(/-([a-z])/g,(_,c)=>c.toUpperCase());if(k in o)fail('DUPLICATE_ARGUMENT',a);o[k]=argv[++i];}if(o.version&&!/^(latest|\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?)$/.test(o.version))fail('INVALID_VERSION');return o;}
+export async function autoDetect(c,{force=false,fetchImpl=fetch}={}){
+ if(process.env.AGENT_PACKAGE_UPDATE_CHECK==='0')return{checked:false,reason:'disabled'};
+ if(!force&&(exists(path.join(c.root,'.git'))||(!c.root.split(path.sep).includes('node_modules')&&path.basename(c.root)!=='.runtime')))return{checked:false,reason:'source-or-owned-runtime'};
+ const dir=c.cacheRoot??path.join(os.homedir(),'.cache','agent-package-updates'),file=path.join(dir,c.tool+'.json');let old={};if(exists(file)){try{old=JSON.parse(fs.readFileSync(file));if(!old||Array.isArray(old)||typeof old.checkedAt!=='number')return{checked:false,reason:'malformed-cache-preserved'};}catch{return{checked:false,reason:'malformed-cache-preserved'};}}
+ if(!force&&old.checkedAt&&Date.now()-old.checkedAt<21600000)return{...old,checked:false,reason:'cached'};fs.mkdirSync(dir,{recursive:true});const lock=file+'.lock';try{fs.mkdirSync(lock);}catch{return{checked:false,reason:'concurrent-check'};}
+ try{const r=await fetchImpl('https://registry.npmjs.org/'+encodeURIComponent(c.name)+'/latest',{signal:AbortSignal.timeout(1800)});let info;if(r.status===404)info={checkedAt:Date.now(),current:c.version,published:false};else{if(!r.ok)throw Error('registry unavailable');const d=await r.json();if(!/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(d.version??''))throw Error('invalid registry version');info={checkedAt:Date.now(),current:c.version,latest:d.version,updateAvailable:compare(d.version,c.version)>0};}const temp=file+'.'+crypto.randomUUID();fs.writeFileSync(temp,JSON.stringify(info),{flag:'wx',mode:0o600});fs.renameSync(temp,file);if(info.updateAvailable)console.error(JSON.stringify({notice:'update-available',package:c.name,latest:info.latest,installation:'explicit update only'}));return{checked:true,...info};}catch{const info={checkedAt:Date.now(),available:false,reason:'offline-or-invalid-registry'};const tmp=file+'.'+crypto.randomUUID();fs.writeFileSync(tmp,JSON.stringify(info),{flag:'wx',mode:0o600});fs.renameSync(tmp,file);return{checked:true,...info};}finally{fs.rmdirSync(lock);}
+}
+export async function runMaintenance(c,command,argv){
+ const action=argv[0]&&!argv[0].startsWith('--')?argv.shift():(command==='update'?'install':'status');if(argv.includes('--help')){const cap=contract(c),key=command+' '+action;const result={ok:true,command:key,...cap.commandContracts?.[key],targetSemantics:cap.maintenanceContract?.targetOptions};console.log(JSON.stringify(result,null,2));return result;}const o=parse(argv);let result;
+ if(command==='skill'){
+  if(action==='source')result=maintenanceSource(c,o.skill);
+  else if(action==='status')result=maintenanceStatus(c,o);
+  else if(['install','update'].includes(action))result=syncSkill(c,o);
+  else fail('UNKNOWN_ACTION');
+ }else if(command==='update'){
+  if(action==='recover'){
+   const t=target(c,o),record=path.join(t.parent,'.'+c.tool+'-operation.json');if(!exists(record))fail('NO_OPERATION');const op=JSON.parse(fs.readFileSync(record));if(op.package!==c.name||op.target!==t.destination)fail('OPERATION_CONFLICT');
+   if(!op.candidate||!path.resolve(op.candidate).startsWith(path.join(t.parent,'.'+c.tool+'-candidate-')))fail('RECOVERY_CANDIDATE_MISSING');const root=path.join(op.candidate,'node_modules',...c.name.split('/')),manifest=path.join(root,'package.json');if(!exists(manifest))fail('RECOVERY_CANDIDATE_MISSING');const meta=JSON.parse(fs.readFileSync(manifest));if(meta.name!==c.name)fail('RECOVERY_IDENTITY_MISMATCH');
+   const r=spawnSync(process.execPath,[path.join(root,c.entry),'skill','update','--target-dir',t.parent,'--agent',t.agent,'--skill',t.skill,'--json'],{encoding:'utf8',timeout:120000,env:{...process.env,AGENT_PACKAGE_UPDATE_CHECK:'0',TBCLI_UPDATE_CHECK:'0'}});if(r.status!==0)fail('RECOVERY_SYNC_FAILED');const receipt=JSON.parse(r.stdout);if(!receipt.current||receipt.version!==meta.version)fail('RECOVERY_VERIFICATION_FAILED');op.stage='complete';op.recoveredAt=new Date().toISOString();const tmp=record+'.'+crypto.randomUUID();fs.writeFileSync(tmp,JSON.stringify(op,null,2),{flag:'wx',mode:0o600});fs.renameSync(tmp,record);result={ok:true,recovered:true,acquisitionInvocations:0,skill:receipt,backup:op.backup};
+  }else if(action==='check')result=await autoDetect(c,{force:true});
+  else if(action==='install'){
+   const t=target(c,o),status=maintenanceStatus(c,o);if(status.installed&&!['current','stale','legacy-link','legacy-copy'].includes(status.state))fail('TARGET_PROTECTED');
+   if(exists(path.join(c.root,'.git'))||(!c.root.split(path.sep).includes('node_modules')&&path.basename(c.root)!=='.runtime'))fail('GIT_OWNED','Use the source repository workflow; source is not upgraded from npm.');
+   if(o.version===c.version){result={ok:true,packageChanged:false,skill:syncSkill(c,o)};}
+   else{
+    const operation={package:c.name,versionBefore:c.version,target:t.destination,stage:'before-package',startedAt:new Date().toISOString()},record=path.join(t.parent,'.'+c.tool+'-operation.json');if(exists(record)){const prior=JSON.parse(fs.readFileSync(record));if(prior.stage!=='complete')fail('RECOVERY_REQUIRED',record);}
+    let backup=null;if(status.installed){const backups=c.backupRoot??path.join(os.homedir(),'.local','state',c.tool,'skill-backups');fs.mkdirSync(backups,{recursive:true});backup=path.join(backups,t.skill+'-prepackage-'+Date.now());fs.cpSync(t.destination,backup,{recursive:true,dereference:true,errorOnExist:true,force:false});}operation.backup=backup;
+    const persist=()=>{const tmp=record+'.'+crypto.randomUUID();fs.writeFileSync(tmp,JSON.stringify(operation,null,2),{flag:'wx',mode:0o600});fs.renameSync(tmp,record);};fs.mkdirSync(t.parent,{recursive:true});persist();
+    const candidate=path.join(t.parent,'.'+c.tool+'-candidate-'+crypto.randomUUID());operation.candidate=candidate;persist();const npm=process.platform==='win32'?'npm.cmd':'npm',args=['install',candidate,'--ignore-scripts',c.name+'@'+(o.version??'latest')],r=spawnSync(npm,args,{encoding:'utf8',timeout:300000,shell:process.platform==='win32',env:{...process.env,AGENT_PACKAGE_UPDATE_CHECK:'0',TBCLI_UPDATE_CHECK:'0'}});
+    if(r.status!==0){operation.stage='package-failed';operation.exitCode=r.status;persist();fail('PACKAGE_ACQUISITION_FAILED',record);}
+    operation.stage='skill-sync';persist();const prefixArgs=['--target-dir',t.parent,'--agent',t.agent,'--skill',t.skill,'--json'],entry=path.join(candidate,'node_modules',...c.name.split('/'),c.entry),sync=spawnSync(process.execPath,[entry,'skill','update',...prefixArgs],{encoding:'utf8',timeout:120000,env:{...process.env,AGENT_PACKAGE_UPDATE_CHECK:'0'}});if(sync.status!==0){operation.stage='skill-failed';operation.exitCode=sync.status;persist();fail('PARTIAL_UPDATE_SKILL_FAILED',record);}const receipt=JSON.parse(sync.stdout),actual=JSON.parse(fs.readFileSync(path.join(candidate,'node_modules',...c.name.split('/'),'package.json')));if(!receipt.current||receipt.version!==actual.version)fail('PACKAGE_SKILL_VERSION_MISMATCH');result={ok:true,packageChanged:true,version:actual.version,entry:receipt.runtimeEntry,skill:receipt,backup};operation.stage='complete';persist();
+   }
+  }else fail('UNKNOWN_ACTION');
+ }else if(command==='operation'){
+  const t=target(c,o),file=path.join(t.parent,'.'+c.tool+'-operation.json');result=exists(file)?JSON.parse(fs.readFileSync(file)):{stage:'none'};
+ }else fail('UNKNOWN_COMMAND');console.log(JSON.stringify(result,null,2));return result;
+}

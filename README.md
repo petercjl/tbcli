@@ -5,6 +5,18 @@ Local CLI for Taobao/Qianniu seller backend workflows. It shares the same
 
 ## Install
 
+### 达摩盘指定商品取数
+
+支持按商品读取成交笔数、笔单价、详情页访问次数、推广与自然点击，以及逐日推广数值、成长阶段和原始证据。查询推广需要明确选择本店锚点；仅经营数据无需锚点。当前账户的权限和平台返回决定可用范围，推广字段的人民币单位尚待独立核验。
+
+向当前 Agent 发送：
+
+> 用 tbcli 获取商品【商品ID】最近30天的达摩盘成交与点击数据。
+
+> 用 tbcli 获取商品【商品ID】在【开始日期】至【结束日期】的达摩盘经营与推广数据，本店锚点是【锚点ID】。
+
+开发者参数和输出合同见 `skill/tbcli/references/dmp.md`；运行 `tbcli dmp catalog --json` 查看当前合同。返回部分数据时保留已成功模块和日期缺口。
+
 ### 日常取数维护（插件内置 Skill 模块）
 
 Agent 可接收“帮我补全取数报表近期缺失数据”“只增补商品-整体”或
@@ -600,3 +612,10 @@ tbcli dev capture --url 'https://example.tmall.com/category.htm' --duration-ms 1
 Capture output is restricted to Taobao/Tmall request metadata. Sensitive query
 parameters are redacted, response bodies and cookies are not exported, and any
 verification signal stops capture immediately.
+
+
+## 商品周期快照与应用报告
+
+`dmp snapshot` 提供指定商品、锚点和单周期的七项经营、推广场景、目标关键词、人群区间及人群数值证据。周期选择、图表与业务分析由应用包 `@petercjl/dmp-product-report` 编排。
+
+当前Agent安装或更新时先读取INSTALL.md/UPDATE.md，解析自己的Skill目录，使用显式目标同步实体副本并验证SHA-256；仅同步选定目标。普通任务检查新版后默认通知，安装更新另需授权。

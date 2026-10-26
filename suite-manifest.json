@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "nodes": [
+    {
+      "skill": "tbcli",
+      "source": "skill/tbcli",
+      "id": "tbcli"
+    },
+    {
+      "skill": "ecommerce-monthly-profit-report",
+      "source": "skill/ecommerce-monthly-profit-report",
+      "id": "ecommerce-monthly-profit-report"
+    }
+  ]
+}
