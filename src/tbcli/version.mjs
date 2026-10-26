@@ -7,6 +7,7 @@ const packageJson = JSON.parse(fs.readFileSync(
 
 export const TBCLI_VERSION = String(packageJson.version || 'unknown');
 
-export function runVersion() {
-  console.log(TBCLI_VERSION);
+export function runVersion(opts={}) {
+  const result={ok:true,package:packageJson.name,version:TBCLI_VERSION,tool:'tbcli'};
+  console.log(opts.json?JSON.stringify(result):TBCLI_VERSION);return result;
 }

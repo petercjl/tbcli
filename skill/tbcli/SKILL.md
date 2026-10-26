@@ -23,7 +23,7 @@ available for explicit compatibility use; it is not a dependency of other CLIs.
 
 ## Source Of Truth
 
-This Skill is distributed with the `tbcli` CLI. Treat the path returned by `tbcli skill source --json` as the only editable source. Agent Skill directories contain CLI-managed links or copies; never maintain an independent fork.
+This Skill is distributed with the `tbcli` CLI. Treat the path returned by `tbcli skill source --json` as the only editable source. Agent Skill directories contain CLI-managed physical copies; never maintain an independent fork.
 
 Discover the owning package with `tbcli skill source --json`. The current Agent resolves its own Skill directory and passes `tbcli skill install --target-dir <parent> --agent <current-agent> --json`. Installation uses physical copies, including a target-owned `.runtime` entry and dependencies. Use that installation’s `.runtime/scripts/tbcli.mjs` for independent execution; the global CLI is the bootstrap surface. Verify `skill status` reports current with SHA-256 verification and then refresh the current host’s discovery. Existing managed links migrate with a verified backup; local edits and unmanaged targets are protected. Generic Agent names are supported and do not select another host’s directory.
 
@@ -32,6 +32,8 @@ When the host is Windows SealSeek, read
 before installation, command discovery, diagnosis, or updating. Its managed
 runtime and `.cmd` rules replace the generic PATH probes below; after the adapter
 passes, return to this Skill's main flow.
+
+Machine discovery uses `tbcli --help --json`, `tbcli capabilities --json`, and `tbcli version --json`. `commandContracts` is authoritative; `commands` is its structured-help alias. Enumerate all bundled Skills with `skill source --all --json`, or select one with `--skill <logical-name>`. Read `discoveryContract` and `maintenanceContract` for typed fields and supported flags. `--target-dir` denotes the parent directory; `--skill-directory` denotes the exact Skill directory. Status with `recovery.required: true` requires `update recover` for the same selected Skill before completion. A Git source version does not attest registry artifact identity.
 
 ### Unified update contract
 
@@ -435,7 +437,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 
 - **Browser unavailable:** verify Chrome installation and the fixed Profile configuration with `tbcli doctor`; normal commands launch a managed persistent browser without requiring port 9223. Return to Main Flow Step 4 after resolving the dependency.
 - **Profile already open:** an ordinary Chrome without an attachable session cannot be taken over safely. Ask the user to close the Chrome using the fixed Profile, then return to Main Flow Step 4. Never copy the Profile or extract Cookie databases.
-- **Unsupported `--no-sandbox` banner:** treat this as an unsafe or outdated tbcli browser launch. Stop the login attempt. For an npm installation, run `tbcli update --agent <当前Agent> --json`, require the unified CLI-and-Skill verification contract above, close that browser, and rerun `tbcli auth login`. If the legacy CLI lacks the unified command, bootstrap `@latest` once and immediately return to it. For a source checkout, use its repository update workflow instead of replacing it with npm. Never advise repeated slider attempts or disabling the Chrome sandbox.
+- **Unsupported `--no-sandbox` banner:** treat this as an unsafe or outdated tbcli browser launch. Stop the login attempt. For an npm installation, run `tbcli update --target-dir <当前Agent的Skill父目录> --agent <当前Agent> --json`, require the unified CLI-and-Skill verification contract above, close that browser, and rerun `tbcli auth login`. If the legacy CLI lacks the unified command, bootstrap `@latest` once and immediately return to it. For a source checkout, use its repository update workflow instead of replacing it with npm. Never advise repeated slider attempts or disabling the Chrome sandbox.
 - **Sandbox unavailable:** stop with the CLI error and ask the user to repair Chrome/operating-system sandbox support. Never add or recommend `--no-sandbox` as a fallback.
 - **Login or verification required:** run `tbcli auth login`, ask the user to complete login/captcha in the visible Chrome, wait for the CLI to confirm authentication, and return to Main Flow Step 4. Do not bypass verification or expose cookies.
 - **Date unavailable:** report requested and valid periods; require approval before changing the period.

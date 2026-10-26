@@ -1,31 +1,59 @@
 {
   "package": "@petercjl/tbcli",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "tool": "tbcli",
   "entry": "scripts/tbcli.mjs",
   "commandContracts": {
     "skill source": {
       "options": {
         "--agent": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--target-dir": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--skill-directory": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--version": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
+        },
+        "--all": {
+          "type": "boolean",
+          "description": "enumerate all canonical Skill sources; mutually exclusive with --skill"
         }
       },
-      "sideEffects": "none"
+      "sideEffects": "none",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
     },
     "skill status": {
       "options": {
@@ -39,16 +67,34 @@
           "type": "string"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--version": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "none"
+      "sideEffects": "none",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
     },
     "skill install": {
       "options": {
@@ -62,16 +108,32 @@
           "type": "string"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
           "type": "string"
         },
         "--version": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "source package version determines Skill bytes"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "local-write"
+      "sideEffects": "local-write",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
     },
     "skill update": {
       "options": {
@@ -85,39 +147,80 @@
           "type": "string"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
           "type": "string"
         },
         "--version": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "source package version determines Skill bytes"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "local-write"
+      "sideEffects": "local-write",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
     },
     "update check": {
       "options": {
         "--agent": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--target-dir": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--skill-directory": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
         },
         "--version": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "accepted legacy option; ignored by this operation"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "none"
+      "sideEffects": "local-write",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      },
+      "network": "registry metadata with bounded cache writes"
     },
     "update install": {
       "options": {
@@ -131,16 +234,32 @@
           "type": "string"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "package updates always install physical isolated copies"
         },
         "--version": {
           "type": "string"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "package-and-skill-update"
+      "sideEffects": "package-and-skill-update",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
     },
     "update recover": {
       "options": {
@@ -154,16 +273,110 @@
           "type": "string"
         },
         "--skill": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
         },
         "--mode": {
-          "type": "string"
+          "type": "string",
+          "deprecated": true,
+          "semantics": "package updates always install physical isolated copies"
         },
         "--version": {
           "type": "string"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
         }
       },
-      "sideEffects": "package-and-skill-update"
+      "sideEffects": "package-and-skill-update",
+      "confirmation": {
+        "required": false,
+        "authority": "caller authorization; explicit selected target for mutation"
+      }
+    },
+    "version": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
+        }
+      },
+      "sideEffects": "none",
+      "result": {
+        "ok": {
+          "field": "ok",
+          "type": "boolean"
+        },
+        "package": {
+          "field": "package",
+          "type": "string"
+        },
+        "version": {
+          "field": "version",
+          "type": "string"
+        }
+      }
+    },
+    "operation status": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
+        },
+        "--target-dir": {
+          "type": "string"
+        },
+        "--skill-directory": {
+          "type": "string"
+        },
+        "--agent": {
+          "type": "string"
+        },
+        "--skill": {
+          "type": "string",
+          "enum": [
+            "tbcli",
+            "ecommerce-monthly-profit-report"
+          ]
+        }
+      },
+      "sideEffects": "none",
+      "description": "read the selected Skill operation and recovery state"
+    },
+    "capabilities": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
+        },
+        "--all": {
+          "type": "boolean"
+        }
+      },
+      "sideEffects": "none"
+    },
+    "help": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--help": {
+          "type": "boolean"
+        }
+      },
+      "sideEffects": "none"
     }
   },
   "maintenanceContract": {
@@ -237,7 +450,12 @@
       }
     },
     "agentEligibility": "valid-name-with-generic-fallback",
-    "hostDiscoveryAuthority": "host"
+    "hostDiscoveryAuthority": "host",
+    "operation": {
+      "command": "operation status",
+      "recordScope": "selected-skill",
+      "recoveryCommand": "update recover"
+    }
   },
   "installationLifecycle": {
     "agentNeutral": true,
@@ -280,5 +498,76 @@
     "eligibility": "any Agent with required command/file capabilities",
     "macos": "locally tested after completion",
     "windows": "implementation and CI only; native host execution unverified"
+  },
+  "discoveryContract": {
+    "schemaVersion": 1,
+    "entryPoints": [
+      {
+        "argv": [
+          "--help",
+          "--json"
+        ],
+        "result": "manifest"
+      },
+      {
+        "argv": [
+          "capabilities",
+          "--json"
+        ],
+        "result": "manifest"
+      },
+      {
+        "argv": [
+          "skill",
+          "source",
+          "--json"
+        ],
+        "result": "source"
+      }
+    ],
+    "commandsField": "commandContracts",
+    "structuredHelpAlias": "commands",
+    "version": {
+      "command": "version",
+      "argv": [
+        "version",
+        "--json"
+      ],
+      "fields": {
+        "package": {
+          "field": "package",
+          "type": "string"
+        },
+        "version": {
+          "field": "version",
+          "type": "string"
+        }
+      }
+    },
+    "skillCollection": {
+      "namesField": "skills",
+      "default": "tbcli",
+      "selector": {
+        "option": "--skill",
+        "type": "string"
+      },
+      "enumeration": {
+        "argv": [
+          "skill",
+          "source",
+          "--all",
+          "--json"
+        ],
+        "itemsField": "sources",
+        "completeField": "complete"
+      },
+      "namedSource": [
+        "skill",
+        "source",
+        "--skill",
+        "{skill}",
+        "--json"
+      ]
+    }
   }
 }

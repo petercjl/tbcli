@@ -1,1 +1,2 @@
 import fs from 'node:fs';import path from 'node:path';const pkg=JSON.parse(fs.readFileSync('package.json'));for(const name of ['tbcli','ecommerce-monthly-profit-report']){const f=path.join('skill',name,'package.json');const s=JSON.parse(fs.readFileSync(f));s.version=pkg.version;fs.writeFileSync(f,JSON.stringify(s,null,2)+'\n');}
+const manifest='capabilities.json';const capability=JSON.parse(fs.readFileSync(manifest));capability.version=pkg.version;fs.writeFileSync(manifest,JSON.stringify(capability,null,2)+'\n');

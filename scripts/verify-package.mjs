@@ -1,2 +1,4 @@
 import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} from 'node:url';
 const root=path.dirname(path.dirname(fileURLToPath(import.meta.url))),pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json')));for(const s of ["tbcli", "ecommerce-monthly-profit-report"]){const p=JSON.parse(fs.readFileSync(path.join(root,'skill',s,'package.json')));if(p.version!==pkg.version)throw Error('SKILL_VERSION_DRIFT');for(const n of ['SKILL.md','capabilities.json','adapters/generic.json'])if(!fs.existsSync(path.join(root,'skill',s,n)))throw Error('MISSING_SKILL_RESOURCE');}for(const n of ['INSTALL.md','UPDATE.md','capabilities.json'])if(!fs.existsSync(path.join(root,n)))throw Error('MISSING_PACKAGE_CONTRACT');console.log(JSON.stringify({ok:true,package:pkg.name,version:pkg.version}));
+
+if(JSON.parse(fs.readFileSync(path.join(root,'capabilities.json'))).version!==pkg.version)throw Error('CAPABILITY_VERSION_DRIFT');
