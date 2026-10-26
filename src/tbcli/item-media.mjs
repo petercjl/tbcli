@@ -8,9 +8,12 @@ export function normalizeVideos(head){
     const raw=typeof v==='string'?v:v?.url??v?.videoUrl??v?.videoPlayUrl??v?.playUrl;
     if(typeof raw!=='string'||!raw.trim())continue;
     let url;try{url=new URL(raw,'https://item.taobao.com');}catch{}
-    if(!url||url.protocol!=='https:'||!/(^|\.)(alicdn\.com|taobaocdn\.com|tbcdn\.cn|taobao\.com)$/.test(url.hostname))continue;
-    const poster=typeof v==='object'?(v.coverUrl??v.videoCover??v.cover??v.picUrl):null;
-    records.push({url:url.href,sourceIndex:index,...(poster?{posterUrl:new URL(poster,'https://item.taobao.com').href}:{}),...(Number(v?.width)>0?{width:Number(v.width)}:{}),...(Number(v?.height)>0?{height:Number(v.height)}:{})});
+    // Taobao hydration still emits HTTP for this official playback endpoint.
+    if(url?.protocol==='http:'&&url.hostname==='cloud.video.taobao.com'&&url.pathname.startsWith('/play/'))url.protocol='https:';
+    if(!url||url.username||url.password||url.protocol!=='https:'||!/(^|\.)(alicdn\.com|taobaocdn\.com|tbcdn\.cn|taobao\.com)$/.test(url.hostname))continue;
+    const poster=typeof v==='object'?(v.videoThumbnailURL??v.coverUrl??v.videoCover??v.cover??v.picUrl):null;
+    let posterUrl;try{const p=new URL(poster,'https://item.taobao.com');if(poster&&p.protocol==='https:'&&!p.username&&!p.password&&/(^|\.)(alicdn\.com|taobaocdn\.com|tbcdn\.cn|taobao\.com)$/.test(p.hostname))posterUrl=p.href;}catch{}
+    records.push({url:url.href,sourceIndex:index,...(posterUrl?{posterUrl}:{}),...(Number(v?.width)>0?{width:Number(v.width)}:{}),...(Number(v?.height)>0?{height:Number(v.height)}:{})});
   }
   return {status:head.videos.length===0?'absent':records.length===head.videos.length?'captured':'partial',records,evidence:'componentsVO.headImageVO.videos',sourceCount:head.videos.length};
 }
