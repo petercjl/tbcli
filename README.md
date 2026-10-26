@@ -445,7 +445,12 @@ Chrome persists the selected theme in each Profile. `browser theme` uses Chrome'
 
 Merchant configuration retains `TBCLI_CDP_URL`, `TBCLI_CHROME_PROFILE` and `TBCLI_REMOTE_DEBUGGING_PORT`. Buyer configuration uses `TBCLI_BUYER_CDP_URL`, `TBCLI_BUYER_CHROME_PROFILE` and `TBCLI_BUYER_REMOTE_DEBUGGING_PORT`. Existing merchant environment variables never override buyer defaults. Known opposite-role endpoints/Profiles are rejected; local CDP reuse verifies Chrome's port and Profile flags.
 
-Buyer auto mode opens/reuses CDP 9224. Merchant auto mode retains CDP reuse or managed-session compatibility. Explicit `--session-mode managed` uses the selected persistent Profile with the sandbox enabled. Chrome is detected on macOS and Windows, with `TBCLI_CHROME_PATH`/`--chrome-path` available for explicit configuration. Windows live verification remains pending for the new role isolation.
+Both roles use standard Google Chrome in auto mode: open/reuse CDP 9223 for merchant or 9224 for buyer. tbcli prepares the browser itself; an external launcher or private Agent instructions are not prerequisites. Explicit `--session-mode managed` uses Playwright persistent-context mode with the selected Profile and sandbox; a closed port does not select this mode. Chrome is detected on macOS and Windows, with `TBCLI_CHROME_PATH`/`--chrome-path` available for explicit configuration. Windows live verification remains pending for the new role isolation.
+
+Agent browser-status inspection is read-only: it reports ready/stopped/conflict without starting Chrome, reading login or checking updates.
+
+> 请检查 tbcli 的商家浏览器状态；如需登录，请打开对应浏览器并等待我完成。
+ `auth login` prepares the browser and waits for manual login/verification. Launch settings do not guarantee that a platform will accept verification.
 
 The CLI checks login-cookie presence without exporting values. This does not prove account privileges; each service remains authoritative. Database/file commands and delegated providers keep their existing contracts. Browser-only requests use the independent browser launcher; its default remains the merchant ecommerce browser.
 

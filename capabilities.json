@@ -1,6 +1,6 @@
 {
   "package": "@petercjl/tbcli",
-  "version": "0.11.3",
+  "version": "0.11.4-dev.0",
   "tool": "tbcli",
   "entry": "scripts/tbcli.mjs",
   "commandContracts": {
@@ -564,6 +564,51 @@
       },
       "sideEffects": "local-write",
       "description": "Read buyer-page product summary, preserve display qualifiers, write a new JSON evidence file."
+    },
+    "browser status": {
+      "options": {
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant",
+            "buyer"
+          ]
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--port": {
+          "type": "string",
+          "semantics": "decimal integer validated by the runtime"
+        },
+        "--chrome-path": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "none",
+      "description": "Read-only CDP readiness and port/Profile verification; no Chrome launch, login read or update check.",
+      "result": {
+        "state": {
+          "type": "string",
+          "enum": [
+            "ready",
+            "stopped",
+            "conflict"
+          ]
+        },
+        "profileVerified": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
     }
   },
   "maintenanceContract": {
@@ -786,7 +831,16 @@
     "helperRoleOption": "--browser-role",
     "roleProof": "intended session; cookie presence does not attest account privileges",
     "crossRoleFallback": false,
-    "localProcessVerification": true
+    "localProcessVerification": true,
+    "autoSessionMode": "cdp",
+    "autoStartsLocalChrome": true,
+    "externalLauncherRequired": false,
+    "managedSession": "explicit-only",
+    "statusCommand": [
+      "browser",
+      "status",
+      "--json"
+    ]
   },
   "itemSummary": {
     "version": 1,

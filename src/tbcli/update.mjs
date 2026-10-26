@@ -74,6 +74,7 @@ export function isPackagedNpmInstall(packageRoot = PACKAGE_ROOT) {
 export async function maybeAutoUpdate(args = {}, options = {}) {
   const environment = options.environment || process.env;
   if (environment.TBCLI_UPDATE_CHECK === '0' || environment.TBCLI_AUTO_UPDATE_REEXEC === '1'
+    || (args._?.[0] === 'browser' && args._?.[1] === 'status')
     || ['update','version','capabilities','skill'].includes(args._?.[0]) || args.version || args.help) return { checked: false, updated: false, reason: 'disabled-or-update-command' };
   const packaged = options.isPackagedInstall ? options.isPackagedInstall() : isPackagedNpmInstall(options.packageRoot);
   if (!packaged) return { checked: false, updated: false, reason: 'source-checkout' };

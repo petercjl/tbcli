@@ -451,6 +451,12 @@ export const COMMAND_DEFINITIONS = Object.freeze([
     description: '使用 Chrome 个人资料设置应用角色主题色：商家蓝色，淘宝买家橙色',
   },
   {
+    key: 'browser status',
+    maturity: 'stable',
+    audience: 'internal',
+    description: '只读检查角色调试浏览器及端口/Profile匹配，不启动Chrome或检查更新',
+  },
+  {
     key: 'browser open',
     maturity: 'stable',
     audience: 'internal',

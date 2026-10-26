@@ -1,6 +1,6 @@
 ---
 name: tbcli
-description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经营与推广数据, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, platform SKU gross-weight initialization and incremental updates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, SKU毛重初始化, 新快递账单更新SKU重量, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Do not load for browser-only launch or status requests; use the independent browser launcher.
+description: Operate tbcli for Taobao, Tmall, Qianniu, 达摩盘指定商品经营与推广数据, 生意参谋自主分析/取数报表, 无界基础报表, 预策类目月数据入库, 旺店通订单与退款事实, product image mappings, ecommerce profit estimates, reconciled monthly profit, platform SKU gross-weight initialization and incremental updates, and the company ecommerce warehouse. Use when the user says tbcli, 获取/导出取数报表, 补全取数报表近期缺失数据, 日常更新, 每日补数, 检查缺失日期, 断点续跑, 增量入库, 全量重拉, 预策类目入库, 旺店通订单/订单明细/运单/退款, 商品ID图片映射, 商品主图入库, 预估利润, 实际利润, 月度利润, 次月15日退款截止, 快递账单利润, SKU毛重初始化, 新快递账单更新SKU重量, 利润数据缺口, 最近7天利润, 最近30天利润, 7月份利润, 三位运营利润, 某负责人过去N天利润, 利润Excel, 检查数据库读写权限, 店铺-整体, 商品-整体, 商品-流量来源, 商品-流量来源详情, 商品-整体退款分布, 商品-退款原因分布, 商品-流失竞店分布, 商品-退款SKU分布, 无界-账户/计划/人群/商品主体/创意/单元/关键词, 转化周期, SKU, 所有历史数据, 公司数据库, 数据仓库, 数据集, 商品排行, 关键词排行, or asks a natural-language business question over imported ecommerce data. Translate business language into stable CLI commands and verified files or semantic query results; employees never need to write SQL. Browser-only work can use the host launcher or tbcli browser open/status.
 ---
 
 # tbcli
@@ -23,9 +23,10 @@ Use `tbcli` as the deterministic execution surface for supported ecommerce-brows
 
 商品 ID 与运营负责人关系核对、缺失补充或同步使用 [商品负责人映射](references/product-owner-mapping.md)。先运行 `profit owners reconcile`；只有用户明确要求写入时才运行 `profit owners import` 或 `profit owners sync`。`import` 只补缺失关系；用户明确指定来源为准并要求保持一致时，`sync` 以历史版本接续冲突关系。
 
-Browser-only launch/status requests belong to the independently configured browser
-launcher, not this business Skill. The legacy `tbcli browser open` command remains
-available for explicit compatibility use; it is not a dependency of other CLIs.
+Browser-only requests may use the current host’s independent browser launcher.
+When none is configured, `tbcli browser open/status` supplies the package-owned
+entry. Normal tbcli auth/business commands prepare their own role browser; an
+external launcher and machine-specific Agent instructions are optional.
 
 ## Source Of Truth
 
@@ -52,7 +53,7 @@ Ordinary business entry checks for updates with bounded timeout and a six-hour c
 - **Input:** a supported business task plus identifiers, URLs, report paths, dates, fields, filters, and output preference when applicable.
 - **Strategy:** discover the live CLI, normalize the intent, preflight dependencies and all targets, execute stable commands, then verify outputs.
 - **Output:** requested business data or a new file, with paths, covered period, command outcome, and limitations.
-- **Dependencies:** a discoverable `tbcli` entry (or the Windows SealSeek adapter's managed-runtime entry); a supported Chrome; the operation-selected merchant or buyer Chrome Profile logged into the required account; terminal execution and filesystem access. Normal commands do not require an exposed debugging port.
+- **Dependencies:** a discoverable `tbcli` entry (or the Windows SealSeek adapter's managed-runtime entry); a supported Chrome; the operation-selected merchant or buyer Chrome Profile logged into the required account; terminal execution and filesystem access. Default browser commands prepare their own role-specific loopback Chrome debugging browser; the caller need not pre-open it or supply an external launcher.
 - **Permissions:** use only the current user's authorized account and visible data. Never extract or persist cookies, tokens, or session headers.
 - **Success:** every requested target completes, every output is new and readable, its scope matches the request, and temporary SYCM reports are cleaned.
 
@@ -441,7 +442,7 @@ Read [references/command-reference.md](references/command-reference.md) when the
 
 ## Failure Branches
 
-- **Browser unavailable:** verify Chrome installation and the selected role with `tbcli doctor --browser-role ROLE`; buyer auto mode uses its dedicated CDP session, while merchant auto mode retains CDP/managed compatibility. Return to Main Flow Step 4 after resolving the dependency.
+- **Browser unavailable:** use the read-only `tbcli browser status --browser-role ROLE --json` to distinguish stopped from port/Profile conflicts. Default auth/business commands prepare standard Chrome/CDP for either role; managed mode is explicit. Return to Main Flow Step 4 after resolving the dependency.
 - **Profile already open:** an ordinary Chrome without an attachable session cannot be taken over safely. Ask the user to close the Chrome using the fixed Profile, then return to Main Flow Step 4. Never copy the Profile or extract Cookie databases.
 - **Unsupported `--no-sandbox` banner:** treat this as an unsafe or outdated tbcli browser launch. Stop the login attempt. For an npm installation, run `tbcli update --target-dir <当前Agent的Skill父目录> --agent <当前Agent> --json`, require the unified CLI-and-Skill verification contract above, close that browser, and rerun `tbcli auth login`. If the legacy CLI lacks the unified command, bootstrap `@latest` once and immediately return to it. For a source checkout, use its repository update workflow instead of replacing it with npm. Never advise repeated slider attempts or disabling the Chrome sandbox.
 - **Sandbox unavailable:** stop with the CLI error and ask the user to repair Chrome/operating-system sandbox support. Never add or recommend `--no-sandbox` as a fallback.

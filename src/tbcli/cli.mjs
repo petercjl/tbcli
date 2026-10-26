@@ -12,7 +12,7 @@ import {
   DEFAULT_PROFILE_DIR,
   DEFAULT_SESSION_MODE,
 } from './config.mjs';
-import { runBrowserOpen, runBrowserTheme } from './commands/browser.mjs';
+import { runBrowserOpen, runBrowserTheme, runBrowserStatus } from './commands/browser.mjs';
 import { runAuthLogin, runAuthStatus } from './commands/auth.mjs';
 import { runLogisticsGet } from './commands/logistics.mjs';
 import { runShopProducts } from './commands/shop-products.mjs';
@@ -104,6 +104,7 @@ const COMMAND_HANDLERS = Object.freeze({
   'auth status': runAuthStatus,
   'item summary': runItemSummary,
   'browser open': runBrowserOpen,
+  'browser status': runBrowserStatus,
   'browser theme': runBrowserTheme,
   'logistics get': runLogisticsGet,
   'shop products': runShopProducts,
@@ -218,6 +219,7 @@ export function usage() {
   tbcli maintenance run-status [--run-id ID] [--state-dir DIR] [--json]
   tbcli auth login [--browser-role merchant|buyer] [--timeout-ms 300000] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
   tbcli auth status [--browser-role merchant|buyer] [--profile-dir DIR] [--session-mode auto|managed|cdp] [--json]
+  tbcli browser status [--browser-role merchant|buyer] [--json]
   tbcli browser theme [--browser-role merchant|buyer]
   tbcli browser open [--browser-role merchant|buyer] [--json] [--url URL] [--profile-dir DIR] [--port PORT]
   tbcli logistics get --trade-id ID [--seller-id ID] [--min-delay-ms 1000] [--max-delay-ms 2000] [--json] [--out file.json]
@@ -318,7 +320,7 @@ export function usage() {
   tbcli dev capture [--url SHOP_URL] [--duration-ms 15000]
 
 Environment:
-  TBCLI_SESSION_MODE   Browser session mode, default ${DEFAULT_SESSION_MODE} (auto reuses an existing CDP browser, otherwise managed)
+  TBCLI_SESSION_MODE   Browser session mode, default ${DEFAULT_SESSION_MODE} (auto opens/reuses standard Chrome with role-specific CDP)
   TBCLI_CDP_URL   Chrome DevTools URL, default ${DEFAULT_CDP}
   TBCLI_CHROME_PROFILE   Chrome profile dir, default ${DEFAULT_PROFILE_DIR}
   TBCLI_REMOTE_DEBUGGING_PORT   Chrome remote debugging port, default ${DEFAULT_DEBUGGING_PORT}
@@ -334,7 +336,8 @@ Notes:
   - First use: run tbcli auth login and complete login in the opened Chrome.
   - Merchant: blue, CDP 9223, ~/.dianshang-chrome-profile. Buyer: orange, CDP 9224, ~/.taobao-user-chrome-profile.
   - item summary/media/detail, search products and shop products automatically use the buyer browser.
-  - Auto mode can reuse an already running legacy CDP browser; browser open remains a compatibility/debugging command.
+  - Auto prepares the role browser itself; no external launcher or private Agent setup is required.
+  - browser status is read-only; managed mode is selected explicitly.
   - tbcli never exports cookies or tokens; authentication stays in the dedicated Chrome profile.
 `);
 }

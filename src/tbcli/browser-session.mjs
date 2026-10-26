@@ -7,7 +7,7 @@ import {
   DEFAULT_PROFILE_DIR,
   DEFAULT_SESSION_MODE,
 } from './config.mjs';
-import { ensureBrowserOpen, isCdpReachable } from './commands/browser.mjs';
+import { ensureBrowserOpen } from './commands/browser.mjs';
 import { resolveBrowserTarget } from './browser-target.mjs';
 import { createVerificationError } from './taobao-guard.mjs';
 
@@ -88,18 +88,15 @@ export async function withAuthenticatedTaobaoSession(opts, callback) {
   });
 }
 
-export async function resolveSessionMode(opts = {}, {
-  cdpReachable = isCdpReachable,
-} = {}) {
+export async function resolveSessionMode(opts = {}) {
   const requested = String(opts.sessionMode || DEFAULT_SESSION_MODE || 'auto').trim().toLowerCase();
   if (!['auto', 'managed', 'cdp'].includes(requested)) {
     throw new Error('--session-mode / TBCLI_SESSION_MODE 只能是 auto、managed 或 cdp');
   }
-  const target = resolveBrowserTarget(opts);
+  resolveBrowserTarget(opts);
   if (opts.cdpUrl || requested === 'cdp') return 'cdp';
   if (requested === 'managed') return 'managed';
-  if (target.browserRole === 'buyer') return 'cdp';
-  return await cdpReachable(target.cdpUrl) ? 'cdp' : 'managed';
+  return 'cdp';
 }
 
 export async function ensureStartPage(context, targetUrl = '') {

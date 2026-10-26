@@ -13,6 +13,29 @@ import {
   DEFAULT_START_URL,
 } from '../config.mjs';
 
+export async function inspectBrowserStatus(opts = {}, {
+  reachable = isCdpReachable, verifyProfile = verifyLocalProfile,
+} = {}) {
+  const target = resolveBrowserTarget(opts);
+  const connected = await reachable(target.cdpUrl);
+  let error;
+  if (target.local) {
+    try { await verifyProfile(target, {allowStopped: !connected}); }
+    catch (cause) { error = {code: cause.code || 'BROWSER_PROFILE_CONFLICT', message: cause.message}; }
+  }
+  return {ok: connected && !error, ...target,
+    state: error ? 'conflict' : connected ? 'ready' : 'stopped',
+    sessionMode: 'cdp', profileVerified: target.local ? connected && !error : null,
+    ...(error ? {error} : {}),
+  };
+}
+export async function runBrowserStatus(opts = {}) {
+  const result = await inspectBrowserStatus(opts);
+  if (opts.json) console.log(JSON.stringify(result));
+  else console.log(`${result.label}浏览器：${result.state} (${result.cdpUrl})${result.error ? '\n' + result.error.message : ''}`);
+  return result;
+}
+
 export async function runBrowserOpen(opts = {}) {
   const target = resolveBrowserTarget(opts);
   const started = await ensureBrowserOpen({...opts, ...target});

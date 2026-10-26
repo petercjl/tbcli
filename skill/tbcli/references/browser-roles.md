@@ -15,12 +15,22 @@ Database, local-file and delegated provider commands keep their existing indepen
 
 1. Classify the requested operation using the table; the five buyer commands select `buyer` automatically. Every other business browser operation defaults to `merchant`.
 2. For authentication/diagnostics/development helpers specify `--browser-role buyer` or `--browser-role merchant`. For example, `tbcli auth status --browser-role buyer --json`, followed by `tbcli auth login --browser-role buyer` only when needed. The user completes login in the selected window. Never switch the merchant browser to a buyer account to unblock a front-page query.
-3. Run the stable data command normally. Buyer auto mode reuses or opens the dedicated CDP browser; explicit managed mode retains its own Profile and sandbox. Merchant auto mode preserves compatibility with the existing CDP/managed behavior. Explicit CDP/profile arguments must match the intended role; role conflicts stop before connection. Local CDP connections verify the Chrome process port/Profile pair.
+3. Run the stable data command normally. Buyer auto mode reuses or opens the dedicated CDP browser; explicit managed mode retains its own Profile and sandbox. Merchant auto mode also opens/reuses the dedicated CDP browser. Explicit CDP/profile arguments must match the intended role; role conflicts stop before connection. Local CDP connections verify the Chrome process port/Profile pair.
 4. Verify the output and return to the calling Skill's main flow. If login, CAPTCHA or access checks stop execution, preserve completed data and ask the user to handle the selected browser. Never copy cookies, profiles or credentials between roles, and never fall back to the other endpoint.
 
 `tbcli browser open --browser-role buyer --json` is the explicit compatibility launcher. Browser-only requests use the independent host browser launcher when configured, with its explicit buyer role; they do not require this business Skill. The existing default ecommerce browser stays merchant.
 
 `tbcli browser theme --browser-role merchant` applies blue; `--browser-role buyer` applies orange through Chrome's visible profile settings. Settings are persisted by Chrome. A changed Chrome settings UI or unsupported language returns an error; account data remains untouched. Opening an existing Profile retains its current theme.
+
+## Browser preparation and observation
+
+For either role, auto mode opens installed Google Chrome with a loopback debugging port, the role-owned persistent Profile, `--no-first-run` and `--no-default-browser-check`, then connects over CDP. It reuses a matching existing instance. tbcli prepares this browser itself; no external launcher or private AGENTS.md is required. Explicit `--session-mode managed` selects Playwright persistent-context mode and its launch arguments. A closed default port does not select that mode.
+
+Use `tbcli browser status --browser-role ROLE --json` to inspect ready/stopped/conflict and local port/Profile verification. This command does not start Chrome, inspect login cookies or check package updates. A remote endpoint remains caller-managed.
+
+`auth login` prepares the selected visible browser and waits for the user to complete login or verification. Keep the same role, Profile and mode for subsequent operations. A managed or ordinary Chrome already holding that Profile cannot be converted in place: report the conflict and let the user close that specific Chrome before retrying. Preserve its data and unrelated windows.
+
+Launch-mode differences alone do not prove why verification failed. Record browser version, role, mode and visible error. Verification remains manual; stop rather than refresh, repeatedly attempt the slider, solve CAPTCHA automatically or change browser identity.
 
 ## Configuration and recovery
 

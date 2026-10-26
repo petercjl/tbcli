@@ -18,9 +18,9 @@ test('requires both a session and an identity cookie', () => {
   assert.equal(hasTaobaoLoginCookies([{ name: 'tracknick' }]), false);
 });
 
-test('auto session mode reuses a running legacy browser or launches managed Chrome', async () => {
+test('auto selects standard CDP with or without a running browser', async () => {
   assert.equal(await resolveSessionMode({}, { cdpReachable: async () => true }), 'cdp');
-  assert.equal(await resolveSessionMode({}, { cdpReachable: async () => false }), 'managed');
+  assert.equal(await resolveSessionMode({}, { cdpReachable: async () => false }), 'cdp');
 });
 
 test('browser open creates a page when reusing a running CDP browser', async (t) => {
