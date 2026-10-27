@@ -37,7 +37,7 @@ test('CLI status reports a stopped endpoint without creating its Profile or laun
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tbcli-status-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   const profile = path.join(dir, 'new profile');
-  const stdout = execFileSync(process.execPath, ['scripts/tbcli.mjs', 'browser', 'status', '--browser-role', 'merchant', '--cdp-url', 'http://127.0.0.1:1', '--profile-dir', profile, '--chrome-path', path.join(dir, 'missing-chrome'), '--json'], {encoding: 'utf8', timeout: 15000, env: {...process.env, TBCLI_UPDATE_CHECK: '0'}});
+  const stdout = execFileSync(process.execPath, ['scripts/tbcli.mjs', 'browser', 'status', '--browser-role', 'merchant', '--cdp-url', 'http://127.0.0.1:1', '--profile-dir', profile, '--chrome-path', path.join(dir, 'missing-chrome'), '--json'], {encoding: 'utf8', timeout: 30000, env: {...process.env, TBCLI_UPDATE_CHECK: '0'}});
   const result = JSON.parse(stdout);
-  assert.equal(result.state, 'stopped'); assert.equal(result.ok, false); assert.equal(fs.existsSync(profile), false);
+  assert.equal(result.state, 'stopped', JSON.stringify(result)); assert.equal(result.ok, false); assert.equal(fs.existsSync(profile), false);
 });

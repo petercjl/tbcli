@@ -148,7 +148,7 @@ export function matchesBrowserCommand(command, {port, profileDir}) {
 export async function verifyLocalProfile(target, {allowStopped=false} = {}) {
   let output;
   if (process.platform === 'win32') {
-    output = (await exec('powershell.exe', ['-NoProfile','-NonInteractive','-Command', "Get-CimInstance Win32_Process -Filter \"name='chrome.exe'\" | ForEach-Object { $_.CommandLine }"], {timeout:5000,maxBuffer:8*1024*1024})).stdout;
+    output = (await exec('powershell.exe', ['-NoProfile','-NonInteractive','-Command', "Get-CimInstance Win32_Process -Filter \"name='chrome.exe'\" | ForEach-Object { $_.CommandLine }"], {timeout:20000,maxBuffer:8*1024*1024})).stdout;
   } else {
     output = (await exec('ps', ['-ax','-o','command='], {timeout:5000,maxBuffer:8*1024*1024})).stdout;
   }
