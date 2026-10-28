@@ -143,8 +143,9 @@ POST `/dataplatform/dataset/report/query.json`，`Content-Type: application/json
 
 经营表dataset156的商品筛选为6797；人群数值表dataset175的商品筛选为7460，日期7463，分组7459，指标7469/7468/7465/7464。两者已有目标ID独立筛选的保存请求证据。授权仍取决于当前商家会话及服务响应。
 
-推广场景、目标关键词及人群区间目前只有双商品请求证据，尚未核实独立目标查询路径。快照保留这三个模块，标记unavailable、reason=capability-unverified和DMP_INDEPENDENT_ROUTE_UNVERIFIED；request/response为null，不伪装成平台空数据或已发出请求。当前不会发出未经核实的替代查询。上述缺口使总状态partial、退出码2，并保留可用来源。完整业务范围始终是全部五个模块。
+推广场景、目标关键词及人群区间采用已验证comparison接口：itemId为当前账户自动发现的本店商品，succItemIds为用户的目标商品。快照内部通过已认证且受节流和验证保护的items请求读取第一页，选择首个有效商品ID并在同周期三个来源间复用。executionContext保存自动选取方式和原始业务证据；subject仍只有目标商品。分析使用succItemValue/关键词succItem，不能把本店itemValue当成目标值。
 
+当前列表未返回有效商品时，三个模块明确标记context-unavailable及DMP_OWNED_CONTEXT_UNAVAILABLE，保留经营与人群数值数据；登录、验证或访问限制立即停止。自动准备不写入平台成功品设置，不让用户额外选品，也不使用历史固定ID。
 HTTP/业务失败、空结果、缺值、权限和验证保持各自状态。真正发出的请求保存脱敏request/response；每模块保存检查点。验证码或访问限制立即停止。旧snapshot v1不满足新采集合同；历史文件可由应用离线读取，不能作为新独立取数的证明。
 
 ## 商品资料

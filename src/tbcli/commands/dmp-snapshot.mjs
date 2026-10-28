@@ -10,12 +10,12 @@ export function prepareDmpSnapshot(opts,now){
  if(itemIds.length!==1)throw dmpError('DMP_INVALID_INPUT','快照每次查询一个商品。');
  return {itemIds,period,delayRange,timeoutMs};
 }
-export function snapshotRequests(plan){
+export function snapshotRequests(plan,contextItemId){
  const itemId=plan.itemIds[0],period=plan.period,body=metricsBody(itemId,period),conf=JSON.parse(body.conf);
  conf.indexList.push({aggr:'SUM',fieldId:6896},{aggr:'SUM',fieldId:6897});body.conf=JSON.stringify(conf);
- const unsupported=name=>({name,unsupported:true,error:{code:'DMP_INDEPENDENT_ROUTE_UNVERIFIED',module:name,message:'目标商品独立查询路径尚未核实；保留所需模块，不请求其他商品。',evidence:'Saved comparison requests contain two item filters; they do not establish a single-target contract.'}});
+ const query={itemId:contextItemId,succItemIds:itemId,startDate:period.startDate,endDate:period.endDate};
  const table={datasetId:175,type:'TABLE',conf:JSON.stringify({columnList:[],conditionList:[{fieldId:7460},{fieldId:7463}],indexList:[7469,7468,7465,7464].map(fieldId=>({aggr:'SUM',fieldId})),rowList:[{fieldId:7459}],userPageSize:100}),filterCondition:JSON.stringify([{id:7460,fieldId:7460,name:'商品ID',expression:'item_id',type:'dim',dataType:'number',displayType:'MULTI_SELECTOR',status:1,datasetId:175,values:[itemId]},{id:7463,fieldId:7463,name:'分区',expression:'ds',type:'dim',dataType:'string',displayType:'DATE_RANGE',dataFormat:'yyyyMMdd',status:1,datasetId:175,values:[period.startDate,period.endDate]}]),page:1,pageSize:100};
- return [{name:'metrics7',kind:'metrics',query:{},body},unsupported('scenes'),unsupported('keywords'),unsupported('crowdRanges'),{name:'crowdTable',kind:'metrics',query:{},body:table}];
+ return [{name:'metrics7',kind:'metrics',query:{},body},{name:'scenes',kind:'scenes',query,needsContext:true},{name:'keywords',kind:'keywords',query,needsContext:true},{name:'crowdRanges',kind:'crowd',query,needsContext:true},{name:'crowdTable',kind:'metrics',query:{},body:table}];
 }
 export function snapshotStatus(response){
  if(response.httpStatus!==200||response.body?.info?.ok!==true)return'unavailable';
@@ -24,16 +24,29 @@ export function snapshotStatus(response){
  if(d.TABLE&&!d.TABLE.columns?.length)return'empty';
  return'returned';
 }
+export async function resolveOwnedContext(client){
+ const response=await client.request('items',{page:'1',pageSize:'20'});
+ const rows=response.httpStatus===200&&response.body?.info?.ok===true?response.body?.data?.list:[];
+ const item=Array.isArray(rows)?rows.find(x=>/^[1-9]\d{0,29}$/.test(String(x.id??''))):null;
+ return {selection:'automatic-owned-item',status:item?'selected':'unavailable',itemId:item?String(item.id):null,source:{request:{kind:'items',query:{page:'1',pageSize:'20'}},response:scrubDmpRaw(response)},...(!item?{error:{code:'DMP_OWNED_CONTEXT_UNAVAILABLE',message:'当前账户未返回可用的接口上下文商品，已有目标商品数据保留。'}}:{})};
+}
 export async function collectSnapshot(client,plan,out,checkpoint=async()=>{}){
- out.account=client.account;
- for(const spec of snapshotRequests(plan)){
-  if(spec.unsupported){out.modules[spec.name]={status:'unavailable',reason:'capability-unverified',error:spec.error,request:null,response:null};await checkpoint(out);continue;}
+ out.account=client.account;let context;
+ for(const initial of snapshotRequests(plan)){
+  let spec=initial;
+  if(spec.needsContext){
+   if(!context){context=await resolveOwnedContext(client);out.executionContext=context;await checkpoint(out);}
+   if(context.status!=='selected'){out.modules[spec.name]={status:'unavailable',reason:'context-unavailable',error:context.error,request:null,response:null};await checkpoint(out);continue;}
+   spec={...spec,query:{...spec.query,itemId:context.itemId}};
+  }
   const response=await client.request(spec.kind,spec.query,spec.body);
-  const status=snapshotStatus(response);
+  let status=snapshotStatus(response);const d=response.body?.data;
+  if(status==='returned'&&spec.name==='keywords'&&Array.isArray(d?.succItem)&&d.succItem.length===0)status='empty';
+  if(status==='returned'&&spec.name==='scenes'&&Array.isArray(d)&&!d.some(row=>Object.values(row).some(v=>v&&typeof v==='object'&&v.succItemValue!==null&&v.succItemValue!==undefined)))status='empty';
   out.modules[spec.name]={status,capturedAt:new Date().toISOString(),request:{kind:spec.kind,query:spec.query,...(spec.body?{body:spec.body}:{})},response:scrubDmpRaw(response)};
   await checkpoint(out);
  }
- out.capabilityGaps=Object.entries(out.modules).filter(([,m])=>m.reason==='capability-unverified').map(([name,m])=>({module:name,...m.error}));
+ out.capabilityGaps=Object.entries(out.modules).filter(([,m])=>m.reason==='context-unavailable').map(([name,m])=>({module:name,...m.error}));
  out.status=Object.values(out.modules).some(m=>m.status==='unavailable')?'partial':'complete';
  return out;
 }

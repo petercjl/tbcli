@@ -680,8 +680,9 @@
           "crowdRanges",
           "crowdTable"
         ],
-        "capabilityGapCode": "DMP_INDEPENDENT_ROUTE_UNVERIFIED"
-      }
+        "capabilityGapCode": "DMP_OWNED_CONTEXT_UNAVAILABLE"
+      },
+      "executionContext": "automatic account-owned product, recorded separately from target subject"
     }
   },
   "maintenanceContract": {
