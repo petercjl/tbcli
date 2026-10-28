@@ -30,7 +30,7 @@ export const DMP_CATALOG = Object.freeze({
     metrics: {method: 'POST', path: DMP_PATHS.metrics, inputs: {datasetId: 156, type: 'INDEX_CARD', conf: 'JSON string: columnList, conditionList, indexList, rowList, userPageSize', filterCondition: 'JSON string: date field 6794 and item field 6797'}, fields: METRIC_FIELDS, output: 'data.INDEX_CARD.fields + values; data.rangeDesc'},
   },
   itemInfo: {command:'dmp item-info', version:1, input:'one target itemId; selected owned anchorId for competitor lookup; new JSON output', output:'DMP product identity, main image, item/shop links when available; no retail-page fallback'},
-  snapshot: {command: 'dmp snapshot', version: 1, input: 'one itemId, explicit anchorId, paired dates or days, new out.json', modules: ['metrics7', 'scenes', 'keywords', 'crowdRanges', 'crowdTable'], metricFields: [6986,6895,6813,8291,8290,6896,6897], crowdDataset: 175, output: 'request and scrubbed response per module; empty/provider failure remains explicit; no retries'},
+  snapshot: {command:'dmp snapshot',version:2,subjectMode:'target-only',input:'one target itemId, paired dates or days, new out.json',modules:['metrics7','scenes','keywords','crowdRanges','crowdTable'],independentRoutes:{metrics7:'verified-saved-request',crowdTable:'verified-saved-request',scenes:'unverified',keywords:'unverified',crowdRanges:'unverified'},metricFields:[6986,6895,6813,8291,8290,6896,6897],crowdDataset:175,output:'snapshotVersion=2; all required module states; unsupported routes explicitly unavailable, never silently omitted'},
   commonQuery: {bizCode: 'dmp', _tb_token_: 'browser cookie', _csrf: 'loginuserinfo.data.csrfId', csrfId: 'same csrfId'},
   reportInputs: {itemIds: '1–20 distinct numeric strings (CLI batch bound); one request per item/module', anchorId: 'required for costs/all; omitted for metrics', modules: 'all (default), costs, metrics', dates: 'paired start/end or days 1–366; default last 30 completed Asia/Shanghai days; bounds are CLI limits, not promised platform retention', out: 'new .json file; never overwrite'},
   guarantees: ['No automatic anchor choice or saved-success-item changes', 'Independent module status; empty/denied/missing values remain unknown', 'Every request is paced and guarded; verification stops the whole batch; no automatic retries', 'Requested period and returned date coverage are separate; no silent date changes'],
@@ -66,16 +66,20 @@ export function dmpPeriod(opts, now = new Date()) {
   if (days < 1 || days > 366 || endDate >= today) throw dmpError('DMP_INVALID_INPUT', '日期须为过去已完成的 1–366 天，开始日不晚于结束日。');
   return {startDate, endDate, days, timeZone: 'Asia/Shanghai', inclusive: true};
 }
-export function prepareDmpReport(opts, now) {
+export function prepareDmpTarget(opts, now) {
   if ((opts.itemId !== undefined) === (opts.itemIds !== undefined)) throw dmpError('DMP_INVALID_INPUT', '提供 --item-id 或 --item-ids，二选一。');
   const itemIds = [...new Set(String(opts.itemId ?? opts.itemIds).split(/[,，\s]+/).filter(Boolean).map(v => id(v, '商品 ID')))];
   if (!itemIds.length || itemIds.length > 20) throw dmpError('DMP_INVALID_INPUT', '每批支持 1–20 个商品 ID。');
+  return {itemIds,period:dmpPeriod(opts,now),delayRange:resolveApiDelayRange(opts),timeoutMs:integer(opts.timeoutMs,30000,1000,120000,'--timeout-ms')};
+}
+export function prepareDmpReport(opts,now){
+  const target=prepareDmpTarget(opts,now);
   const modules = opts.modules ?? 'all';
   if (!['all', 'costs', 'metrics'].includes(modules)) throw dmpError('DMP_INVALID_INPUT', '--modules 只能是 all、costs、metrics。');
   const anchorId = opts.anchorId === undefined ? null : id(opts.anchorId, '--anchor-id');
   if (modules !== 'metrics' && !anchorId) throw dmpError('DMP_INVALID_INPUT', '查询推广明细须明确提供本店 --anchor-id；先用 dmp items 发现候选。');
   if (modules === 'metrics' && anchorId) throw dmpError('DMP_INVALID_INPUT', '--modules metrics 不使用锚点，请省略 --anchor-id。');
-  return {itemIds, anchorId, modules, period: dmpPeriod(opts, now), delayRange: resolveApiDelayRange(opts), timeoutMs: integer(opts.timeoutMs, 30000, 1000, 120000, '--timeout-ms')};
+  return {...target,anchorId,modules};
 }
 export function prepareDmpItems(opts) {
   return {page: integer(opts.page, 1, 1, 100000, '--page'), pageSize: integer(opts.pageSize, 20, 1, 100, '--page-size'), delayRange: resolveApiDelayRange(opts), timeoutMs: integer(opts.timeoutMs, 30000, 1000, 120000, '--timeout-ms')};

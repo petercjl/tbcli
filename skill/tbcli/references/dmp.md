@@ -1,3 +1,9 @@
+# 竞品独立查询入口
+
+指定单个竞品的经营、推广、关键词和新老人群分析统一走 `dmp catalog → dmp snapshot → 覆盖核对`，仅输入目标商品。先读取下文“单周期竞品独立分析快照”。完整分析所需的独立路径缺口应如实报告，不增加选品步骤。
+
+以下旧 `dmp report` 是另行明确调用的历史双商品协议，保留兼容性；不作为竞品报告应用的恢复或替代路线。
+
 # 达摩盘指定商品数据
 
 适用于指定商品的经营指标、逐日推广数值和成长阶段。入口为 `dmp catalog → dmp items（需要选锚点时）→ dmp report → 覆盖核对`。这是只读取数能力；商品选择、竞品关系判断、分析和经营建议由调用者负责。
@@ -131,11 +137,15 @@ POST `/dataplatform/dataset/report/query.json`，`Content-Type: application/json
 每次维护按请求参数、原始业务响应、日期覆盖和真实CLI输出核对。新的字段或重复失败先形成解析/请求策略测试，再更新此参考及 `dmp catalog`；本模块不承担推广策略选择或付费操作。
 
 
-## 单周期经营、推广与人群快照
+## 单周期竞品独立分析快照
 
-`tbcli dmp snapshot --item-id ID --anchor-id OWNED_ID --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out NEW.json --json` 保存一个指定周期的5个来源：七项经营指标（额外6896支付转化率、6897加购率）、推广场景、目标关键词、人群区间、人群数值dataset175。周期选取和报告分析由应用决定。输出snapshotVersion=1，按模块保留脱敏request/response、状态与来源时间。业务失败和空数据分别保留；每个模块完成后保存检查点，验证码或权限访问限制停止全部后续请求。退出码2表示存在模块业务失败，可读取已保存的其他模块。
+`tbcli dmp snapshot --item-id ID --start-date YYYY-MM-DD --end-date YYYY-MM-DD --out NEW.json --json` 接受唯一目标商品，保存snapshotVersion=2、subject.mode=target-only与5个所需模块状态。应用负责四周期与自然周规划、解读及HTML。
 
-场景、关键词、人群区间参数为itemId本店锚点、succItemIds目标、startDate/endDate。人群数值表dataset175/type=TABLE，日期7463、商品7460、分组7459、指标7469/7468/7465/7464；按字段ID解析，合计行与分类分别保留。日期未回显时不声称覆盖已核实。人群数值与经营dataset156保持独立，不以区间中点替代精确值。
+经营表dataset156的商品筛选为6797；人群数值表dataset175的商品筛选为7460，日期7463，分组7459，指标7469/7468/7465/7464。两者已有目标ID独立筛选的保存请求证据。授权仍取决于当前商家会话及服务响应。
+
+推广场景、目标关键词及人群区间目前只有双商品请求证据，尚未核实独立目标查询路径。快照保留这三个模块，标记unavailable、reason=capability-unverified和DMP_INDEPENDENT_ROUTE_UNVERIFIED；request/response为null，不伪装成平台空数据或已发出请求。当前不会发出未经核实的替代查询。上述缺口使总状态partial、退出码2，并保留可用来源。完整业务范围始终是全部五个模块。
+
+HTTP/业务失败、空结果、缺值、权限和验证保持各自状态。真正发出的请求保存脱敏request/response；每模块保存检查点。验证码或访问限制立即停止。旧snapshot v1不满足新采集合同；历史文件可由应用离线读取，不能作为新独立取数的证明。
 
 ## 商品资料
 

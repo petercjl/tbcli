@@ -202,7 +202,7 @@ export const ROUTED_COMMAND_KEYS = Object.freeze(Object.keys(COMMAND_HANDLERS));
 export function usage() {
   console.log(`Usage:
   tbcli --version
-  tbcli dmp snapshot --item-id ID --anchor-id OWNED_ID [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--json]
+  tbcli dmp snapshot --item-id ID [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--json]
   tbcli dmp catalog [--out NEW.json] [--json]
   tbcli dmp items [--page 1] [--page-size 20] [--out NEW.json] [--json]
   tbcli dmp report (--item-id ID | --item-ids ID,ID) [--modules all|costs|metrics] [--anchor-id OWNED_ID] [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--timeout-ms 30000] [--json]

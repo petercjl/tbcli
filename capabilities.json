@@ -1,6 +1,6 @@
 {
   "package": "@petercjl/tbcli",
-  "version": "0.11.4-dev.0",
+  "version": "0.12.0-dev.0",
   "tool": "tbcli",
   "entry": "scripts/tbcli.mjs",
   "commandContracts": {
@@ -608,6 +608,79 @@
             "null"
           ]
         }
+      }
+    },
+    "dmp snapshot": {
+      "options": {
+        "--item-id": {
+          "type": "string",
+          "required": true
+        },
+        "--out": {
+          "type": "string",
+          "required": true
+        },
+        "--start-date": {
+          "type": "string"
+        },
+        "--end-date": {
+          "type": "string"
+        },
+        "--days": {
+          "type": "string"
+        },
+        "--json": {
+          "type": "boolean"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read",
+      "result": {
+        "snapshotVersion": 2,
+        "subjectMode": "target-only",
+        "requiredModules": [
+          "metrics7",
+          "scenes",
+          "keywords",
+          "crowdRanges",
+          "crowdTable"
+        ],
+        "capabilityGapCode": "DMP_INDEPENDENT_ROUTE_UNVERIFIED"
       }
     }
   },
