@@ -3,6 +3,6 @@
     "allowSameVersion": true
   },
   "hooks": {
-    "after:bump": "node scripts/sync-skill-versions.mjs && node scripts/verify-package.mjs"
+    "after:bump": "node scripts/sync-skill-versions.mjs && node scripts/verify-package.mjs && npm test"
   }
 }

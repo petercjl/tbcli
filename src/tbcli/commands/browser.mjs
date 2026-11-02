@@ -154,7 +154,7 @@ export async function verifyLocalProfile(target, {allowStopped=false} = {}) {
   }
   const commands = output.split(/\r?\n/).map(s=>s.trim()).filter(s=>/(?:Google Chrome|chrome(?:\.exe)?)/i.test(s));
   if (commands.some(command=>matchesBrowserCommand(command,target))) return;
-  const relevant = commands.some(command=>command.includes(`--remote-debugging-port=${target.port}`) || command.includes(`--user-data-dir=${target.profileDir}`));
+  const relevant = commands.some(command=>new RegExp(`--remote-debugging-port=${Number(target.port)}(?:[\\s"\']|$)`).test(command) || command.includes(`--user-data-dir=${target.profileDir}`));
   if (allowStopped && !relevant) return;
   throw fail('BROWSER_PROFILE_CONFLICT', '调试端口与指定角色的 Chrome Profile 不匹配，或 Profile 已被其他会话占用；请检查两个独立浏览器。');
 }

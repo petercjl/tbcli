@@ -8,20 +8,20 @@ function validateOptions(opts, own) {
   if ((opts._ && opts._.length !== 2) || Object.keys(opts).some(k => !allowed.has(k))) throw dmpError('DMP_INVALID_INPUT', 'DMP 命令包含未知或不适用的参数；请查阅 dmp catalog 和命令帮助。');
 }
 
-async function outputFile(out, required = false) {
+export async function outputFile(out, required = false) {
   if (!out && !required) return null;
   if (!out || path.extname(out).toLowerCase() !== '.json') throw dmpError('DMP_INVALID_OUTPUT', '需要新的 --out FILE.json。');
   try { await lstat(out); throw dmpError('OUTPUT_EXISTS', '输出已存在，请使用新的文件名。'); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   return open(out, 'wx', 0o600);
 }
-async function save(file, data) {
+export async function save(file, data) {
   if (!file) return;
   const buffer = Buffer.from(JSON.stringify(data, null, 2) + '\n');
   let offset = 0;
   while (offset < buffer.length) { const written = await file.write(buffer, offset, buffer.length - offset, offset); offset += written.bytesWritten; }
   await file.truncate(buffer.length); await file.sync();
 }
-function emitError(error, opts, out) {
+export function emitError(error, opts, out) {
   const result = {ok: false, code: error.code ?? 'DMP_COLLECTION_FAILED', message: 'DMP 取数停止；已取得的数据保留在输出文件。', ...(out ? {out: path.resolve(out)} : {})};
   if (opts.json) console.log(JSON.stringify(result));
   else console.error(`${result.code}: ${result.message}`);
@@ -49,7 +49,7 @@ export async function runDmpItems(opts = {}, {session = withAuthenticatedTaobaoS
 export async function runDmpReport(opts = {}, {session = withAuthenticatedTaobaoSession, clientFactory = createDmpClient} = {}) {
   validateOptions(opts, ['itemId', 'itemIds', 'anchorId', 'modules', 'startDate', 'endDate', 'days', 'timeoutMs', 'delayMs', 'minDelayMs', 'maxDelayMs']);
   const plan = prepareDmpReport(opts), file = await outputFile(opts.out, true);
-  const report = {schemaVersion: 1, command: 'dmp report', status: 'running', startedAt: new Date().toISOString(), period: plan.period, anchorId: plan.anchorId, modules: plan.modules, requestPolicy: plan.delayRange, items: [], warnings: ['推广字段单位尚未独立核验；CNY 计算仅为所提供方法下的假设。', '数据可用性限于当前账户、目标商品和日期，无法保证任意商品 ID。']};
+  const report = {schemaVersion: 1, command: 'dmp report', status: 'running', startedAt: new Date().toISOString(), period: plan.period, anchorId: plan.anchorId, modules: plan.modules, requestPolicy: plan.delayRange, items: [], warnings: ['数据可用性限于当前账户、目标商品和日期，无法保证任意商品 ID。']};
   try {
     await save(file, report);
     await session(opts, async ({context}) => {

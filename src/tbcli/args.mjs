@@ -91,6 +91,12 @@ export function parseArgs(argv) {
     else if (arg === '--questions') out.questions = argv[++index] ?? '';
     else if (arg === '--item-id') out.itemId = argv[++index];
     else if (arg === '--item-ids') out.itemIds = argv[++index];
+    else if (arg === '--cate-id') out.cateId = argv[++index] ?? '';
+    else if (arg === '--rank-type') out.rankType = argv[++index] ?? '';
+    else if (arg === '--date') out.date = argv[++index] ?? '';
+    else if (arg === '--life-stage-codes') out.lifeStageCodes = argv[++index] ?? '';
+    else if (arg === '--order-indicator') out.orderIndicator = argv[++index] ?? '';
+    else if (arg === '--order-type') out.orderType = argv[++index] ?? '';
     else if (arg === '--anchor-id') out.anchorId = argv[++index] ?? '';
     else if (arg === '--modules') out.modules = argv[++index] ?? '';
     else if (arg === '--device') out.device = argv[++index];
@@ -105,6 +111,7 @@ export function parseArgs(argv) {
     else if (arg === '--end-date') out.endDate = argv[++index];
     else if (arg === '--effective-from') out.effectiveFrom = argv[++index];
     else if (arg === '--source-revision') out.sourceRevision = argv[++index];
+    else if (arg === '--audience-type') out.audienceType = argv[++index] ?? '';
     else if (arg === '--days') out.days = argv[++index];
     else if (arg === '--tid') out.tid = argv[++index];
     else if (arg === '--seller-id') out.sellerId = argv[++index];

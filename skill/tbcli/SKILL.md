@@ -28,6 +28,8 @@ When none is configured, `tbcli browser open/status` supplies the package-owned
 entry. Normal tbcli auth/business commands prepare their own role browser; an
 external launcher and machine-specific Agent instructions are optional.
 
+竞品行为人群画像：读取 [竞品画像取数合同](references/dmp-audience.md)，运行 `dmp audience`。默认近30天购买人群，支持7/15/30/90天及购买/浏览/收藏/加购/搜索；使用商家会话，无需本店商品参数。画像滚动窗口独立于经营日期范围。
+
 ## Source Of Truth
 
 This Skill is distributed with the `tbcli` CLI. Treat the path returned by `tbcli skill source --json` as the only editable source. Agent Skill directories contain CLI-managed physical copies; never maintain an independent fork.
@@ -470,3 +472,5 @@ When a realistic run exposes a recurring routing, CLI, field, date, filter, clea
 ## 平台订单主账
 
 核对已卖出宝贝、平台订单全集、供应商发货或待结算订单时，读取 [平台订单主账](references/orders-list.md)，调用 `orders list --all-history`。近期与历史分区分别采集；交易状态和展示金额作为订单事实，资金发生额仍来自财务流水。
+
+本店商品分析列表、竞品候选搜索与类目榜单：读取 [达摩盘取数合同](references/dmp.md) 的“商品发现与榜单”，分别使用 `dmp analysis-items`、`dmp competitors`、`dmp market-rank`。五类原名含“消耗占比”的渠道字段统一解释为人民币消耗金额；`gmvTrend` 单独保留为成交趋势值。

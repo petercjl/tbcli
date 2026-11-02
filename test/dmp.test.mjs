@@ -30,9 +30,9 @@ test('dataset156 sends one target and an explicit inclusive period, retaining co
   assert.deepEqual(conf.indexList.map(x => x.fieldId), [6986, 6895, 6813, 8291, 8290]);
   assert.deepEqual(filters[0].values, ['2026-04-01', '2026-04-02']); assert.deepEqual(filters[1].values, ['123']);
 });
-test('complete promotion coverage sums numbers, retains zero and keeps unit unverified', () => {
+test('complete promotion coverage sums numbers, retains zero and declares channel spend in CNY', () => {
   const c = normalizeDmpCosts(costs(), period);
-  assert.equal(c.status, 'complete'); assert.equal(c.totals.total, 5.05); assert.equal(c.daily[1].total, 0); assert.equal(c.unit, 'unverified'); assert.equal(c.stages[0].actionText, '[]');
+  assert.equal(c.status, 'complete'); assert.equal(c.totals.total, 5.05); assert.equal(c.daily[1].total, 0); assert.equal(c.unit, 'CNY'); assert.equal(c.unitBasis, 'channel-spend-contract'); assert.equal(c.stages[0].actionText, '[]');
 });
 test('missing, duplicate, invalid and out-of-period promotion records cannot become complete totals', () => {
   for (const rows of [[null, row('20260402')], [row('20260401')], [row('20260401'), row('20260401'), row('20260402')], [row('20260401'), row('20260402'), row('20260403')], [row('bad'), row('20260402')], [row('20260401'), {...row('20260402'), [COST_FIELDS.keyword]: null}], [row('20260401'), {...row('20260402'), [COST_FIELDS.keyword]: ''}]]) {

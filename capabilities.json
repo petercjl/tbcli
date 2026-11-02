@@ -1,6 +1,6 @@
 {
   "package": "@petercjl/tbcli",
-  "version": "0.12.0",
+  "version": "0.13.0-dev.1",
   "tool": "tbcli",
   "entry": "scripts/tbcli.mjs",
   "commandContracts": {
@@ -683,6 +683,461 @@
         "capabilityGapCode": "DMP_OWNED_CONTEXT_UNAVAILABLE"
       },
       "executionContext": "automatic account-owned product, recorded separately from target subject"
+    },
+    "dmp analysis-items": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--page": {
+          "type": "string"
+        },
+        "--page-size": {
+          "type": "string"
+        },
+        "--keyword": {
+          "type": "string"
+        },
+        "--life-stage-codes": {
+          "type": "string"
+        },
+        "--order-indicator": {
+          "type": "string"
+        },
+        "--order-type": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp competitors": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--page": {
+          "type": "string"
+        },
+        "--page-size": {
+          "type": "string"
+        },
+        "--anchor-id": {
+          "type": "string",
+          "required": true
+        },
+        "--keyword": {
+          "type": "string",
+          "required": true
+        },
+        "--cate-id": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp market-rank": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--cate-id": {
+          "type": "string",
+          "required": true
+        },
+        "--date": {
+          "type": "string",
+          "required": true
+        },
+        "--rank-type": {
+          "type": "string",
+          "enum": [
+            "SALES_STAR",
+            "SEARCH_HOT",
+            "MARKETING_STAR"
+          ]
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp report": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string",
+          "required": true
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--item-id": {
+          "type": "string"
+        },
+        "--item-ids": {
+          "type": "string"
+        },
+        "--anchor-id": {
+          "type": "string"
+        },
+        "--modules": {
+          "type": "string"
+        },
+        "--start-date": {
+          "type": "string"
+        },
+        "--end-date": {
+          "type": "string"
+        },
+        "--days": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp items": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string"
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--page": {
+          "type": "string"
+        },
+        "--page-size": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp catalog": {
+      "options": {
+        "--out": {
+          "type": "string"
+        },
+        "--json": {
+          "type": "boolean"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "none"
+    },
+    "dmp item-info": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string",
+          "required": true
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--item-id": {
+          "type": "string",
+          "required": true
+        },
+        "--anchor-id": {
+          "type": "string"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
+    },
+    "dmp audience": {
+      "options": {
+        "--json": {
+          "type": "boolean"
+        },
+        "--out": {
+          "type": "string",
+          "required": true
+        },
+        "--browser-role": {
+          "type": "string",
+          "enum": [
+            "merchant"
+          ]
+        },
+        "--cdp-url": {
+          "type": "string"
+        },
+        "--session-mode": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "managed",
+            "cdp"
+          ]
+        },
+        "--profile-dir": {
+          "type": "string"
+        },
+        "--chrome-path": {
+          "type": "string"
+        },
+        "--timeout-ms": {
+          "type": "string"
+        },
+        "--min-delay-ms": {
+          "type": "string"
+        },
+        "--max-delay-ms": {
+          "type": "string"
+        },
+        "--delay-ms": {
+          "type": "string"
+        },
+        "--item-id": {
+          "type": "string",
+          "required": true
+        },
+        "--days": {
+          "type": "string",
+          "enum": [
+            "7",
+            "15",
+            "30",
+            "90"
+          ],
+          "default": "30",
+          "semantics": "rolling period in days; validated as one of 7, 15, 30, 90"
+        },
+        "--audience-type": {
+          "type": "string",
+          "enum": [
+            "purchase",
+            "browse",
+            "favorite",
+            "cart",
+            "search"
+          ],
+          "default": "purchase"
+        }
+      },
+      "sideEffects": "local-write",
+      "serviceAccess": "read"
     }
   },
   "maintenanceContract": {
@@ -930,5 +1385,33 @@
       "entryPrice",
       "reviewCount"
     ]
+  },
+  "dmpAudience": {
+    "version": 1,
+    "command": "dmp audience",
+    "defaultDays": 30,
+    "days": [
+      7,
+      15,
+      30,
+      90
+    ],
+    "defaultType": "purchase",
+    "types": [
+      "purchase",
+      "browse",
+      "favorite",
+      "cart",
+      "search"
+    ],
+    "dimensions": [
+      "gender",
+      "age",
+      "consumption",
+      "city",
+      "segments"
+    ],
+    "ownedContextRequired": false,
+    "periodType": "rolling"
   }
 }

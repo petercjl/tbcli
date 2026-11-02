@@ -1,4 +1,6 @@
+import {runDmpAudience} from './commands/dmp-audience.mjs';
 import {runItemSummary} from './commands/item-summary.mjs';
+import {runDmpAnalysisItems, runDmpCompetitors, runDmpMarketRank} from './commands/dmp-discovery.mjs';
 import {runDmpSnapshot} from './commands/dmp-snapshot.mjs';
 import {runOrdersList} from './commands/orders.mjs';
 import {runDmpCatalog, runDmpItems, runDmpReport, runDmpItemInfo} from './commands/dmp.mjs';
@@ -80,8 +82,12 @@ import { runVersion } from './version.mjs';
 import { maybeAutoUpdate, relaunchWithUpdatedCli } from './update.mjs';
 
 const COMMAND_HANDLERS = Object.freeze({
+  'dmp audience': runDmpAudience,
   'dmp catalog': runDmpCatalog,
   'dmp items': runDmpItems,
+  'dmp analysis-items': runDmpAnalysisItems,
+  'dmp competitors': runDmpCompetitors,
+  'dmp market-rank': runDmpMarketRank,
   'dmp report': runDmpReport,
   'dmp snapshot': runDmpSnapshot,
   'dmp item-info': runDmpItemInfo,
@@ -203,6 +209,10 @@ export function usage() {
   console.log(`Usage:
   tbcli --version
   tbcli dmp snapshot --item-id ID [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--json]
+  tbcli dmp analysis-items [--keyword TEXT] [--page 1] [--page-size 20] [--out NEW.json] --json
+  tbcli dmp competitors --anchor-id OWNED_ID --keyword ID_OR_TEXT [--cate-id ID] [--page 1] [--page-size 20] [--out NEW.json] --json
+  tbcli dmp market-rank --cate-id ID --date YYYY-MM-DD [--rank-type SALES_STAR|SEARCH_HOT|MARKETING_STAR] [--out NEW.json] --json
+  tbcli dmp audience --item-id ID [--days 7|15|30|90] [--audience-type purchase|browse|favorite|cart|search] --out NEW.json [--json]
   tbcli dmp catalog [--out NEW.json] [--json]
   tbcli dmp items [--page 1] [--page-size 20] [--out NEW.json] [--json]
   tbcli dmp report (--item-id ID | --item-ids ID,ID) [--modules all|costs|metrics] [--anchor-id OWNED_ID] [--days 30 | --start-date YYYY-MM-DD --end-date YYYY-MM-DD] --out NEW.json [--timeout-ms 30000] [--json]

@@ -615,3 +615,9 @@ verification signal stops capture immediately.
 当前Agent安装或更新时先读取INSTALL.md/UPDATE.md，解析自己的Skill目录，使用显式目标同步实体副本并验证SHA-256；仅同步选定目标。普通任务检查新版后默认通知，安装更新另需授权。
 
 `tbcli item summary --item-id ID --out NEW.json --json` reads product identity, the first five main images, shop, displayed sales, entry price and review count from the orange Taobao buyer browser (淘宝买家浏览器). Merchant DMP metrics keep their own session and period scope.
+
+### 达摩盘商品发现与渠道消耗
+
+可向当前Agent提出：“用tbcli查询本店商品分析列表”“用tbcli搜索这个竞品编号，本店锚点是……”“用tbcli获取这个类目在指定日期的销量明星榜单”。提供类目、日期和必要商品编号，由Agent按当前合同执行。五类原名含“消耗占比”的渠道字段解释为人民币消耗金额；gmv单独保留为成交趋势值。
+
+竞品行为画像：提供商品ID，可选择7/15/30/90天及购买、浏览、收藏、加购、搜索人群；默认近30天购买，返回五类特征及来源。可向当前Agent发送：“用tbcli获取这个商品近30天购买人群画像。”

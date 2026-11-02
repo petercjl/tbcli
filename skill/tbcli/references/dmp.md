@@ -51,9 +51,9 @@ tbcli dmp report --item-id <ID> --anchor-id <OWNED_ID> --modules costs \
 
 `costs.daily` 中保留五类原值及其合计、日期和归一化 `gmv`；归一化 GMV 不能当成人民币成交额。只有完整日期且五类值均有效时，`costs.totals` 才给出总计。`observedTotals` 仅是已返回的有效数值小计，必须连同覆盖缺口使用。空缺、空字符串、不可解析值保留未知，不能补零。真实0值保留0。
 
-五个字段原名为“消耗占比”。所提供取数方法将它们解释为人民币元，但独立账单和官方计费口径尚未交叉核验。因此 `unit: unverified`、`assumedUnit: CNY`，含花费的推导位于 `computed.assumingCostsAreCny`，不能直接称为精确实际花费。某些日值重复或等于固定数也不能自行认定为预算、上限或实际账单。
+五个字段原名为“消耗占比”，含义为各渠道消耗金额，单位人民币元。`costs.unit` 为 `CNY`；原始响应保留中文字段名，归一化结果使用 keyword、wholeSite、audience、content、leads。周期合计来自同一次范围查询返回的有效逐日金额求和。含消耗的推导位于 `computed.costsCny`；`computed.assumingCostsAreCny` 与 `assumedUnit` 保留为兼容旧调用者的别名。金额口径不表示已完成财务账单对账。
 
-`metrics.values` 包括成交笔数、笔单价、IPV、推广点击和自然点击。IPV为详情页访问次数，非去重访客人数。`estimatedGmv` 用完整精度的成交笔数×笔单价计算，再保留两位小数；`transactionsPerIpvPercent` 为成交笔数/IPV，属于计算值；不能直接替代平台的去重访客支付转化率。综合CPC用五类推广值合计/推广点击，数值单位建立在人民币假设上；分母为0时输出null。
+`metrics.values` 包括成交笔数、笔单价、IPV、推广点击和自然点击。IPV为详情页访问次数，非去重访客人数。`estimatedGmv` 用完整精度的成交笔数×笔单价计算，再保留两位小数；`transactionsPerIpvPercent` 为成交笔数/IPV，属于计算值；不能直接替代平台的去重访客支付转化率。综合CPC用五类推广值合计/推广点击，单位元/次；分母为0时输出null。
 
 CLI 退出码：0=合同完整成功；2=有用但不完整的报告；1=执行停止或参数/输出错误。退出码2后仍读取并交付成功模块。输出文件独占新建、权限0600；每完成一个模块保存检查点。恢复时选择新的输出文件，仅重查缺失目标/模块；没有自动重试或自动续跑参数。
 
@@ -132,7 +132,7 @@ POST `/dataplatform/dataset/report/query.json`，`Content-Type: application/json
 
 ## 验证边界与维护
 
-2026-10-24 实测：推广7、30、31个自然日返回对应行数；经营单日及30日返回；缺锚点、缺开始日、无权锚点、空对象以及系统繁忙均有独立证据。单日推广与更早的7天推广曾返回系统繁忙，不作为硬日期限制。任意商品覆盖、跨类目规则、最早保留日、币种/计费归因与精确消耗仍待独立验证。
+2026-10-24 实测：推广7、30、31个自然日返回对应行数；经营单日及30日返回；缺锚点、缺开始日、无权锚点、空对象以及系统繁忙均有独立证据。单日推广与更早的7天推广曾返回系统繁忙，不作为硬日期限制。任意商品覆盖、跨类目规则、最早保留日、计费归因与财务账单一致性仍待独立核验。
 
 每次维护按请求参数、原始业务响应、日期覆盖和真实CLI输出核对。新的字段或重复失败先形成解析/请求策略测试，再更新此参考及 `dmp catalog`；本模块不承担推广策略选择或付费操作。
 
@@ -151,3 +151,20 @@ HTTP/业务失败、空结果、缺值、权限和验证保持各自状态。真
 ## 商品资料
 
 `tbcli dmp item-info --item-id ID --out NEW.json --json` 使用当前DMP店铺会话，调用 `/api/goods/item/info`。不需要本店锚点或日期。输出目标ID、名称、主图URL、商品链接和可得的店铺ID/名称/链接；严格核对响应ID，缺失保留未知。店铺标准链接仅在已返回shopId时构造并标注来源。此命令不打开商品前台、不切换普通买家账号；资料不可用时保留业务状态，不转商品前台补采。
+
+
+## 商品发现与榜单
+
+三个命令均只读取当前商家DMP会话，支持新的 `--out FILE.json`。认证、请求间隔和验证停止沿用主流程。每次只获取一页或一个榜单，不自动选择锚点、回退接口、改日期或设置成功品。返回 status、items、coverage、source.request/raw、account；returned/empty退出0，unavailable退出2，stopped退出1。零行仅表示当前筛选范围无返回。
+
+- `dmp analysis-items [--keyword TEXT] [--life-stage-codes CODES] [--order-indicator FIELD] [--order-type asc|desc] [--page 1] [--page-size 20] --json`：GET `/api/goods/analysis/item/list`；透传成长阶段与排序条件，支持值以当前服务为准。
+- `dmp competitors --anchor-id OWNED_ID --keyword ID_OR_TEXT [--cate-id ID] [--page 1] [--page-size 20] --json`：POST `/api/goods/benchmark/item/list`；itemId为明确的本店锚点，keyword为竞品ID或搜索词，cateId默认0，competitionSceneType固定1。候选是否同款由调用方判断。
+- `dmp market-rank --cate-id ID --date YYYY-MM-DD [--rank-type SALES_STAR|SEARCH_HOT|MARKETING_STAR] --json`：POST `/api/subdivide/market/ranking/list`；periodType固定1、subjectType固定ITEM、properties/options为空数组。榜单分别为销量明星、搜索热门和营销明星。仅返回服务当前快照，不承诺全市场覆盖，不自动回退日期；不同榜单排名不可混合。未回显日期时 dateVerified=false。
+
+列表每页1–100条、默认20。coverage保留当前页与服务pager；不能把一页当完整库存。所有业务字段保留在脱敏source.raw，items提取通用商品资料。
+
+### 渠道消耗金额与成交趋势
+
+`lineInfo`五个渠道字段是人民币消耗金额，不按百分比格式化。推广场景对比的 `chargeRatio` 仍是比例、`charge` 是金额；两种接口字段独立解释。
+
+`lineInfo[].gmv` 是依赖查询区间的成交趋势值，输出为 `gmvTrend`，旧名 `normalizedGmv` 保留兼容。它不是人民币金额，不加总、不用于ROI或消耗占比分母，不通过固定倍率恢复金额；后端平滑/归一化公式尚未确认。`estimatedGmv` 仍独立使用成交笔数乘笔单价派生。

@@ -1,10 +1,15 @@
+import {AUDIENCE_CONTRACT} from './dmp-audience-contract.mjs';
 import {resolveApiDelayRange, waitBeforeTaobaoApiRequest} from './api-policy.mjs';
 import {assertPageNotVerifying, createVerificationError, isVerificationSignal} from './taobao-guard.mjs';
 
 export const dmpError = (code, message) => Object.assign(new Error(message), {code});
 export const DMP_PATHS = Object.freeze({
+  audience: '/api/dmp/insight/tag/chart',
   login: '/api_2/login/loginuserinfo',
   items: '/api/goods/item/list',
+  analysisItems: '/api/goods/analysis/item/list',
+  benchmarkItems: '/api/goods/benchmark/item/list',
+  marketRanking: '/api/subdivide/market/ranking/list',
   itemInfo: '/api/goods/item/info',
   successItems: '/api/goods/grow/define/success/item/list',
   latestDay: '/api/latestDay',
@@ -22,13 +27,17 @@ export const METRIC_FIELDS = Object.freeze({
   transactionCount: 6986, avgOrderValue: 6895, ipv: 6813, paidClicks: 8291, freeClicks: 8290,
 });
 export const DMP_CATALOG = Object.freeze({
-  schemaVersion: 1, commands: ['dmp catalog', 'dmp items', 'dmp report', 'dmp snapshot', 'dmp item-info'],
+  schemaVersion: 1, commands: ['dmp audience', 'dmp catalog', 'dmp items', 'dmp report', 'dmp snapshot', 'dmp item-info', 'dmp analysis-items', 'dmp competitors', 'dmp market-rank'],
   authentication: 'Dedicated Chrome session; login check and DMP identity; credentials stay in browser memory.',
   endpoints: {
+    analysisItems: {method:'GET',path:DMP_PATHS.analysisItems,inputs:{page:'positive integer',pageSize:'1–100',keyword:'optional text',lifeStageCodes:'optional codes',orderIndicator:'optional metric',orderType:'asc|desc'},output:'one page of owned analysis items'},
+    benchmarkItems: {method:'POST',path:DMP_PATHS.benchmarkItems,inputs:{itemId:'explicit owned anchor',keyword:'competitor ID or text',cateId:'0 or selected category',page:'positive integer',pageSize:'1–100',competitionSceneType:'1'},output:'competitor candidate list and source evidence'},
+    marketRanking: {method:'POST',path:DMP_PATHS.marketRanking,inputs:{cateId:'selected category',date:'explicit past YYYY-MM-DD',periodType:'1',subjectType:'ITEM',rankType:'SALES_STAR|SEARCH_HOT|MARKETING_STAR',properties:'[]',options:'[]'},output:'provider rankList snapshot; not full-market coverage'},
     items: {method: 'GET', path: DMP_PATHS.items, inputs: {page: 'positive integer', pageSize: '1–100 (CLI bound)'}, output: 'data.list + data.pager; one page only'},
-    costs: {method: 'GET', path: DMP_PATHS.costs, inputs: {itemId: 'owned anchor ID', successItemId: 'one target ID', startDate: 'YYYY-MM-DD, inclusive', endDate: 'YYYY-MM-DD, inclusive'}, output: 'data.lineInfo + data.stages', fields: COST_FIELDS, unit: 'unverified; CNY is the supplied method’s assumption, not independently confirmed'},
+    costs: {method: 'GET', path: DMP_PATHS.costs, inputs: {itemId: 'owned anchor ID', successItemId: 'one target ID', startDate: 'YYYY-MM-DD, inclusive', endDate: 'YYYY-MM-DD, inclusive'}, output: 'data.lineInfo + data.stages', fields: COST_FIELDS, unit:'CNY',meaning:'five channel spend amounts in yuan; original names retained',aggregation:'sum daily amounts; complete totals require full coverage',gmv:'query-window-dependent trend value; not currency or additive; formula unknown'},
     metrics: {method: 'POST', path: DMP_PATHS.metrics, inputs: {datasetId: 156, type: 'INDEX_CARD', conf: 'JSON string: columnList, conditionList, indexList, rowList, userPageSize', filterCondition: 'JSON string: date field 6794 and item field 6797'}, fields: METRIC_FIELDS, output: 'data.INDEX_CARD.fields + values; data.rangeDesc'},
   },
+  audience: AUDIENCE_CONTRACT,
   itemInfo: {command:'dmp item-info', version:1, input:'one target itemId; selected owned anchorId for competitor lookup; new JSON output', output:'DMP product identity, main image, item/shop links when available; no retail-page fallback'},
   snapshot: {command:'dmp snapshot',version:2,subjectMode:'target-only',input:'one target itemId, paired dates or days, new out.json',modules:['metrics7','scenes','keywords','crowdRanges','crowdTable'],independentRoutes:{metrics7:'verified-saved-request',crowdTable:'verified-saved-request',scenes:'verified-saved-request',keywords:'verified-saved-request',crowdRanges:'verified-saved-request'},metricFields:[6986,6895,6813,8291,8290,6896,6897],crowdDataset:175,contextPolicy:'Automatically select first valid product from current authenticated owned-item list; technical context only, never a report comparison subject',output:'snapshotVersion=2; target values only; five modules, automatic execution context evidence and explicit source states'},
   commonQuery: {bizCode: 'dmp', _tb_token_: 'browser cookie', _csrf: 'loginuserinfo.data.csrfId', csrfId: 'same csrfId'},
@@ -106,7 +115,7 @@ export async function guardedDmpRequest(page, range, perform, {wait = waitBefore
 
 // This function runs only in Chrome. Tokens are never serialized to the CLI.
 async function browserDmpRequest(state, spec) {
-  const paths = {login: '/api_2/login/loginuserinfo', items: '/api/goods/item/list', itemInfo: '/api/goods/item/info', successItems: '/api/goods/grow/define/success/item/list', latestDay: '/api/latestDay', costs: '/api/goods/grow/define/line/data', metrics: '/dataplatform/dataset/report/query.json', scenes: '/api/goods/grow/comparison/scene', keywords: '/api/goods/grow/comparison/scene/keyword', crowd: '/api/goods/grow/comparison/crowd'};
+  const paths = {audience: '/api/dmp/insight/tag/chart', login: '/api_2/login/loginuserinfo', items: '/api/goods/item/list', analysisItems: '/api/goods/analysis/item/list', benchmarkItems: '/api/goods/benchmark/item/list', marketRanking: '/api/subdivide/market/ranking/list', itemInfo: '/api/goods/item/info', successItems: '/api/goods/grow/define/success/item/list', latestDay: '/api/latestDay', costs: '/api/goods/grow/define/line/data', metrics: '/dataplatform/dataset/report/query.json', scenes: '/api/goods/grow/comparison/scene', keywords: '/api/goods/grow/comparison/scene/keyword', crowd: '/api/goods/grow/comparison/crowd'};
   const token = (document.cookie.match(/_tb_token_=([^;]+)/) ?? [])[1] ?? '';
   const query = new URLSearchParams({bizCode: 'dmp', _tb_token_: token, ...(spec.kind === 'login' ? {} : {_csrf: state.csrf, csrfId: state.csrf}), ...spec.query});
   const origin = spec.kind === 'login' ? 'https://dmp.taobao.com' : 'https://dmp.advgateway.taobao.com';
@@ -177,13 +186,13 @@ export function normalizeDmpCosts(response, period) {
     if (day < period.startDate || day > period.endDate) { outside.push(day); continue; }
     const values = Object.fromEntries(Object.entries(COST_FIELDS).map(([key, name]) => [key, number(row[name])]));
     for (const [key, n] of Object.entries(values)) { if (n === null) missingFields.push({date: day, field: key}); else observedTotals[key] += n; }
-    daily.push({date: day, values, total: Object.values(values).every(v => v !== null) ? round(Object.values(values).reduce((a, b) => a + b, 0)) : null, normalizedGmv: number(row.gmv)});
+    daily.push({date: day, values, gmvTrend: number(row.gmv), total: Object.values(values).every(v => v !== null) ? round(Object.values(values).reduce((a, b) => a + b, 0)) : null, normalizedGmv: number(row.gmv)});
   }
   for (const key of Object.keys(observedTotals)) observedTotals[key] = round(observedTotals[key]);
   observedTotals.total = round(Object.values(observedTotals).reduce((a, b) => a + b, 0));
   const missingDates = expected.filter(d => !seen.has(d));
   const complete = rows.length > 0 && ![duplicates, outside, invalid, missingFields, missingDates].some(x => x.length);
-  return {status: !rows.length ? 'empty' : complete ? 'complete' : 'partial', unit: 'unverified', assumedUnit: 'CNY', unitBasis: 'supplied-method-not-independently-verified', daily, totals: complete ? observedTotals : null, observedTotals, coverage: {requestedDays: period.days, returnedRows: rows.length, validDays: daily.length, missingDates, duplicateDates: duplicates, outsideDates: outside, invalidRows: invalid, missingFields}, stages: response.body.data.stages ?? [], source};
+  return {status: !rows.length ? 'empty' : complete ? 'complete' : 'partial', unit: 'CNY', assumedUnit: 'CNY', unitBasis: 'channel-spend-contract', daily, totals: complete ? observedTotals : null, observedTotals, coverage: {requestedDays: period.days, returnedRows: rows.length, validDays: daily.length, missingDates, duplicateDates: duplicates, outsideDates: outside, invalidRows: invalid, missingFields}, stages: response.body.data.stages ?? [], source};
 }
 export function normalizeDmpMetrics(response, period) {
   const source = evidence(response), error = failure(response);
@@ -205,7 +214,8 @@ export function dmpComputed(entry) {
   out.estimatedGmv = round(v.transactionCount * v.avgOrderValue);
   out.totalClicks = v.paidClicks + v.freeClicks;
   out.transactionsPerIpvPercent = v.ipv > 0 ? round(v.transactionCount / v.ipv * 100) : null;
-  if (c?.status === 'complete') out.assumingCostsAreCny = {costShareOfGmvPercent: out.estimatedGmv > 0 ? round(c.totals.total / out.estimatedGmv * 100) : null, blendedCpc: v.paidClicks > 0 ? round(c.totals.total / v.paidClicks) : null};
+  if (c?.status === 'complete') out.costsCny = {costShareOfGmvPercent: out.estimatedGmv > 0 ? round(c.totals.total / out.estimatedGmv * 100) : null, blendedCpc: v.paidClicks > 0 ? round(c.totals.total / v.paidClicks) : null};
+  if (out.costsCny) out.assumingCostsAreCny = {...out.costsCny}; // Legacy alias.
   return out;
 }
 export async function collectDmpReport(client, plan, report, checkpoint = async () => {}) {
@@ -250,3 +260,5 @@ export function normalizeDmpItemInfo(response, itemId) {
  const product={itemId,title:typeof (d.name??d.itemTitle)==='string'?(d.name??d.itemTitle):null,mainImageUrl:url(d.pictUrl??d.itemPictUrl,true),itemUrl:url(d.detailUrl)??("https://item.taobao.com/item.htm?id="+itemId),category:typeof d.cateName==='string'?d.cateName:null,shop:{shopId,shopName:typeof d.shopName==='string'?d.shopName:null,url:shopUrl,urlSource:d.shopUrl?'returned':shopUrl?'constructed-from-shopId':null}};
  return {schemaVersion:1,command:'dmp item-info',itemId,status:product.title&&product.mainImageUrl&&product.itemUrl?'available':'partial',product,source};
 }
+
+export {failure as dmpResponseFailure, evidence as dmpEvidence};
