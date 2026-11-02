@@ -1,6 +1,6 @@
 {
   "package": "@petercjl/tbcli",
-  "version": "0.13.0-dev.1",
+  "version": "0.13.0",
   "tool": "tbcli",
   "entry": "scripts/tbcli.mjs",
   "commandContracts": {
